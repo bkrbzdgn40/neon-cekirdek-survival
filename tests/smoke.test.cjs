@@ -309,3 +309,147 @@ test('extended-run reward stress stays bounded without discarding 6000 drops', (
   assert.equal(snapshot.xp, 9000);
   assert.equal(snapshot.gold, 3000);
 });
+
+
+test('director cycles through preparation, pressure, crisis and recovery', () => {
+  const { run } = setup();
+  const p = JSON.parse(run(`(() => {
+    const phase = (t, bosses=0, bossAt=1000, respite=-Infinity) =>
+      getDirectorProfile(t, 5, bosses, bossAt, respite, 1).phase;
+    return JSON.stringify({
+      opening:phase(0), pressure:phase(15), crisis:phase(40), recovery:phase(56),
+      warning:phase(53,0,55), boss:phase(54,2,55),
+      postBoss:phase(64,0,120,70), newCycle:phase(65)
+    });
+  })()`));
+  assert.deepEqual(p, {opening:'BUILDUP',pressure:'PRESSURE',crisis:'CRISIS',
+    recovery:'RECOVERY',warning:'WARNING',boss:'BOSS',
+    postBoss:'RECOVERY',newCycle:'BUILDUP'});
+});
+
+test('director threat is reduced when HP critical and increases with wave and crisis', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    const profile=(t,w,hp)=>getDirectorProfile(t,w,0,1000,-Infinity,hp);
+    return JSON.stringify({
+      low:profile(20,12,.20).tokenRate, healthy:profile(20,12,1).tokenRate,
+      early:profile(20,1,1).tokenRate, late:profile(20,20,1).tokenRate,
+      crisis:profile(40,12,1).tokenRate, recovery:profile(54,12,1).tokenRate,
+      peakCap:profile(40,12,1).cap, recoveryCap:profile(54,12,1).cap
+    });
+  })()`));
+  assert.ok(x.low < x.healthy && x.low > 0);
+  assert.ok(x.early < x.late);
+  assert.ok(x.crisis > x.healthy && x.healthy > x.recovery);
+  assert.ok(x.recoveryCap < x.peakCap && x.peakCap <= 160);
+});
+
+test('theme weights alter composition without spawning inaccessible types', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    const sample = (wave,theme) => {
+      const counts = {};
+      for (let i=0;i<1000;i++) {
+        const type = pickEnemyTypeForWave(wave,(i+.5)/1000,theme);
+        counts[type] = (counts[type] || 0) + 1;
+      }
+      return counts;
+    };
+    return JSON.stringify({ surge:sample(15,'SURGE'), siege:sample(15,'SIEGE'),
+      hunt:sample(15,'HUNT'), waveOne:sample(1,'HUNT'),
+      noCredits:pickEnemyTypeForWave(10,.5,'HUNT',.3) });
+  })()`));
+  assert.ok(x.surge.SWARM > x.siege.SWARM);
+  assert.ok(x.siege.TANK > x.surge.TANK);
+  assert.ok(x.hunt.SNIPER > x.surge.SNIPER);
+  assert.deepEqual(Object.keys(x.waveOne).sort(), ['SPLITTER','SWARM']);
+  assert.equal(x.noCredits, null);
+});
+
+test('director spends only available tokens and tracks actual enemy spawns', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave=15; totalTime=37;
+    combatDirector.update(.05);
+    combatDirector.tokens=12;
+    let success = 0;
+    for(let i=0;i<70;i++) if(combatDirector.trySpawn()) success++;
+    return JSON.stringify({ success, enemies:enemies.length, tracked:combatDirector.stats.spawned,
+      tokens:combatDirector.tokens, max:combatDirector.profile.cap });
+  })()`));
+  assert.ok(x.success >= 1);
+  assert.equal(x.enemies, x.success);
+  assert.equal(x.tracked, x.success);
+  assert.ok(x.tokens >= -0.000001 && x.tokens < 1.5);
+  assert.ok(x.enemies <= x.max);
+});
+
+test('elite chests have cooldown, rolling per-minute ceiling and no unlimited drops', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave=20;
+    const c=combatDirector;
+    for(let t=0;t<180;t++) {
+      totalTime=t;
+      c.registerChestDrop('elite',100,100);
+      lootChests.length=0; // model the player collecting each reward
+    }
+    return JSON.stringify({ chests:c.stats.chestDrops.elite, kills:c.stats.eliteKills,
+      window:c.eliteChestTimes.length, last:c.lastEliteChestAt });
+  })()`));
+  assert.equal(x.kills,180);
+  assert.ok(x.chests >= 3 && x.chests <= 9, `Elite chests in 180 seconds: ${x.chests}`);
+  assert.ok(x.window <= 3);
+});
+
+test('a multi-boss encounter guarantees only one chest and triggers recovery on clear', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave=12; totalTime=111;
+    combatDirector.onBossEncounter();
+    const result = [combatDirector.registerChestDrop('boss',1,1),
+      combatDirector.registerChestDrop('boss',2,2),
+      combatDirector.registerChestDrop('boss',3,3)];
+    combatDirector.onBossCleared();
+    return JSON.stringify({ result, drops:combatDirector.stats.chestDrops.boss,
+      chests:lootChests.length, encounters:combatDirector.stats.encounters,
+      phase:getDirectorProfile(112,wave,0,150,combatDirector.afterBossUntil,1).phase });
+  })()`));
+  assert.deepEqual(x.result,[true,false,false]);
+  assert.equal(x.drops,1);
+  assert.equal(x.chests,1);
+  assert.equal(x.encounters,1);
+  assert.equal(x.phase,'RECOVERY');
+});
+
+test('chest opening records exactly one of three reward categories', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); const chest = new LootChest(player.x, player.y);
+    chest.update(.016);
+    return JSON.stringify({ dead:chest.dead,
+      categories: Object.values(combatDirector.stats.chestOpened),
+      gold:totalGold, state:gameState });
+  })()`));
+  assert.equal(x.dead,true);
+  assert.equal(x.categories.reduce((sum,n)=>sum+n,0),1);
+  assert.ok(x.categories.every(n=>n===0||n===1));
+});
+
+test('director state resets cleanly between runs and diagnostics stay read-only', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); combatDirector.stats.eliteKills=40;
+    totalTime=100; combatDirector.tokens=0;
+    const old=window.getNeonRunDiagnostics();
+    startNewGame();
+    const fresh=window.getNeonRunDiagnostics();
+    return JSON.stringify({oldKills:old.eliteKills,newKills:fresh.eliteKills,
+      newPhase:fresh.phase,tokens:fresh.threatTokens,oldTime:old.timeSeconds});
+  })()`));
+  assert.equal(x.oldKills,40);
+  assert.equal(x.oldTime,100);
+  assert.equal(x.newKills,0);
+  assert.equal(x.newPhase,'BUILDUP');
+  assert.equal(x.tokens,4);
+});
