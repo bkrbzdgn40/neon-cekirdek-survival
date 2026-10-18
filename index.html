@@ -2298,7 +2298,7 @@
                         this.x += (dx / dist) * this.speed * dt;
                         this.y += (dy / dist) * this.speed * dt;
                         this.actionTimer -= dt * (this.enraged ? 1.35 : 1.0);
-                        if (this.actionTimer <= 0) {
+                        if (this.actionTimer <= 0 && (!combatDirector || combatDirector.allowBossAttack(this, 'regular'))) {
                             this.actionTimer = 2.2;
                             const count = this.enraged ? 16 : 12;
                             const pSpd = 265 * projSpeedScale;
@@ -2321,7 +2321,7 @@
                         if (this.state === 'CHASE') {
                             this.x += (dx / dist) * this.speed * dt;
                             this.y += (dy / dist) * this.speed * dt;
-                            if (this.actionTimer <= 0) {
+                            if (this.actionTimer <= 0 && (!combatDirector || combatDirector.allowBossAttack(this, 'titan'))) {
                                 this.state = 'CHARGE';
                                 this.actionTimer = this.enraged ? 0.5 : 0.7;
                                 this.dashTargetAngle = Math.atan2(dy, dx);
@@ -2359,7 +2359,7 @@
                         }
                         this.actionTimer -= dt;
                         this.secondaryTimer -= dt;
-                        if (this.actionTimer <= 0) {
+                        if (this.actionTimer <= 0 && (!combatDirector || combatDirector.allowBossAttack(this, 'regular'))) {
                             this.actionTimer = this.enraged ? 1.3 : 1.85;
                             const baseA = Math.atan2(dy, dx);
                             const pSpd = 300 * projSpeedScale;
@@ -2371,7 +2371,7 @@
                                 enemies.push(new Enemy(this.x + (Math.random() - 0.5) * 60, this.y + (Math.random() - 0.5) * 60, 'KAMIKAZE', false));
                             }
                         }
-                        if (this.secondaryTimer <= 0) {
+                        if (this.secondaryTimer <= 0 && (!combatDirector || combatDirector.canBossReposition(this))) {
                             this.secondaryTimer = this.enraged ? 3.4 : 4.8;
                             shockwaves.push(new Shockwave(this.x, this.y, 140, '#b000ff', 0.3));
                             const blinkAngle = Math.random() * Math.PI * 2;
@@ -2399,7 +2399,7 @@
 
                         this.aimAngle = Math.atan2(dy, dx);
                         this.actionTimer -= dt;
-                        if (this.actionTimer <= 0) {
+                        if (this.actionTimer <= 0 && (!combatDirector || combatDirector.allowBossAttack(this, 'regular'))) {
                             this.actionTimer = this.enraged ? 1.15 : 1.65;
                             const sniperSpd = 520 * projSpeedScale;
                             for (let s = -1; s <= 1; s++) {
@@ -2429,22 +2429,31 @@
             updateBossPhases(dt, dx, dy) {
                 const ratio = this.hp / Math.max(1, this.maxHp);
                 const nextPhase = ratio <= 0.35 ? 3 : ratio <= 0.70 ? 2 : 1;
-                if (nextPhase > this.bossPhase) {
-                    this.bossPhase = nextPhase;
+                // Do not skip phase 2 even if one hit crosses both thresholds.
+                // Every threshold gets its own telegraph and counterplay window.
+                if (nextPhase > this.bossPhase && !this.bossSpecial) {
+                    this.bossPhase++;
                     const aimAngle = Math.atan2(dy, dx);
-                    this.bossSpecial = { angle: aimAngle, timer: nextPhase === 3 ? 1.35 : 1.15, phase: nextPhase };
-                    // The phase attack has its own clearly readable wind-up.
+                    const phase = this.bossPhase;
+                    const delay = combatDirector ? combatDirector.reserveBossPhase(phase) : 0;
+                    this.bossSpecial = { angle: aimAngle, delay, timer: phase === 3 ? 1.35 : 1.15, phase };
                     this.actionTimer = Math.max(this.actionTimer, 1.2);
                     this.secondaryTimer = Math.max(this.secondaryTimer, 1.2);
                     if (this.type === 'BOSS_TITAN') this.state = 'CHASE';
-                    createFloatingText(this.x, this.y - this.radius - 30,
-                        nextPhase === 3 ? '⚠ SON FAZ: ÖZEL SALDIRI!' : '⚠ 2. FAZ: ÖZEL SALDIRI!',
-                        this.color, 16);
-                    shockwaves.push(new Shockwave(this.x, this.y, 170, this.color, 0.55));
+                    if (delay < 0.01) {
+                        createFloatingText(this.x, this.y - this.radius - 30,
+                            phase === 3 ? '⚠ SON FAZ: ÖZEL SALDIRI!' : '⚠ 2. FAZ: ÖZEL SALDIRI!',
+                            this.color, 16);
+                    }
                 }
                 if (!this.bossSpecial) return;
+                if (this.bossSpecial.delay > 0) {
+                    this.bossSpecial.delay = Math.max(0, this.bossSpecial.delay - dt);
+                    return;
+                }
                 this.bossSpecial.timer -= dt;
-                if (this.bossSpecial.timer <= 0) {
+                if (this.bossSpecial.timer <= 0 &&
+                    (!combatDirector || combatDirector.allowBossAttack(this, 'phase'))) {
                     const attack = this.bossSpecial;
                     this.bossSpecial = null;
                     fireBossPhaseAttack(this, attack.angle, attack.phase);
@@ -2625,7 +2634,7 @@
             draw(ctx) {
                 ctx.save();
 
-                if (this.isBoss && this.bossSpecial) {
+                if (this.isBoss && this.bossSpecial && this.bossSpecial.delay <= 0) {
                     const attack = this.bossSpecial;
                     const reach = Math.max(worldWidth, worldHeight);
                     ctx.save();
@@ -3326,6 +3335,98 @@
             return config.count;
         }
 
+        const ARENA_EVENT_GAP = 82;
+        const ARENA_EVENT_LIFETIME = 17;
+
+        class ArenaEvent {
+            constructor(kind, x, y) {
+                this.kind = kind;
+                this.x = x;
+                this.y = y;
+                this.radius = 73;
+                this.dead = false;
+                this.timeLeft = ARENA_EVENT_LIFETIME;
+                this.progress = 0;
+                this.required = kind === 'VAULT' ? 4.1 : 3.0;
+                this.committed = false;
+                this.cost = kind === 'VAULT' ? 12 : 0;
+                this.color = kind === 'VAULT' ? '#ffe600' : '#00f3ff';
+                this.label = kind === 'VAULT' ? 'RİSKLİ KASA · -12 CAN / ALTIN' : 'VERİ AKTARIMI · XP / CİNNET';
+            }
+
+            update(dt) {
+                if (this.dead || !player) return;
+                this.timeLeft -= dt;
+                if (this.timeLeft <= 0) {
+                    this.dead = true;
+                    if (combatDirector) combatDirector.finishArenaEvent(this, 'expired');
+                    return;
+                }
+                const distance = Math.hypot(this.x - player.x, this.y - player.y);
+                const inside = distance < this.radius - player.radius * 0.25;
+                if (inside && !this.committed) {
+                    if (this.cost && player.hp <= this.cost + 10) return;
+                    this.committed = true;
+                    if (this.cost) {
+                        player.hp -= this.cost;
+                        createFloatingText(player.x, player.y - 36, '-12 CAN · KASA AÇILIYOR', '#ffe600', 15);
+                    }
+                }
+                if (!this.committed) return;
+                this.progress = Math.max(0, Math.min(this.required,
+                    this.progress + (inside ? dt : -dt * 1.1)));
+                if (this.progress >= this.required) {
+                    this.dead = true;
+                    if (this.kind === 'VAULT') {
+                        const gold = Math.min(65, 20 + wave * 3);
+                        totalGold += gold;
+                        sessionGold += gold;
+                        player.hp = Math.min(player.maxHp, player.hp + 6);
+                        saveMetaProgress();
+                        createFloatingText(this.x, this.y - 28, `+ ${gold} ALTIN · +6 CAN`, '#ffe600', 17);
+                    } else {
+                        const xp = Math.min(140, player.xpToNext * 0.32);
+                        player.addOverdrive(25);
+                        player.gainXp(xp);
+                        createFloatingText(this.x, this.y - 28, 'VERİ BAŞARILI · XP + CİNNET', '#00f3ff', 17);
+                    }
+                    audio.playJackpot();
+                    if (combatDirector) combatDirector.finishArenaEvent(this, 'completed');
+                }
+            }
+
+            draw(ctx) {
+                ctx.save();
+                const pulse = 0.08 * Math.sin(totalTime * 5);
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.kind === 'VAULT' ? 'rgba(255,230,0,0.09)' : 'rgba(0,243,255,0.07)';
+                ctx.fill();
+                ctx.lineWidth = 2.5;
+                ctx.strokeStyle = this.color;
+                ctx.globalAlpha = 0.7 + pulse;
+                ctx.setLineDash([8, 6]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                if (this.progress > 0) {
+                    ctx.lineWidth = 6;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius - 7, -Math.PI / 2,
+                        -Math.PI / 2 + Math.PI * 2 * (this.progress / this.required));
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = this.color;
+                ctx.textAlign = 'center';
+                ctx.font = "bold 12px 'Orbitron', sans-serif";
+                ctx.fillText(this.label, this.x, this.y - this.radius - 18);
+                ctx.font = "bold 11px 'Orbitron', sans-serif";
+                ctx.fillText(this.committed ? `${Math.ceil(this.required - this.progress)}s KAL` :
+                    `${Math.ceil(this.timeLeft)}s · İÇİNE GİR`, this.x, this.y + 4);
+                ctx.restore();
+            }
+        }
+
         const DIRECTOR_PHASES = {
             BUILDUP: { label: 'HAZIRLIK', multiplier: 0.65, interval: 0.5, cap: 85 },
             PRESSURE: { label: 'BASKI', multiplier: 1.0, interval: 0.33, cap: 130 },
@@ -3378,6 +3479,11 @@
                 this.bossChestAwarded = false;
                 this.eliteChestTimes = [];
                 this.pendingEncounter = null;
+                this.activeArenaEvent = null;
+                this.nextArenaAt = 88;
+                this.arenaEventIndex = 0;
+                this.bossAttackNextAt = -Infinity;
+                this.nextBossPhaseWindowAt = -Infinity;
                 this.nextEncounterAt = 26;
                 this.encounterIndex = 0;
                 this.lastEncounterAt = -Infinity;
@@ -3385,7 +3491,9 @@
                 this.stats = {
                     spawned: 0, eliteSpawned: 0, eliteKills: 0, bossKills: 0,
                     encounters: 0, specialEncounters: 0, specialUnits: 0, specialCancelled: 0,
-                    bossSpecialAttacks: 0, chestDrops: { elite: 0, boss: 0 },
+                    bossSpecialAttacks: 0, bossAttacksDeferred: 0,
+                    arenaOffered: 0, arenaCompleted: 0, arenaExpired: 0, arenaCancelled: 0,
+                    chestDrops: { elite: 0, boss: 0 },
                     chestOpened: { goldHeal: 0, overdriveXp: 0, bulletNova: 0 }
                 };
             }
@@ -3397,11 +3505,88 @@
                     nextBossTime, this.afterBossUntil, hpFraction);
                 this.tokens = Math.min(14, this.tokens + dt * this.profile.tokenRate);
                 this.updateSpecialEncounter(dt);
+                this.updateArenaEvent(dt);
                 if (this.profile.phase !== previous && this.profile.phase !== 'BOSS' &&
                     this.profile.phase !== 'WARNING') {
                     createFloatingText(player.x, player.y - 52,
                         `TEHDİT: ${this.profile.label}`, '#00f3ff', 14);
                 }
+            }
+
+            reserveBossPhase(phase) {
+                const warning = phase === 3 ? 1.35 : 1.15;
+                const start = Math.max(totalTime, this.nextBossPhaseWindowAt);
+                this.nextBossPhaseWindowAt = start + warning + (activeBosses.length > 1 ? 1.1 : 0.35);
+                return Math.max(0, start - totalTime);
+            }
+
+            allowBossAttack(boss, kind) {
+                if (activeBosses.length > 1 &&
+                    activeBosses.some(other => other !== boss && !other.dead &&
+                        other.bossSpecial && other.bossSpecial.delay <= 0)) {
+                    this.stats.bossAttacksDeferred++;
+                    return false;
+                }
+                if (totalTime + 0.00001 < this.bossAttackNextAt) {
+                    this.stats.bossAttacksDeferred++;
+                    return false;
+                }
+                const interval = activeBosses.length > 1
+                    ? (kind === 'phase' ? 1.5 : kind === 'titan' ? 1.65 : 0.95)
+                    : 0;
+                this.bossAttackNextAt = totalTime + interval;
+                return true;
+            }
+
+            canBossReposition(boss) {
+                return !activeBosses.some(other => other !== boss && !other.dead &&
+                    other.bossSpecial && other.bossSpecial.delay <= 0);
+            }
+
+            updateArenaEvent(dt) {
+                const bossApproaching = activeBosses.length > 0 || nextBossTime - totalTime < 19;
+                if (this.activeArenaEvent) {
+                    if (bossApproaching) {
+                        const event = this.activeArenaEvent;
+                        // Cancellation is not a player failure: reimburse committed HP.
+                        if (event.committed && event.cost) {
+                            player.hp = Math.min(player.maxHp, player.hp + event.cost);
+                        }
+                        event.dead = true;
+                        this.finishArenaEvent(event, 'cancelled');
+                    } else {
+                        this.activeArenaEvent.update(dt);
+                    }
+                    return;
+                }
+                if (totalTime < this.nextArenaAt || bossApproaching ||
+                    this.pendingEncounter || !['BUILDUP', 'PRESSURE'].includes(this.profile.phase) ||
+                    wave < 4) return;
+                const kind = this.arenaEventIndex % 2 === 0 ? 'RELAY' : 'VAULT';
+                const safeMargin = 115;
+                const minX = Math.min(safeMargin, worldWidth / 3);
+                const minY = Math.min(safeMargin, worldHeight / 3);
+                const x = minX + Math.random() * Math.max(0, worldWidth - 2 * minX);
+                const y = minY + Math.random() * Math.max(0, worldHeight - 2 * minY);
+                const fallbackX = Math.max(minX, Math.min(worldWidth - minX, player.x + (player.x < worldWidth / 2 ? 190 : -190)));
+                const fallbackY = Math.max(minY, Math.min(worldHeight - minY, player.y + (player.y < worldHeight / 2 ? 150 : -150)));
+                const farEnough = Math.hypot(x - player.x, y - player.y) >= 160;
+                this.activeArenaEvent = new ArenaEvent(kind, farEnough ? x : fallbackX, farEnough ? y : fallbackY);
+                this.arenaEventIndex++;
+                this.nextArenaAt = totalTime + ARENA_EVENT_GAP;
+                this.stats.arenaOffered++;
+                createFloatingText(player.x, player.y - 68,
+                    kind === 'VAULT' ? '⚠ RİSKLİ KASA: -12 CAN · ALTIN ÖDÜLÜ' :
+                        '◎ VERİ AKTARIMI: ALANDA KAL, XP KAZAN',
+                    this.activeArenaEvent.color, 16);
+            }
+
+            finishArenaEvent(event, result) {
+                if (this.activeArenaEvent !== event) return;
+                this.activeArenaEvent = null;
+                if (result === 'completed') this.stats.arenaCompleted++;
+                else if (result === 'cancelled') this.stats.arenaCancelled++;
+                else this.stats.arenaExpired++;
             }
 
             updateSpecialEncounter(dt) {
@@ -3418,7 +3603,7 @@
                     if (this.pendingEncounter.warning <= 0) this.resolveSpecialEncounter();
                     return;
                 }
-                if (!inCombat || bossImminent || wave < 3 || totalTime < this.nextEncounterAt ||
+                if (!inCombat || bossImminent || this.activeArenaEvent || wave < 3 || totalTime < this.nextEncounterAt ||
                     enemies.length > this.profile.cap - 12 || this.tokens < 8) return;
                 const side = Math.floor(Math.random() * 4);
                 this.pendingEncounter = getSpecialEncounterPlan(wave, this.profile.theme, side, this.encounterIndex);
@@ -3469,6 +3654,8 @@
             onBossEncounter() {
                 this.stats.encounters++;
                 this.bossChestAwarded = false;
+                this.bossAttackNextAt = -Infinity;
+                this.nextBossPhaseWindowAt = -Infinity;
                 if (this.pendingEncounter) {
                     this.pendingEncounter = null;
                     this.stats.specialCancelled++;
@@ -3513,6 +3700,10 @@
                     threatTokens: Math.round(this.tokens * 10) / 10,
                     pendingEncounter: this.pendingEncounter ? this.pendingEncounter.type : null,
                     warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
+                    arenaEvent: this.activeArenaEvent ? this.activeArenaEvent.kind : null,
+                    arenaTimeLeft: this.activeArenaEvent ? Math.round(this.activeArenaEvent.timeLeft) : 0,
+                    arenaProgress: this.activeArenaEvent ?
+                        Math.round(100 * this.activeArenaEvent.progress / this.activeArenaEvent.required) : 0,
                     ...this.stats,
                     chestsPerMinute: totalTime > 0 ? Math.round(600 * drops / totalTime) / 10 : 0
                 };
@@ -3868,6 +4059,10 @@
             for (const cz of conduitZones) {
                 targets.push({ x: cz.x, y: cz.y, col: '#00ff66', label: '⚡ İKMAL' });
             }
+            if (combatDirector?.activeArenaEvent) {
+                const event = combatDirector.activeArenaEvent;
+                targets.push({ x: event.x, y: event.y, col: event.color, label: event.kind === 'VAULT' ? '◆ KASA' : '◎ VERİ' });
+            }
             for (const lc of lootChests) {
                 targets.push({ x: lc.x, y: lc.y, col: '#ffe600', label: '★ SANDIK' });
             }
@@ -3947,6 +4142,7 @@
             }
 
             for (const cz of conduitZones) cz.draw(ctx);
+            if (combatDirector?.activeArenaEvent) combatDirector.activeArenaEvent.draw(ctx);
             for (const sw of shockwaves) sw.draw(ctx);
             for (const orb of orbs) orb.draw(ctx);
             for (const lc of lootChests) lc.draw(ctx);
@@ -4796,7 +4992,7 @@
                 if (performanceSampleMs >= 1000) {
                     const fps = Math.round(performanceSampleFrames * 1000 / performanceSampleMs);
                     document.getElementById('perfOverlay').textContent =
-                        `FPS ${fps} | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length} | Küre ${orbs.length}/${orbs.reduce((sum, orb) => sum + orb.count, 0)} | Efekt ${particles.length} | Sandık ${lootChests.length} | ${combatDirector ? combatDirector.profile.label + '/' + combatDirector.profile.theme : '-'} | Baskın ${combatDirector?.pendingEncounter?.type || '-'} | Sandık/dk ${combatDirector ? combatDirector.getDiagnostics().chestsPerMinute : 0}`;
+                        `FPS ${fps} | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length} | Küre ${orbs.length}/${orbs.reduce((sum, orb) => sum + orb.count, 0)} | Efekt ${particles.length} | Sandık ${lootChests.length} | ${combatDirector ? combatDirector.profile.label + '/' + combatDirector.profile.theme : '-'} | Baskın ${combatDirector?.pendingEncounter?.type || '-'} | Etkinlik ${combatDirector?.activeArenaEvent?.kind || '-'} | Sandık/dk ${combatDirector ? combatDirector.getDiagnostics().chestsPerMinute : 0}`;
                     performanceSampleFrames = 0;
                     performanceSampleMs = 0;
                 }
