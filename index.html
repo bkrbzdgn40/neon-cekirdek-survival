@@ -2027,10 +2027,16 @@
                 this.baseDamage = damage;
                 this.previousX = x;
                 this.previousY = y;
+                this.visualAge = 0;
+                this.exhaustTrail = isHoming ? [] : null;
+                this.exhaustSampleTimer = 0;
+                this.visualLockDistance = Infinity;
+                this.clusterFragment = false;
             }
 
             update(dt) {
                 this.life -= dt;
+                this.visualAge += dt;
                 if (this.life <= 0) {
                     this.dead = true;
                     return;
@@ -2047,6 +2053,7 @@
                             target = e;
                         }
                     }
+                    this.visualLockDistance = target ? minDist : Infinity;
                     if (target) {
                         const desiredAngle = Math.atan2(target.y - this.y, target.x - this.x);
                         const curSpeed = Math.hypot(this.vx, this.vy);
@@ -2064,6 +2071,14 @@
                 this.previousY = this.y;
                 this.x += this.vx * dt;
                 this.y += this.vy * dt;
+                if (this.isHoming && this.exhaustTrail) {
+                    this.exhaustSampleTimer += dt;
+                    if (this.exhaustSampleTimer >= 0.035) {
+                        this.exhaustSampleTimer %= 0.035;
+                        this.exhaustTrail.push({ x: this.x, y: this.y });
+                        if (this.exhaustTrail.length > 9) this.exhaustTrail.shift();
+                    }
+                }
 
                 if (this.x < this.radius || this.x > worldWidth - this.radius) {
                     if (this.ricochet > 0) {
@@ -2091,6 +2106,10 @@
             }
 
             draw(ctx, compact = false) {
+                if (this.isHoming) {
+                    drawGuidedMissile(ctx, this, compact);
+                    return;
+                }
                 const visual = getProjectileVisualStyle(this);
                 const speed = Math.hypot(this.vx, this.vy) || 1;
                 const dx = this.vx / speed, dy = this.vy / speed;
@@ -2174,6 +2193,7 @@
                     Math.cos(angle) * 430, Math.sin(angle) * 430,
                     shell.damage * 0.32, 3.5, 1, 0, false, true);
                 fragment.life = 1.2;
+                fragment.clusterFragment = true;
                 // Fragments should not instantly collide with their parent hit target.
                 fragment.hitIds.add(struckEnemy.id);
                 bullets.push(fragment);
@@ -2199,6 +2219,101 @@
             if (b.isHoming) return b.clusterPayload ?
                 PROJECTILE_VISUAL_STYLES.cluster : PROJECTILE_VISUAL_STYLES.missile;
             return b.isCrit ? PROJECTILE_VISUAL_STYLES.critical : PROJECTILE_VISUAL_STYLES.plasma;
+        }
+
+        function drawGuidedMissile(ctx, b, compact = false) {
+            const angle = Math.atan2(b.vy, b.vx);
+            const ca = Math.cos(angle), sa = Math.sin(angle);
+            const x = b.x, y = b.y;
+            const fragment = b.clusterFragment;
+            const size = b.radius * (fragment ? 0.8 : 1);
+            const pulse = 0.78 + 0.22 * Math.sin(b.visualAge * 24 + x * .017);
+            ctx.save();
+            ctx.lineCap = 'round';
+            // Recorded movement points make the exhaust actually curve when homing turns.
+            const trail = b.exhaustTrail || [];
+            if (trail.length > 1) {
+                ctx.globalAlpha = compact ? 0.3 : 0.4;
+                ctx.strokeStyle = fragment ? '#baffc5' : '#09bca8';
+                ctx.lineWidth = compact ? 2.4 : 4.5;
+                ctx.beginPath();
+                ctx.moveTo(trail[0].x, trail[0].y);
+                for (let i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
+                ctx.lineTo(x - ca * size * 1.8, y - sa * size * 1.8);
+                ctx.stroke();
+                if (!compact) {
+                    ctx.globalAlpha = 0.63;
+                    ctx.strokeStyle = '#92fff3';
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.moveTo(trail[0].x, trail[0].y);
+                    for (let i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
+                    ctx.stroke();
+                }
+            }
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            // Exhaust flame is a short animated thruster, not a particle emitter.
+            const flame = size * (2.1 + pulse * 1.1);
+            ctx.globalAlpha = compact ? 0.75 : 0.9;
+            ctx.fillStyle = '#00bdb9';
+            ctx.beginPath();
+            ctx.moveTo(-size * 1.0, -size * 0.62);
+            ctx.lineTo(-flame, 0);
+            ctx.lineTo(-size * 1.0, size * 0.62);
+            ctx.closePath();
+            ctx.fill();
+            if (!compact) {
+                ctx.fillStyle = '#cefff5';
+                ctx.beginPath();
+                ctx.moveTo(-size * 1.2, -size * 0.3);
+                ctx.lineTo(-flame * .72, 0);
+                ctx.lineTo(-size * 1.2, size * .3);
+                ctx.closePath();
+                ctx.fill();
+            }
+            // Diamond-nosed smart rocket with fins: distinguishable at small scale.
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = fragment ? '#b1ffb6' : (b.clusterPayload ? '#8cffe0' : '#35ec8d');
+            ctx.strokeStyle = '#dcfff1';
+            ctx.lineWidth = compact ? 1 : 1.5;
+            ctx.beginPath();
+            ctx.moveTo(size * 1.85, 0);
+            ctx.lineTo(size * .30, -size * .80);
+            ctx.lineTo(-size * 1.15, -size * .66);
+            ctx.lineTo(-size * .85, 0);
+            ctx.lineTo(-size * 1.15, size * .66);
+            ctx.lineTo(size * .30, size * .80);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            if (!compact) {
+                ctx.fillStyle = '#17c7b3';
+                for (const dir of [-1, 1]) {
+                    ctx.beginPath();
+                    ctx.moveTo(-size * .25, size * dir * .45);
+                    ctx.lineTo(-size * 1.30, size * dir * 1.35);
+                    ctx.lineTo(-size * .75, size * dir * .35);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            }
+            ctx.fillStyle = '#f0fffa';
+            ctx.beginPath();
+            ctx.arc(size * .5, 0, Math.max(1.15, size * .26), 0, Math.PI * 2);
+            ctx.fill();
+            if (!compact && Number.isFinite(b.visualLockDistance) &&
+                b.visualLockDistance < 185) {
+                const lockStrength = 1 - b.visualLockDistance / 185;
+                ctx.globalAlpha = 0.28 + lockStrength * 0.5;
+                ctx.strokeStyle = '#cbfff5';
+                ctx.lineWidth = 1.1;
+                ctx.beginPath();
+                ctx.arc(size * .5, 0, size * (1.2 + 0.26 * pulse),
+                    -Math.PI * .3, Math.PI * .3);
+                ctx.stroke();
+            }
+            ctx.restore();
         }
 
         class EnemyProjectile {
