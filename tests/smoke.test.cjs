@@ -181,3 +181,131 @@ test('HUD updates at controlled frequency rather than every simulation frame', (
   run('updateGame(0.025)');
   assert.ok(run('hudRefreshAccumulator') < 0.03);
 });
+
+
+test('orb compaction preserves separate XP/gold identities and exact totals', () => {
+  const { run } = setup();
+  const totals = JSON.parse(run(`(() => {
+    startNewGame();
+    for (let i = 0; i < 400; i++) emitEnergyOrb(250, 200, 5, false);
+    for (let i = 0; i < 320; i++) emitEnergyOrb(260, 210, 1, true);
+    return JSON.stringify({
+      visible: orbs.length,
+      max: MAX_ACTIVE_ORBS,
+      xp: orbs.filter(o => !o.isGold).reduce((n, o) => n + o.value, 0),
+      xpCount: orbs.filter(o => !o.isGold).reduce((n, o) => n + o.count, 0),
+      goldCount: orbs.filter(o => o.isGold).reduce((n, o) => n + o.count, 0),
+      maxStack: Math.max(...orbs.map(o => o.count))
+    });
+  })()`));
+  assert.ok(totals.visible <= totals.max + 1, 'At most one overflow slot per reward type');
+  assert.equal(totals.xp, 2000);
+  assert.equal(totals.xpCount, 400);
+  assert.equal(totals.goldCount, 320);
+  assert.ok(totals.maxStack > 1);
+});
+
+test('stacked XP pickup credits every original orb and maintains quest progress', () => {
+  const { run } = setup();
+  const info = JSON.parse(run(`(() => {
+    startNewGame();
+    for (let i = 0; i < 400; i++) emitEnergyOrb(300, 300, 8, false);
+    const stack = orbs.find(o => o.count > 1);
+    activeQuest = { type:'ORBS', target:1000, progress:0, rewardGold:1, desc:'collect' };
+    const sum = stack.value, count = stack.count;
+    player.x = stack.x; player.y = stack.y;
+    stack.update(0.016);
+    return JSON.stringify({ dead:stack.dead, count, sum, xp:player.xp,
+      xpToNext:player.xpToNext, level:player.level, progress:activeQuest.progress,
+      finite:Number.isFinite(stack.x) && Number.isFinite(stack.y) });
+  })()`));
+  assert.equal(info.dead, true);
+  assert.equal(info.finite, true, 'Exact center magnet contact must not create NaN coordinates');
+  assert.equal(info.progress, info.count);
+  assert.equal(info.level, 2);
+  assert.equal(info.xp + 125, info.sum);
+});
+
+test('stacked gold grants all original pickups and writes storage once per frame', () => {
+  const { run } = setup();
+  const info = JSON.parse(run(`(() => {
+    startNewGame();
+    for (let i=0; i<300; i++) emitEnergyOrb(300, 300, 1, true);
+    player.x=300; player.y=300;
+    localStorage.calls=0;
+    const save = localStorage.setItem;
+    localStorage.setItem = function(key,value) { this.calls++; save(key,value); };
+    updateGame(0.016);
+    return JSON.stringify({ gold:totalGold, earned:sessionGold,
+      storageWrites:localStorage.calls, remaining:orbs.length });
+  })()`));
+  assert.equal(info.gold, 650);
+  assert.equal(info.earned, 600);
+  assert.equal(info.storageWrites, 1);
+  assert.equal(info.remaining, 0);
+});
+
+test('multiple earned levels are offered sequentially after upgrade selection', () => {
+  const { run } = setup();
+  const status = JSON.parse(run(`(() => {
+    startNewGame();
+    player.gainXp(3000);
+    const firstLevel = player.level;
+    selectUpgradeOption(0);
+    return JSON.stringify({firstLevel, nextLevel:player.level, state:gameState, xp:player.xp});
+  })()`));
+  assert.equal(status.firstLevel, 2);
+  assert.equal(status.nextLevel, 3);
+  assert.equal(status.state, 'LEVEL_UP');
+  assert.ok(status.xp > 0);
+});
+
+test('frequent laser, pickup and explosion calls reuse SFX rate budgets', () => {
+  const { run } = setup();
+  const counts = JSON.parse(run(`(() => {
+    const engine = new SoundEngine();
+    let voices = 0;
+    let clock = 10;
+    const param = { setValueAtTime(){}, exponentialRampToValueAtTime(){} };
+    const node = () => ({frequency:param,gain:param,connect(){},start(){voices++;},stop(){}});
+    engine.ctx = {
+      get currentTime(){return clock;},
+      createOscillator:node, createGain:node, destination:{}
+    };
+    for (let i=0;i<20;i++) {
+      engine.playLaser();
+      engine.playOrbPickup();
+      engine.playExplosion();
+    }
+    const first = voices;
+    clock += 0.1;
+    engine.playLaser();
+    engine.playOrbPickup();
+    engine.playExplosion();
+    return JSON.stringify({first, voices});
+  })()`));
+  assert.equal(counts.first, 3);
+  assert.equal(counts.voices, 6);
+});
+
+
+test('extended-run reward stress stays bounded without discarding 6000 drops', () => {
+  const { run } = setup();
+  const snapshot = JSON.parse(run(`(() => {
+    startNewGame();
+    for (let i=0; i<6000; i++) {
+      emitEnergyOrb(100 + (i % 80) * 9, 100 + (i % 60) * 7,
+        i % 2 === 0 ? 3 : 0, i % 2 === 1);
+    }
+    return JSON.stringify({
+      objects:orbs.length,
+      count:orbs.reduce((n,o)=>n+o.count,0),
+      xp:orbs.filter(o=>!o.isGold).reduce((n,o)=>n+o.value,0),
+      gold:orbs.filter(o=>o.isGold).reduce((n,o)=>n+o.count,0)
+    });
+  })()`));
+  assert.ok(snapshot.objects <= 241);
+  assert.equal(snapshot.count, 6000);
+  assert.equal(snapshot.xp, 9000);
+  assert.equal(snapshot.gold, 3000);
+});

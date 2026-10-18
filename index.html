@@ -861,6 +861,16 @@
                 this.musicTimer = 0;
                 this.musicStep = 0;
                 this.bassNotes = [55, 55, 65.41, 55, 73.42, 65.41, 49, 55];
+                this.lastSfxTime = Object.create(null);
+            }
+
+            allowSfx(channel, spacingSeconds) {
+                if (!this.ctx) return false;
+                const now = this.ctx.currentTime;
+                const previous = this.lastSfxTime[channel];
+                if (previous !== undefined && now - previous < spacingSeconds) return false;
+                this.lastSfxTime[channel] = now;
+                return true;
             }
 
             init() {
@@ -915,7 +925,7 @@
             }
 
             playLaser(isCrit = false) {
-                if (!this.enabled || !this.ctx) return;
+                if (!this.enabled || !this.allowSfx('laser', 0.035)) return;
                 try {
                     const now = this.ctx.currentTime;
                     const osc = this.ctx.createOscillator();
@@ -935,7 +945,7 @@
             }
 
             playExplosion(isBig = false) {
-                if (!this.enabled || !this.ctx) return;
+                if (!this.enabled || !this.allowSfx(isBig ? 'bigExplosion' : 'smallExplosion', isBig ? 0.12 : 0.06)) return;
                 try {
                     const now = this.ctx.currentTime;
                     const osc = this.ctx.createOscillator();
@@ -955,7 +965,7 @@
             }
 
             playOrbPickup(combo = 1, isGold = false) {
-                if (!this.enabled || !this.ctx) return;
+                if (!this.enabled || !this.allowSfx(isGold ? 'goldPickup' : 'xpPickup', isGold ? 0.075 : 0.045)) return;
                 try {
                     const now = this.ctx.currentTime;
                     const osc = this.ctx.createOscillator();
@@ -1939,12 +1949,12 @@
                         }
 
                         for (let i = 0; i < 5; i++) {
-                            orbs.push(new EnergyOrb(
+                            emitEnergyOrb(
                                 this.x + (Math.random() - 0.5) * 55,
                                 this.y + (Math.random() - 0.5) * 55,
                                 24,
                                 i === 0
-                            ));
+                            );
                         }
                         createFloatingText(this.x, this.y - 25, '⚡ İKMAL HALKASI AŞIRI YÜKLENDİ! ⚡', '#00ff66', 16);
                     }
@@ -2531,17 +2541,17 @@
                     shockwaves.push(new Shockwave(this.x, this.y, 350, '#ffe600', 0.65));
                     lootChests.push(new LootChest(this.x, this.y));
                     for (let i = 0; i < 16; i++) {
-                        orbs.push(new EnergyOrb(
+                        emitEnergyOrb(
                             this.x + (Math.random() - 0.5) * 90,
                             this.y + (Math.random() - 0.5) * 90,
                             35,
                             i < 8
-                        ));
+                        );
                     }
                     showDopamineBanner(`★ ${this.bossName} İMHA EDİLDİ! ★`, '#ffe600');
                 } else {
                     const dropGold = Math.random() < (this.type === 'TANK' ? 0.42 : 0.11);
-                    orbs.push(new EnergyOrb(this.x, this.y, this.xpValue, dropGold));
+                    emitEnergyOrb(this.x, this.y, this.xpValue, dropGold);
 
                     if (!dropGold && Math.random() < 0.025) {
                         const pType = Math.random() < 0.5 ? 'MAGNET' : 'CHRONO';
@@ -2660,6 +2670,7 @@
                 this.color = isGold ? '#ffe600' : '#00ff66';
                 this.dead = false;
                 this.magnetized = false;
+                this.count = 1;
             }
 
             update(dt) {
@@ -2668,24 +2679,25 @@
                 const dist = Math.hypot(dx, dy);
 
                 const effectiveMagnet = player.magnetRadius * (1 + (player.momentum / 100) * 0.55) * (player.overdriveActive ? 1.5 : 1.0);
-                if (dist < effectiveMagnet || this.magnetized) {
+                if ((dist < effectiveMagnet || this.magnetized) && dist > 0.0001) {
                     const pullSpeed = this.magnetized ? 780 : 480;
-                    this.x += (dx / dist) * pullSpeed * dt;
-                    this.y += (dy / dist) * pullSpeed * dt;
+                    const travel = Math.min(dist, pullSpeed * dt);
+                    this.x += (dx / dist) * travel;
+                    this.y += (dy / dist) * travel;
                 }
 
                 if (dist < player.radius + this.radius + 5) {
                     this.dead = true;
                     if (this.isGold) {
-                        const goldAmt = Math.max(1, Math.round((2 + Math.floor(wave / 2)) * player.greedBonus));
+                        const goldAmt = Math.max(1, Math.round((2 + Math.floor(wave / 2)) * player.greedBonus)) * this.count;
                         totalGold += goldAmt;
                         sessionGold += goldAmt;
-                        saveMetaProgress();
+                        pendingMetaSave = true;
                         audio.playOrbPickup(combo, true);
                         createFloatingText(this.x, this.y - 12, `+${goldAmt} ALTIN`, '#ffe600', 14);
                     } else {
                         player.gainXp(this.value);
-                        advanceQuest('ORBS', 1);
+                        advanceOrbQuestStacks(this.count);
                         audio.playOrbPickup(combo, false);
                     }
                 }
@@ -2699,6 +2711,11 @@
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();
+                if (this.count > 1) {
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = Math.min(3, 0.75 + Math.log2(this.count) * 0.4);
+                    ctx.stroke();
+                }
                 ctx.restore();
             }
         }
@@ -3036,6 +3053,8 @@
         let floatingTexts = [];
         let shockwaves = [];
         let lightningBolts = [];
+        const MAX_ACTIVE_ORBS = 240;
+        let pendingMetaSave = false;
         let spawnTimer = 0;
         let conduitSpawnTimer = 4.0;
         const MAX_VISIBLE_PARTICLES = 420;
@@ -3048,6 +3067,50 @@
         let performanceSampleMs = 0;
         let bulletCollisionGrid = new Map();
         let largestBulletRadius = 0;
+
+        function emitEnergyOrb(x, y, value, isGold = false) {
+            if (orbs.length >= MAX_ACTIVE_ORBS) {
+                // Remove collected orbs before trying to compact surviving rewards.
+                for (let i = orbs.length - 1; i >= 0; i--) {
+                    if (orbs[i].dead) orbs.splice(i, 1);
+                }
+            }
+            if (orbs.length < MAX_ACTIVE_ORBS) {
+                orbs.push(new EnergyOrb(x, y, value, isGold));
+                return;
+            }
+            let nearest = null;
+            let minDistanceSq = Infinity;
+            for (const orb of orbs) {
+                if (orb.dead || orb.isGold !== isGold) continue;
+                const dx = orb.x - x;
+                const dy = orb.y - y;
+                const distanceSq = dx * dx + dy * dy;
+                if (distanceSq < minDistanceSq) {
+                    nearest = orb;
+                    minDistanceSq = distanceSq;
+                }
+            }
+            if (!nearest) {
+                // Mixed reward types must keep their XP/gold identity intact.
+                // Replace no reward: keep one extra orb until a compatible stack exists.
+                orbs.push(new EnergyOrb(x, y, value, isGold));
+                return;
+            }
+            nearest.value += value;
+            nearest.count++;
+            nearest.radius = Math.min(12, (isGold ? 7 : 5.5) + Math.log2(nearest.count) * 1.2);
+        }
+
+        function advanceOrbQuestStacks(count) {
+            let remaining = count;
+            while (remaining > 0 && activeQuest && activeQuest.type === 'ORBS') {
+                const towardGoal = Math.max(1, activeQuest.target - activeQuest.progress);
+                const consumed = Math.min(remaining, towardGoal);
+                advanceQuest('ORBS', consumed);
+                remaining -= consumed;
+            }
+        }
 
         function emitParticle(particle) {
             // Preserve combat feedback without accumulating unbounded particle work.
@@ -3350,6 +3413,10 @@
             for (let i = orbs.length - 1; i >= 0; i--) {
                 orbs[i].update(dt);
                 if (orbs[i].dead) orbs.splice(i, 1);
+            }
+            if (pendingMetaSave) {
+                pendingMetaSave = false;
+                saveMetaProgress();
             }
 
             for (let i = lootChests.length - 1; i >= 0; i--) {
@@ -3775,6 +3842,7 @@
             enemyProjectiles = [];
             enemies = [];
             orbs = [];
+            pendingMetaSave = false;
             lootChests = [];
             powerups = [];
             conduitZones = [];
@@ -3854,6 +3922,9 @@
             createFloatingText(player.x, player.y - 30, `${upg.name} (K.${nextLvl})`, rarity.textCol, 17);
             updateModulesDock();
             updateHUD();
+            // A collected stacked orb may grant more than one full level.
+            // Queue additional choices one at a time without discarding earned XP.
+            if (player.xp >= player.xpToNext) player.gainXp(0);
         }
 
         function populateUpgradeCards() {
@@ -4370,7 +4441,7 @@
                 if (performanceSampleMs >= 1000) {
                     const fps = Math.round(performanceSampleFrames * 1000 / performanceSampleMs);
                     document.getElementById('perfOverlay').textContent =
-                        `FPS ${fps} | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length} | Küre ${orbs.length} | Efekt ${particles.length} | Sandık ${lootChests.length}`;
+                        `FPS ${fps} | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length} | Küre ${orbs.length}/${orbs.reduce((sum, orb) => sum + orb.count, 0)} | Efekt ${particles.length} | Sandık ${lootChests.length}`;
                     performanceSampleFrames = 0;
                     performanceSampleMs = 0;
                 }
