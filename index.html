@@ -1664,7 +1664,7 @@
                         }
                         if (nearEnemy) {
                             nearEnemy.takeDamage(this.damage * 0.55, 0, 0, true, false);
-                            lightningBolts.push({ x1: this.x, y1: this.y, x2: nearEnemy.x, y2: nearEnemy.y, life: 0.14 });
+                            emitLightningArc(this.x, this.y, nearEnemy.x, nearEnemy.y);
                         }
                     }
                 }
@@ -2849,13 +2849,8 @@
                         }
                         if (nextTarget) {
                             visited.add(nextTarget.id);
-                            lightningBolts.push({
-                                x1: lastTarget.x,
-                                y1: lastTarget.y,
-                                x2: nextTarget.x,
-                                y2: nextTarget.y,
-                                life: 0.15
-                            });
+                            emitLightningArc(lastTarget.x, lastTarget.y,
+                                nextTarget.x, nextTarget.y, isCrit || evolvedArc);
                             nextTarget.takeDamage(finalDmg * 0.55, 0, 0, false, false);
                             lastTarget = nextTarget;
                             jumps--;
@@ -3590,6 +3585,8 @@
         let floatingTexts = [];
         let shockwaves = [];
         let lightningBolts = [];
+        let lightningArcSequence = 0;
+        const MAX_LIGHTNING_ARCS = 32;
         let weaponImpacts = [];
         let weaponImpactFrameCount = 0;
         const MAX_WEAPON_IMPACTS = 56;
@@ -3683,6 +3680,122 @@
             });
             weaponImpactFrameCount++;
             return true;
+        }
+
+        function emitLightningArc(x1, y1, x2, y2, charged = false) {
+            // Only visual metadata: actual chain targets and damage were settled already.
+            if (lightningBolts.length >= MAX_LIGHTNING_ARCS) lightningBolts.shift();
+            const length = Math.hypot(x2 - x1, y2 - y1);
+            const duration = charged ? 0.23 : 0.17;
+            const seed = ++lightningArcSequence;
+            lightningBolts.push({
+                x1, y1, x2, y2, life: duration, duration,
+                seed, charged, segments: Math.max(4, Math.min(7, Math.round(length / 42)))
+            });
+        }
+
+        function getLightningArcPoints(arc, time = totalTime) {
+            // Stable segment count and deterministic multi-joint distortion:
+            // visual jitter never changes the real collision geometry.
+            const count = arc.segments || 5;
+            const dx = arc.x2 - arc.x1, dy = arc.y2 - arc.y1;
+            const length = Math.hypot(dx, dy) || 1;
+            const nx = -dy / length, ny = dx / length;
+            const phase = (time * 23 + (arc.seed || 1) * 2.17);
+            const sway = Math.min(20, length * 0.13);
+            const points = [{ x: arc.x1, y: arc.y1 }];
+            for (let i = 1; i < count; i++) {
+                const t = i / count;
+                const envelope = Math.sin(Math.PI * t);
+                const jag = Math.sin(i * 4.13 + phase) * 0.68 +
+                    Math.sin(i * 8.11 + phase * 0.46) * 0.32;
+                points.push({
+                    x: arc.x1 + dx * t + nx * jag * sway * envelope,
+                    y: arc.y1 + dy * t + ny * jag * sway * envelope
+                });
+            }
+            points.push({ x: arc.x2, y: arc.y2 });
+            return points;
+        }
+
+        function drawLightningArcs() {
+            const dense = lightningBolts.length > 15;
+            for (const arc of lightningBolts) {
+                const duration = arc.duration || 0.15;
+                const strength = Math.max(0, Math.min(1, arc.life / duration));
+                const points = getLightningArcPoints(arc);
+                const segments = points.length - 1;
+                const strokePath = () => {
+                    ctx.beginPath();
+                    ctx.moveTo(points[0].x, points[0].y);
+                    for (let i = 1; i <= segments; i++) ctx.lineTo(points[i].x, points[i].y);
+                    ctx.stroke();
+                };
+                ctx.save();
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'miter';
+                // Amber electric field, cyan ionization and a white-hot core.
+                ctx.globalAlpha = strength * (arc.charged ? 0.46 : 0.30);
+                ctx.lineWidth = arc.charged ? 11 : 8;
+                ctx.strokeStyle = '#ffb336';
+                strokePath();
+                if (!dense) {
+                    ctx.globalAlpha = strength * 0.5;
+                    ctx.strokeStyle = '#50f2ff';
+                    ctx.lineWidth = arc.charged ? 5.4 : 3.8;
+                    strokePath();
+                }
+                ctx.globalAlpha = strength;
+                ctx.strokeStyle = '#fff9e1';
+                ctx.lineWidth = arc.charged ? 2.6 : 1.65;
+                strokePath();
+                if (!dense) {
+                    // Visible current front traveling from the previous target to the next.
+                    const progress = 1 - strength;
+                    const n = Math.min(segments - 1, Math.floor(progress * segments));
+                    const t = progress * segments - n;
+                    const px = points[n].x + (points[n + 1].x - points[n].x) * t;
+                    const py = points[n].y + (points[n + 1].y - points[n].y) * t;
+                    ctx.globalAlpha = strength;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(px, py, arc.charged ? 4 : 2.8, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Very short fork at one joint: keeps the electric silhouette jagged.
+                    const middle = points[Math.floor(segments / 2)];
+                    const heading = Math.atan2(arc.y2 - arc.y1, arc.x2 - arc.x1);
+                    ctx.globalAlpha = strength * 0.63;
+                    ctx.strokeStyle = '#67e8ff';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(middle.x, middle.y);
+                    ctx.lineTo(middle.x + Math.cos(heading + 1.12) * 14,
+                               middle.y + Math.sin(heading + 1.12) * 14);
+                    ctx.stroke();
+                }
+                // The struck target has a crown that collapses with the discharge.
+                const corona = arc.charged ? 17 : 12;
+                ctx.globalAlpha = strength * 0.85;
+                ctx.strokeStyle = '#a1faff';
+                ctx.lineWidth = arc.charged ? 2.5 : 1.6;
+                ctx.beginPath();
+                ctx.arc(arc.x2, arc.y2, corona * (1.12 - strength * .35), 0, Math.PI * 2);
+                ctx.stroke();
+                if (!dense) {
+                    ctx.strokeStyle = '#fff6be';
+                    const spin = totalTime * 9 + (arc.seed || 0);
+                    for (let i = 0; i < 4; i++) {
+                        const angle = spin + i * Math.PI / 2;
+                        ctx.beginPath();
+                        ctx.moveTo(arc.x2 + Math.cos(angle) * (corona - 2),
+                                   arc.y2 + Math.sin(angle) * (corona - 2));
+                        ctx.lineTo(arc.x2 + Math.cos(angle) * (corona + 7),
+                                   arc.y2 + Math.sin(angle) * (corona + 7));
+                        ctx.stroke();
+                    }
+                }
+                ctx.restore();
+            }
         }
 
         function drawWeaponImpacts() {
@@ -4796,28 +4909,7 @@
             for (const b of bullets) b.draw(ctx, denseVolley);
             drawWeaponImpacts();
 
-            for (const lb of lightningBolts) {
-                // Distinct double-layer electric arc, without per-frame random jitter.
-                const dx = lb.x2 - lb.x1, dy = lb.y2 - lb.y1;
-                const inv = 1 / (Math.hypot(dx, dy) || 1);
-                const bend = 11 * Math.sin(totalTime * 31 + lb.x1 * .017);
-                const mx = (lb.x1 + lb.x2) * .5 - dy * inv * bend;
-                const my = (lb.y1 + lb.y2) * .5 + dx * inv * bend;
-                ctx.save();
-                ctx.strokeStyle = '#ffc447';
-                ctx.lineWidth = 5;
-                ctx.globalAlpha = 0.48;
-                ctx.beginPath();
-                ctx.moveTo(lb.x1, lb.y1); ctx.lineTo(mx, my); ctx.lineTo(lb.x2, lb.y2);
-                ctx.stroke();
-                ctx.strokeStyle = '#fff8dd';
-                ctx.lineWidth = 1.8;
-                ctx.globalAlpha = 0.96;
-                ctx.beginPath();
-                ctx.moveTo(lb.x1, lb.y1); ctx.lineTo(mx, my); ctx.lineTo(lb.x2, lb.y2);
-                ctx.stroke();
-                ctx.restore();
-            }
+            drawLightningArcs();
 
             for (const e of enemies) e.draw(ctx);
 
@@ -5110,6 +5202,7 @@
             floatingTexts = [];
             shockwaves = [];
             lightningBolts = [];
+            lightningArcSequence = 0;
             weaponImpacts = [];
             weaponImpactFrameCount = 0;
 
