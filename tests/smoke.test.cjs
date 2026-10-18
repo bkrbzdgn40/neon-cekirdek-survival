@@ -852,14 +852,17 @@ test('M2.3 optional arena event renders using mock canvas without error', () => 
 });
 
 
-test('M3.1 build metadata defines five real evolutions and four two-module recipes', () => {
+test('M3.1 five original evolutions remain among all eleven, with four recipes', () => {
   const { run } = setup();
   const info = JSON.parse(run(`(() => JSON.stringify({
     evolutions: Object.keys(EVOLUTION_DEFS),
     synergies: SYNERGY_DEFS.map(s=>({id:s.id,modules:s.modules})),
     upgrades: UPGRADES_POOL.map(u=>u.id)
   }))()`));
-  assert.equal(info.evolutions.length,5);
+  assert.equal(info.evolutions.length,11);
+  for(const id of ['multishot','homing','lightning','orbital','pierce_ricochet']) {
+    assert.ok(info.evolutions.includes(id));
+  }
   assert.equal(info.synergies.length,4);
   for(const id of info.evolutions) assert.ok(info.upgrades.includes(id));
   for(const s of info.synergies) {
@@ -1345,4 +1348,23 @@ test('M3.2 new run resets evolution cooldowns, counters and build guide', () => 
   assert.equal(x.burst,0);
   assert.equal(x.readyAt,0);
   assert.equal(x.guide.totalModules,0);
+});
+
+
+test('M3.2 cleared enemy projectiles cannot damage player on next simulation frame', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame(); player.upgradeCounts.overdrive_boost=3; player.refreshBuildTraits();
+    const shot = new EnemyProjectile(player.x,player.y,0,0,8,90);
+    enemyProjectiles.push(shot);
+    const hp=player.hp;
+    player.addOverdrive(200);
+    updateGame(.016);
+    return JSON.stringify({dead:shot.dead,remaining:enemyProjectiles.length,
+      initialHp:hp,afterHp:player.hp,discharges:player.buildStats.overdriveDischarges});
+  })()`));
+  assert.equal(x.dead,true);
+  assert.equal(x.remaining,0);
+  assert.equal(x.initialHp,x.afterHp);
+  assert.equal(x.discharges,1);
 });
