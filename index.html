@@ -211,6 +211,8 @@
 
     <!-- Critical Low HP Screen Warning Vignette -->
     <div id="lowHpOverlay" class="pointer-events-none fixed inset-0 z-10 hidden low-hp-vignette"></div>
+    <!-- Optional lightweight diagnostics: press F3 during desktop play. -->
+    <div id="perfOverlay" class="pointer-events-none fixed right-3 bottom-24 z-20 hidden rounded-lg border border-cyan-500/50 bg-gray-950/90 px-3 py-2 font-mono text-[11px] text-cyan-300 shadow-lg">F3 · PERFORMANS</div>
 
     <!-- CRT Scanline Visual Effect -->
     <div class="crt-overlay fixed inset-0 z-10"></div>
@@ -3041,6 +3043,9 @@
         const BULLET_GRID_SIZE = 96;
         const HUD_REFRESH_INTERVAL = 0.10;
         let hudRefreshAccumulator = 0;
+        let performanceOverlayOn = false;
+        let performanceSampleFrames = 0;
+        let performanceSampleMs = 0;
         let bulletCollisionGrid = new Map();
         let largestBulletRadius = 0;
 
@@ -4151,6 +4156,13 @@
         }
         window.addEventListener('resize', resizeCanvas);
 
+        function togglePerformanceOverlay() {
+            performanceOverlayOn = !performanceOverlayOn;
+            performanceSampleFrames = 0;
+            performanceSampleMs = 0;
+            document.getElementById('perfOverlay').classList.toggle('hidden', !performanceOverlayOn);
+        }
+
         function toggleFullscreen() {
             try {
                 if (!document.fullscreenElement) {
@@ -4168,6 +4180,11 @@
         });
 
         window.addEventListener('keydown', (e) => {
+            if (e.code === 'F3') {
+                e.preventDefault();
+                togglePerformanceOverlay();
+                return;
+            }
             keys[e.code] = true;
             if (e.code === 'KeyF') {
                 toggleFullscreen();
@@ -4343,8 +4360,21 @@
         let lastFrameTime = performance.now();
 
         function gameLoop(now) {
-            const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+            const frameMs = Math.max(0, now - lastFrameTime);
+            const dt = Math.min(0.05, frameMs / 1000);
             lastFrameTime = now;
+
+            if (performanceOverlayOn && frameMs > 0) {
+                performanceSampleFrames++;
+                performanceSampleMs += frameMs;
+                if (performanceSampleMs >= 1000) {
+                    const fps = Math.round(performanceSampleFrames * 1000 / performanceSampleMs);
+                    document.getElementById('perfOverlay').textContent =
+                        `FPS ${fps} | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length} | Küre ${orbs.length} | Efekt ${particles.length} | Sandık ${lootChests.length}`;
+                    performanceSampleFrames = 0;
+                    performanceSampleMs = 0;
+                }
+            }
 
             if (gameState === 'MENU') {
                 for (const n of menuDemoNodes) {
