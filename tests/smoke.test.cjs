@@ -287,3 +287,25 @@ test('frequent laser, pickup and explosion calls reuse SFX rate budgets', () => 
   assert.equal(counts.first, 3);
   assert.equal(counts.voices, 6);
 });
+
+
+test('extended-run reward stress stays bounded without discarding 6000 drops', () => {
+  const { run } = setup();
+  const snapshot = JSON.parse(run(`(() => {
+    startNewGame();
+    for (let i=0; i<6000; i++) {
+      emitEnergyOrb(100 + (i % 80) * 9, 100 + (i % 60) * 7,
+        i % 2 === 0 ? 3 : 0, i % 2 === 1);
+    }
+    return JSON.stringify({
+      objects:orbs.length,
+      count:orbs.reduce((n,o)=>n+o.count,0),
+      xp:orbs.filter(o=>!o.isGold).reduce((n,o)=>n+o.value,0),
+      gold:orbs.filter(o=>o.isGold).reduce((n,o)=>n+o.count,0)
+    });
+  })()`));
+  assert.ok(snapshot.objects <= 241);
+  assert.equal(snapshot.count, 6000);
+  assert.equal(snapshot.xp, 9000);
+  assert.equal(snapshot.gold, 3000);
+});
