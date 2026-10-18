@@ -979,6 +979,26 @@
                 } catch (e) {}
             }
 
+            playThreatCue(kind = 'raid') {
+                // Short distinct UI cue, separated from bass and rapid-fire audio.
+                if (!this.enabled || !this.allowSfx('cue-' + kind, 1.5)) return;
+                try {
+                    const notes = {boss:[260,195],raid:[570,430],phase:[440,310],event:[740,920]}[kind] || [570,430];
+                    notes.forEach((freq,index) => {
+                        const now = this.ctx.currentTime + index * .13;
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = kind === 'boss' ? 'sawtooth' : 'triangle';
+                        osc.frequency.setValueAtTime(freq,now);
+                        osc.frequency.exponentialRampToValueAtTime(freq*.92,now+.11);
+                        gain.gain.setValueAtTime(kind==='boss' ? .075 : .045,now);
+                        gain.gain.exponentialRampToValueAtTime(.001,now+.12);
+                        osc.connect(gain);gain.connect(this.ctx.destination);
+                        osc.start(now);osc.stop(now+.12);
+                    });
+                } catch(e) {}
+            }
+
             playLaser(isCrit = false) {
                 if (!this.enabled || !this.allowSfx('laser', 0.035)) return;
                 try {
@@ -2118,15 +2138,19 @@
 
             draw(ctx) {
                 ctx.save();
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = this.color;
+                // All hostile projectiles use the same magenta ring, including cyan bosses.
+                ctx.shadowBlur = 5;
+                ctx.shadowColor = '#ff527a';
+                ctx.strokeStyle = '#ff809b';
+                ctx.lineWidth = 2;
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.arc(this.x, this.y, this.radius + 1, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.fillStyle = '#ffffff';
+                ctx.stroke();
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 0.45, 0, Math.PI * 2);
+                ctx.fillStyle = '#170719';
+                ctx.arc(this.x, this.y, Math.max(1.5, this.radius * .37), 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
             }
@@ -2655,6 +2679,7 @@
                     const phase = this.bossPhase;
                     const delay = combatDirector ? combatDirector.reserveBossPhase(phase) : 0;
                     this.bossSpecial = { angle: aimAngle, delay, timer: phase === 3 ? 1.35 : 1.15, phase };
+                    if (delay < .01) audio.playThreatCue('phase');
                     this.actionTimer = Math.max(this.actionTimer, 1.2);
                     this.secondaryTimer = Math.max(this.secondaryTimer, 1.2);
                     if (this.type === 'BOSS_TITAN') this.state = 'CHASE';
@@ -2667,6 +2692,7 @@
                 if (!this.bossSpecial) return;
                 if (this.bossSpecial.delay > 0) {
                     this.bossSpecial.delay = Math.max(0, this.bossSpecial.delay - dt);
+                    if (this.bossSpecial.delay === 0) audio.playThreatCue('phase');
                     return;
                 }
                 this.bossSpecial.timer -= dt;
@@ -3824,6 +3850,7 @@
                 this.tokens = 4;
                 this.afterBossUntil = -Infinity;
                 this.lastEliteChestAt = -Infinity;
+                this.lastBossCueEncounter = 0;
                 this.elitePity = 0;
                 this.bossChestAwarded = false;
                 this.eliteChestTimes = [];
@@ -3924,6 +3951,7 @@
                 const fallbackY = Math.max(minY, Math.min(worldHeight - minY, player.y + (player.y < worldHeight / 2 ? 150 : -150)));
                 const farEnough = Math.hypot(x - player.x, y - player.y) >= 160;
                 this.activeArenaEvent = new ArenaEvent(kind, farEnough ? x : fallbackX, farEnough ? y : fallbackY);
+                audio.playThreatCue('event');
                 this.arenaEventIndex++;
                 this.nextArenaAt = totalTime + ARENA_EVENT_GAP;
                 this.stats.arenaOffered++;
@@ -3959,6 +3987,7 @@
                     enemies.length > this.profile.cap - 12 || this.tokens < 8) return;
                 const side = Math.floor(Math.random() * 4);
                 this.pendingEncounter = getSpecialEncounterPlan(wave, this.profile.theme, side, this.encounterIndex);
+                audio.playThreatCue('raid');
                 this.encounterIndex++;
                 this.lastEncounterAt = totalTime;
                 this.nextEncounterAt = totalTime + SPECIAL_ENCOUNTER_GAP;
@@ -4139,6 +4168,10 @@
 
             if (totalTime >= nextBossTime - 3.8 && totalTime < nextBossTime && activeBosses.length === 0) {
                 bossWarningTimer = 1;
+                if (combatDirector && combatDirector.lastBossCueEncounter !== bossEncounterCount + 1) {
+                    combatDirector.lastBossCueEncounter = bossEncounterCount + 1;
+                    audio.playThreatCue('boss');
+                }
                 const warnBanner = document.getElementById('bossWarningBanner');
                 const warnText = document.getElementById('bossWarningText');
                 const upcomingCount = (bossEncounterCount + 1) === 1 ? 1 : ((bossEncounterCount + 1) >= 3 && (bossEncounterCount + 1) % 2 === 1 ? 3 : 2);
@@ -4329,8 +4362,21 @@
         }
 
         function drawBackgroundGrid() {
-            ctx.fillStyle = '#04060c';
+            ctx.fillStyle = '#050816';
             ctx.fillRect(0, 0, worldWidth, worldHeight);
+            const phase = combatDirector?.profile?.phase;
+            const railColor = phase === 'BOSS' || phase === 'WARNING'
+                ? 'rgba(255,82,104,.36)' : phase === 'CRISIS'
+                    ? 'rgba(255,182,71,.28)' : 'rgba(0,226,236,.16)';
+            ctx.fillStyle = railColor;
+            const corner = Math.min(84, Math.max(28, Math.min(worldWidth, worldHeight) * .11));
+            for (const [x,y,dx,dy] of [
+                [10,10,1,1],[worldWidth-10,10,-1,1],
+                [10,worldHeight-10,1,-1],[worldWidth-10,worldHeight-10,-1,-1]
+            ]) {
+                ctx.fillRect(dx > 0 ? x : x-corner*.65, y, corner*.65, 2);
+                ctx.fillRect(x, dy > 0 ? y : y-corner*.65, 2, corner*.65);
+            }
 
             const spacing = 48;
             const gridShockwaves = shockwaves.map(sw => {
@@ -4388,8 +4434,8 @@
             ctx.lineWidth = 4;
             ctx.setLineDash([14, 9]);
             ctx.globalAlpha = 0.35 + 0.45 * (1 - progress);
-            ctx.strokeStyle = '#ffe600';
-            ctx.fillStyle = 'rgba(255, 180, 0, 0.08)';
+            ctx.strokeStyle = '#ffbf58';
+            ctx.fillStyle = 'rgba(255, 180, 0, 0.04)';
             const band = Math.min(70, Math.min(worldWidth, worldHeight) * 0.13);
             for (const side of sides) {
                 if (side === 0) {
@@ -4405,6 +4451,16 @@
                     ctx.fillRect(0, 0, band, worldHeight);
                     ctx.beginPath(); ctx.moveTo(band, 0); ctx.lineTo(band, worldHeight); ctx.stroke();
                 }
+            }
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#ffdb75';
+            const mark = Math.max(10, Math.round(26 * (1-progress)));
+            for (const side of sides) {
+                if (side === 0) ctx.fillRect(worldWidth/2-20,12,40,mark);
+                else if (side === 1) ctx.fillRect(worldWidth-12-mark,worldHeight/2-20,mark,40);
+                else if (side === 2) ctx.fillRect(worldWidth/2-20,worldHeight-12-mark,40,mark);
+                else ctx.fillRect(12,worldHeight/2-20,mark,40);
             }
             ctx.restore();
         }
