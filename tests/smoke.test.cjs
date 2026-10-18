@@ -1894,3 +1894,195 @@ test('M4.3.1 rendering effects is safe for all weapon types and electric bolts',
   assert.equal(x.impacts,1);
   assert.equal(x.lightning,1);
 });
+
+
+test('M4.3.1.1 electric arcs have bounded segments, preserved endpoints and moving charge', () => {
+  const {run}=setup();
+  const data=JSON.parse(run(`(() => {
+    startNewGame(); totalTime=12;
+    emitLightningArc(10,30,180,115,true);
+    const arc=lightningBolts[0];
+    const first=getLightningArcPoints(arc,12);
+    const second=getLightningArcPoints(arc,12.04);
+    return JSON.stringify({count:first.length,segments:arc.segments,charged:arc.charged,
+      first:first[0],last:first[first.length-1],
+      changed:first.slice(1,-1).some((p,i)=>p.x!==second[i+1].x||p.y!==second[i+1].y),
+      maxLife:arc.duration,life:arc.life});
+  })()`));
+  assert.equal(data.charged,true);
+  assert.ok(data.segments>=4 && data.segments<=7);
+  assert.equal(data.count,data.segments+1);
+  assert.deepEqual(data.first,{x:10,y:30});
+  assert.deepEqual(data.last,{x:180,y:115});
+  assert.equal(data.changed,true);
+  assert.equal(data.maxLife,data.life);
+});
+
+test('M4.3.1.1 repeated chain arcs never exceed 32 while preserving newest bolts', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    for(let i=0;i<70;i++)emitLightningArc(i,0,i+40,60,i%2===0);
+    const last=lightningBolts[lightningBolts.length-1];
+    drawLightningArcs();
+    return JSON.stringify({count:lightningBolts.length,cap:MAX_LIGHTNING_ARCS,
+      oldest:lightningBolts[0].x1,newest:last.x1,charged:last.charged});
+  })()`));
+  assert.equal(x.cap,32);
+  assert.equal(x.count,32);
+  assert.equal(x.oldest,38);
+  assert.equal(x.newest,69);
+  assert.equal(x.charged,false);
+});
+
+test('M4.3.1.1 actual chain lightning uses charged animated arcs but identical damage', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    player.chainLightning=1;
+    player.upgradeCounts.lightning=3;player.refreshBuildTraits();
+    const a=new Enemy(200,200,'TANK'),b=new Enemy(280,200,'TANK');
+    enemies.push(a,b);
+    const initial=b.hp;
+    a.takeDamage(10,0,0,true,true);
+    const arc=lightningBolts[0];
+    drawLightningArcs();
+    return JSON.stringify({before:initial,after:b.hp,arcCount:lightningBolts.length,
+      charged:arc.charged,segments:arc.segments,from:arc.x1,to:arc.x2});
+  })()`));
+  assert.ok(x.after<x.before);
+  assert.equal(x.arcCount,1);
+  assert.equal(x.charged,true);
+  assert.ok(x.segments>=4);
+  assert.equal(x.from,200);
+  assert.equal(x.to,280);
+});
+
+test('M4.3.1.1 rocket exhaust history is capped and driven by actual movement', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const missile=new Bullet(150,190,280,0,13,6,1,0,true,true);
+    const target=new Enemy(330,270,'TANK');enemies.push(target);
+    for(let i=0;i<24;i++)missile.update(.02);
+    const history=missile.exhaustTrail;
+    missile.draw(ctx);
+    missile.draw(ctx,true);
+    return JSON.stringify({trail:history.length,first:history[0],last:history.at(-1),
+      pos:{x:missile.x,y:missile.y},age:missile.visualAge,
+      lock:missile.visualLockDistance,heading:Math.atan2(missile.vy,missile.vx)});
+  })()`));
+  assert.ok(x.trail>1&&x.trail<=9);
+  assert.ok(x.last.x>x.first.x);
+  assert.ok(x.last.y>x.first.y);
+  assert.ok(x.age>0);
+  assert.ok(Number.isFinite(x.lock));
+  assert.ok(x.heading>0);
+});
+
+test('M4.3.1.1 non-homing bullets do not allocate persistent exhaust histories', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const a=new Bullet(100,100,100,0,10,5,1,0,false,false);
+    const b=new Bullet(100,100,100,0,10,5,1,0,true,true);
+    a.update(.05);b.update(.05);
+    return JSON.stringify({regular:a.exhaustTrail,rocketHistory:b.exhaustTrail.length,
+      fragment:b.clusterFragment});
+  })()`));
+  assert.equal(x.regular,null);
+  assert.ok(x.rocketHistory<=9);
+  assert.equal(x.fragment,false);
+});
+
+test('M4.3.1.1 cluster split fragments are visually distinct without recursive payload', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const target=new Enemy(280,280,'TANK');
+    const missile=new Bullet(280,280,100,0,20,6,1,0,true,true);
+    missile.clusterPayload=true;
+    const emitted=spawnClusterFragments(missile,target);
+    const history=bullets.map(b=>({fragment:b.clusterFragment,payload:b.clusterPayload,
+      radius:b.radius,homing:b.isHoming}));
+    for(const shot of bullets)shot.draw(ctx);
+    return JSON.stringify({emitted,history});
+  })()`));
+  assert.equal(x.emitted,2);
+  assert.equal(x.history.length,2);
+  assert.ok(x.history.every(v=>v.fragment&&v.homing&&!v.payload));
+});
+
+test('M4.3.1.1 rocket firing adds visual-only twin muzzle flash with decay', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();player.homingMissiles=1;player.shotCounter=2;
+    enemies.push(new Enemy(player.x+170,player.y,'TANK'));
+    player.autoShoot();
+    const atLaunch=player.missileLaunchFlash;
+    player.draw(ctx);player.update(.08);
+    return JSON.stringify({atLaunch,after:player.missileLaunchFlash,
+      missiles:bullets.filter(b=>b.isHoming).length});
+  })()`));
+  assert.equal(x.atLaunch,1);
+  assert.ok(x.after<x.atLaunch&&x.after>0);
+  assert.equal(x.missiles,1);
+});
+
+test('M4.3.1.1 impact presentation tracks cluster and boss without altering damage', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const missile=new Bullet(160,160,120,0,12,6,1,0,true,true);
+    missile.clusterPayload=true;
+    const registered=emitWeaponImpact(missile,{radius:40,isBoss:true});
+    const item=weaponImpacts[0];
+    drawWeaponImpacts();
+    return JSON.stringify({registered,count:weaponImpacts.length,type:item.type,
+      boss:item.boss,cluster:item.cluster,radius:item.radius,
+      originalDamage:missile.damage,healthAffected:player.hp===player.maxHp});
+  })()`));
+  assert.equal(x.registered,true);
+  assert.equal(x.type,'missile');
+  assert.equal(x.boss,true);
+  assert.equal(x.cluster,true);
+  assert.equal(x.radius,20.8);
+  assert.equal(x.originalDamage,12);
+  assert.equal(x.healthAffected,true);
+});
+
+test('M4.3.1.1 charged critical, rail and rocket paint without new collisions', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const bullet=new Bullet(210,210,180,0,25,8,2,1,true,false);
+    const rail=new Bullet(240,240,260,0,30,10,2,0);
+    rail.evoRail=true;
+    const missile=new Bullet(270,270,130,0,15,6,1,0,true,true);
+    bullet.draw(ctx);rail.draw(ctx);missile.draw(ctx);
+    emitWeaponImpact(bullet,{radius:18});
+    emitWeaponImpact(rail,{radius:30,isBoss:true});
+    emitWeaponImpact(missile,{radius:20,isBoss:false});
+    drawWeaponImpacts();
+    return JSON.stringify({types:weaponImpacts.map(i=>i.type),count:weaponImpacts.length,
+      shots:bullets.length,enemyShots:enemyProjectiles.length});
+  })()`));
+  assert.deepEqual(x.types,['critical','rail','missile']);
+  assert.equal(x.count,3);
+  assert.equal(x.shots,0);
+  assert.equal(x.enemyShots,0);
+});
+
+test('M4.3.1.1 new run resets arc and impact visuals with no persistent state', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();emitLightningArc(0,0,100,100,true);
+    emitWeaponImpact(new Bullet(0,0,100,0,12,5,1,0,true),{radius:20});
+    const before={arcs:lightningBolts.length,impacts:weaponImpacts.length,seed:lightningArcSequence};
+    startNewGame();
+    const after={arcs:lightningBolts.length,impacts:weaponImpacts.length,seed:lightningArcSequence};
+    return JSON.stringify({before,after});
+  })()`));
+  assert.deepEqual(x.before,{arcs:1,impacts:1,seed:1});
+  assert.deepEqual(x.after,{arcs:0,impacts:0,seed:0});
+});
