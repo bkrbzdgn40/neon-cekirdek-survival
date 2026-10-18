@@ -2038,6 +2038,7 @@
                 this.pushVy = 0;
                 this.rotation = 0;
                 this.stunTimer = 0;
+                this.orbitalHitCooldown = 0;
                 this.dead = false;
                 this.actionTimer = 1.4 + Math.random() * 1.2;
                 this.secondaryTimer = 3.0 + Math.random() * 1.5;
@@ -2180,6 +2181,7 @@
             }
 
             update(dt) {
+                this.orbitalHitCooldown = Math.max(0, this.orbitalHitCooldown - dt);
                 if (this.stunTimer > 0) {
                     this.stunTimer -= dt;
                 } else {
@@ -3254,10 +3256,11 @@
 
                 if (!e.dead) {
                     for (const op of orbPositions) {
-                        if (Math.hypot(e.x - op.x, e.y - op.y) < e.radius + op.r) {
+                        if (e.orbitalHitCooldown <= 0 && Math.hypot(e.x - op.x, e.y - op.y) < e.radius + op.r) {
+                            // Shared contact cooldown limits both DPS and damage-number spam.
+                            e.orbitalHitCooldown = 0.12;
                             const angle = Math.atan2(e.y - player.y, e.x - player.x);
-                            // Orbital contact is damage-per-second, not damage-per-render-frame.
-                            e.takeDamage(player.damage * 8 * dt, Math.cos(angle) * 110 * dt, Math.sin(angle) * 110 * dt, false, false);
+                            e.takeDamage(player.damage * 8 * 0.12, Math.cos(angle) * 13.2, Math.sin(angle) * 13.2, false, false);
                         }
                     }
                 }
