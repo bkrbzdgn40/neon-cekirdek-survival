@@ -1725,3 +1725,172 @@ test('M4.2.2 fit refreshes after tab switches, returns and delayed font loading'
     assert.ok(html.includes(anchor),anchor);
   assert.equal((html.match(/scheduleMenuFit\(\);/g)||[]).length>=3,true);
 });
+
+
+test('M4.3.1 arena palette has distinct beats and prioritizes boss danger over Overdrive', () => {
+  const {run}=setup();
+  const p=JSON.parse(run(`(() => JSON.stringify({
+    buildup:getArenaAtmosphereProfile('BUILDUP',false),
+    pressure:getArenaAtmosphereProfile('PRESSURE',false),
+    crisis:getArenaAtmosphereProfile('CRISIS',false),
+    boss:getArenaAtmosphereProfile('BOSS',true),
+    warning:getArenaAtmosphereProfile('WARNING',false),
+    recovery:getArenaAtmosphereProfile('RECOVERY',false),
+    overdrive:getArenaAtmosphereProfile('PRESSURE',true)
+  }))()`));
+  assert.equal(p.boss.id,'danger');
+  assert.equal(p.warning.id,'danger');
+  assert.equal(p.overdrive.id,'overdrive');
+  assert.ok(p.crisis.strength>p.pressure.strength);
+  assert.ok(p.recovery.strength<p.buildup.strength);
+  assert.notEqual(p.crisis.color,p.boss.color);
+  assert.notEqual(p.overdrive.color,p.pressure.color);
+});
+
+test('M4.3.1 arena draws cosmetic phase motifs without changing game state', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();wave=12;totalTime=43;
+    combatDirector.update(.02);
+    const before={hp:player.hp,kills,enemies:enemies.length,tokens:combatDirector.tokens};
+    drawBackgroundGrid();drawArenaAtmosphere();drawSpecialEncounterWarning();
+    const after={hp:player.hp,kills,enemies:enemies.length,tokens:combatDirector.tokens};
+    return JSON.stringify({before,after});
+  })()`));
+  assert.deepEqual(x.after,x.before);
+});
+
+test('M4.3.1 projectile visuals distinguish six families without damage changes', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    const variants=[
+      {evoRail:true},{reactorPulse:true},{prismEvolved:true},
+      {isHoming:true,clusterPayload:true},{isHoming:true},
+      {isCrit:true},{}
+    ];
+    const kinds=variants.map(x=>getProjectileVisualStyle(x).type);
+    const same=getProjectileVisualStyle({evoRail:true})===getProjectileVisualStyle({evoRail:true});
+    return JSON.stringify({kinds,same});
+  })()`));
+  assert.deepEqual(x.kinds,['rail','reactor','prism','missile','missile','critical','plasma']);
+  assert.equal(x.same,true,'Paint recipes must be cached, not allocated per shot');
+});
+
+test('M4.3.1 impact frame budget preserves slots for critical hits', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const common=new Bullet(100,100,20,0,9,5,1,0);
+    const critical=new Bullet(100,100,20,0,9,6,1,0,true,false);
+    const target={radius:18,isBoss:false};
+    const result=[];
+    for(let i=0;i<8;i++)result.push(emitWeaponImpact(common,target));
+    const important=[emitWeaponImpact(critical,target),emitWeaponImpact(critical,target),
+      emitWeaponImpact(critical,target)];
+    return JSON.stringify({result,important,count:weaponImpacts.length,
+      budget:weaponImpactFrameCount,types:weaponImpacts.map(e=>e.type)});
+  })()`));
+  assert.equal(x.result.filter(Boolean).length,5);
+  assert.deepEqual(x.important,[true,true,false]);
+  assert.equal(x.count,7);
+  assert.equal(x.budget,7);
+  assert.deepEqual(x.types.slice(-2),['critical','critical']);
+});
+
+test('M4.3.1 impact pool caps at 56 and makes room for an important hit', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const n=new Bullet(100,100,1,0,10,4,1,0);
+    const c=new Bullet(100,100,1,0,10,4,1,0,true);
+    const target={radius:12,isBoss:false};
+    for(let i=0;i<56;i++)weaponImpacts.push({
+      x:0,y:0,type:'plasma',color:'#fff',core:'#fff',duration:.1,life:.1,radius:11,angle:0
+    });
+    const normal=emitWeaponImpact(n,target);
+    const crit=emitWeaponImpact(c,target);
+    return JSON.stringify({normal,crit,size:weaponImpacts.length,
+      latest:weaponImpacts[weaponImpacts.length-1].type});
+  })()`));
+  assert.equal(x.normal,false);
+  assert.equal(x.crit,true);
+  assert.equal(x.size,56);
+  assert.equal(x.latest,'critical');
+});
+
+test('M4.3.1 actual projectile collision creates impact without changing hit damage', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();player.fireTimer=100;
+    const e=new Enemy(player.x+90,player.y,'TANK');e.speed=0;
+    enemies.push(e);
+    const b=new Bullet(e.x,e.y,0,0,15,5,1,0,false,false);
+    bullets.push(b);
+    const hp=e.hp;
+    updateGame(.016);
+    return JSON.stringify({lost:hp-e.hp,impacts:weaponImpacts.length,
+      style:weaponImpacts[0]?.type,dead:b.dead});
+  })()`));
+  assert.equal(x.lost,15);
+  assert.equal(x.impacts,1);
+  assert.equal(x.style,'plasma');
+  assert.equal(x.dead,true);
+});
+
+test('M4.3.1 visual impact lifetime and new run cleanup stay bounded', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const b=new Bullet(120,130,20,0,12,5,1,0,true);
+    emitWeaponImpact(b,{radius:16});
+    const before=weaponImpacts.length;
+    updateGame(.30);
+    const expired=weaponImpacts.length;
+    emitWeaponImpact(b,{radius:16});
+    startNewGame();
+    return JSON.stringify({before,expired,cleared:weaponImpacts.length,
+      frame:weaponImpactFrameCount});
+  })()`));
+  assert.equal(x.before,1);
+  assert.equal(x.expired,0);
+  assert.equal(x.cleared,0);
+  assert.equal(x.frame,0);
+});
+
+test('M4.3.1 dense bullet field uses compact draw mode', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    bullets=Array.from({length:151},(_,i)=>new Bullet(50+i,50,20,0,8,4,1,0));
+    const seen=[];
+    const old=Bullet.prototype.draw;
+    Bullet.prototype.draw=function(ctx,compact){seen.push(compact);};
+    try{renderGame();}finally{Bullet.prototype.draw=old;}
+    return JSON.stringify({count:seen.length,compact:seen.every(Boolean)});
+  })()`));
+  assert.equal(x.count,151);
+  assert.equal(x.compact,true);
+});
+
+test('M4.3.1 rendering effects is safe for all weapon types and electric bolts', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const types=[
+      {evoRail:true},{reactorPulse:true},{prismEvolved:true},
+      {isHoming:true,clusterPayload:true},{isHoming:true},{isCrit:true},{}
+    ];
+    for(const values of types){
+      const b=new Bullet(100,150,100,15,8,4,2,1,!!values.isCrit,!!values.isHoming);
+      Object.assign(b,values);b.draw(ctx);
+    }
+    lightningBolts.push({x1:60,y1:90,x2:130,y2:120,life:.1});
+    weaponImpacts.push({x:110,y:110,duration:.2,life:.15,radius:12,
+      type:'rail',color:'#fff',core:'#fff',angle:0});
+    renderGame();
+    return JSON.stringify({bullets:bullets.length,impacts:weaponImpacts.length,
+      lightning:lightningBolts.length});
+  })()`));
+  assert.equal(x.impacts,1);
+  assert.equal(x.lightning,1);
+});
