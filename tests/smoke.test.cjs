@@ -658,3 +658,195 @@ test('boss phase telegraph suppresses simultaneous regular attack', () => {
   assert.equal(x.specials,1);
   assert.ok(x.normalTimer > 0);
 });
+
+
+test('M2.3 two bosses share a cooldown for ordinary attack salvos', () => {
+  const { run } = setup();
+  const data=JSON.parse(run(`(() => {
+    startNewGame(); totalTime=90;
+    const a=new Enemy(150,150,'BOSS_DESTROYER');
+    const b=new Enemy(250,250,'BOSS_PRISM');
+    activeBosses=[a,b];
+    const first=combatDirector.allowBossAttack(a,'regular');
+    const second=combatDirector.allowBossAttack(b,'regular');
+    totalTime+=0.96;
+    const third=combatDirector.allowBossAttack(b,'regular');
+    return JSON.stringify({first,second,third,deferred:combatDirector.stats.bossAttacksDeferred});
+  })()`));
+  assert.deepEqual(data,{first:true,second:false,third:true,deferred:1});
+});
+
+test('M2.3 phase warnings are serialized across three simultaneous bosses', () => {
+  const { run } = setup();
+  const data=JSON.parse(run(`(() => {
+    startNewGame(); totalTime=100;
+    const bosses=['BOSS_DESTROYER','BOSS_PRISM','BOSS_VOID'].map(t=>new Enemy(200,200,t));
+    activeBosses=bosses;
+    for(const boss of bosses) {
+      boss.hp=boss.maxHp*0.67;
+      boss.updateBossPhases(0.01,1,0);
+    }
+    const delays=bosses.map(b=>b.bossSpecial.delay);
+    const initialShots=enemyProjectiles.length;
+    for(let i=0;i<190;i++) {
+      totalTime+=0.05;
+      for(const boss of bosses) boss.updateBossPhases(0.05,1,0);
+    }
+    return JSON.stringify({delays,initialShots,
+      attacks:combatDirector.stats.bossSpecialAttacks,
+      shots:enemyProjectiles.length,phases:bosses.map(b=>b.bossPhase)});
+  })()`));
+  assert.equal(data.initialShots,0);
+  assert.ok(data.delays[1]>data.delays[0]+1.5 && data.delays[2]>data.delays[1]+1.5);
+  assert.equal(data.attacks,3);
+  assert.equal(data.shots,13);
+  assert.deepEqual(data.phases,[2,2,2]);
+});
+
+test('M2.3 direct damage past both boss thresholds still queues both phases', () => {
+  const { run }=setup();
+  const state=JSON.parse(run(`(() => {
+    startNewGame();totalTime=85;
+    const boss=new Enemy(120,120,'BOSS_DESTROYER');
+    boss.hp=boss.maxHp*0.2;
+    boss.updateBossPhases(0.02,100,0);
+    const first=boss.bossPhase;
+    totalTime+=2;
+    boss.updateBossPhases(1.5,100,0);
+    const afterFirst=boss.bossPhase;
+    totalTime+=.05;
+    boss.updateBossPhases(.05,100,0);
+    const second=boss.bossPhase;
+    totalTime+=2;
+    boss.updateBossPhases(1.5,100,0);
+    return JSON.stringify({first,afterFirst,second,attacks:boss.bossSpecialCount,
+      tracked:combatDirector.stats.bossSpecialAttacks});
+  })()`));
+  assert.equal(state.first,2);
+  assert.equal(state.afterFirst,2);
+  assert.equal(state.second,3);
+  assert.equal(state.attacks,2);
+  assert.equal(state.tracked,2);
+});
+
+test('M2.3 event offer occurs only in safe director windows and resets each run', () => {
+  const { run }=setup();
+  const state=JSON.parse(run(`(() => {
+    startNewGame(); wave=8; totalTime=150;
+    nextBossTime=500;combatDirector.nextArenaAt=0;
+    combatDirector.update(.016);
+    const first=combatDirector.activeArenaEvent?.kind;
+    const metrics=window.getNeonRunDiagnostics();
+    startNewGame();
+    return JSON.stringify({first,offers:metrics.arenaOffered,
+      newEvent:combatDirector.activeArenaEvent,newOffers:combatDirector.stats.arenaOffered});
+  })()`));
+  assert.equal(state.first,'RELAY');
+  assert.equal(state.offers,1);
+  assert.equal(state.newEvent,null);
+  assert.equal(state.newOffers,0);
+});
+
+test('M2.3 relay rewards XP and overdrive only after sustained optional capture', () => {
+  const { run }=setup();
+  const state=JSON.parse(run(`(() => {
+    startNewGame();wave=7;totalTime=150;nextBossTime=500;combatDirector.nextArenaAt=0;
+    combatDirector.update(.01);
+    const evt=combatDirector.activeArenaEvent;
+    const initialXp=player.xp,initialOverdrive=player.overdrive;
+    player.x=evt.x;player.y=evt.y;
+    evt.update(1.2);
+    player.x+=130;evt.update(.5);
+    const incomplete=!evt.dead;
+    player.x=evt.x;evt.update(2.5);
+    return JSON.stringify({incomplete,dead:evt.dead,initialXp,xp:player.xp,
+      initialOverdrive,overdrive:player.overdrive,completed:combatDirector.stats.arenaCompleted,
+      remaining:combatDirector.activeArenaEvent});
+  })()`));
+  assert.equal(state.incomplete,true);
+  assert.equal(state.dead,true);
+  assert.ok(state.xp>state.initialXp);
+  assert.ok(state.overdrive>state.initialOverdrive);
+  assert.equal(state.completed,1);
+  assert.equal(state.remaining,null);
+});
+
+test('M2.3 vault requires sufficient HP and charges at most once, with balanced reward', () => {
+  const { run }=setup();
+  const state=JSON.parse(run(`(() => {
+    startNewGame();wave=8;totalTime=150;nextBossTime=500;
+    combatDirector.arenaEventIndex=1;combatDirector.nextArenaAt=0;
+    combatDirector.update(.01);
+    const evt=combatDirector.activeArenaEvent;
+    player.x=evt.x;player.y=evt.y;player.hp=20;
+    evt.update(.2);const declined=evt.committed;
+    player.hp=80;
+    evt.update(.2);const afterCommit=player.hp;
+    evt.update(.5);const afterRepeat=player.hp;
+    evt.update(4);
+    return JSON.stringify({kind:evt.kind,declined,afterCommit,afterRepeat,
+      finalHp:player.hp,gold:sessionGold,completed:combatDirector.stats.arenaCompleted});
+  })()`));
+  assert.equal(state.kind,'VAULT');
+  assert.equal(state.declined,false);
+  assert.equal(state.afterCommit,68);
+  assert.equal(state.afterRepeat,68);
+  assert.equal(state.finalHp,74);
+  assert.equal(state.gold,44);
+  assert.equal(state.completed,1);
+});
+
+test('M2.3 boss warning cancels risky event and refunds charged HP', () => {
+  const { run }=setup();
+  const state=JSON.parse(run(`(() => {
+    startNewGame();wave=8;totalTime=150;nextBossTime=500;
+    combatDirector.arenaEventIndex=1;combatDirector.nextArenaAt=0;
+    combatDirector.update(.01);
+    const evt=combatDirector.activeArenaEvent;
+    player.hp=92;player.x=evt.x;player.y=evt.y;
+    evt.update(.2);
+    const paid=player.hp;
+    nextBossTime=totalTime+10;
+    combatDirector.update(.01);
+    return JSON.stringify({paid,refunded:player.hp,
+      gone:combatDirector.activeArenaEvent,cancelled:combatDirector.stats.arenaCancelled,
+      completed:combatDirector.stats.arenaCompleted});
+  })()`));
+  assert.equal(state.paid,80);
+  assert.equal(state.refunded,92);
+  assert.equal(state.gone,null);
+  assert.equal(state.cancelled,1);
+  assert.equal(state.completed,0);
+});
+
+test('M2.3 unclaimed event expires without reward, penalty or extra threats', () => {
+  const { run }=setup();
+  const state=JSON.parse(run(`(() => {
+    startNewGame();wave=6;totalTime=150;nextBossTime=500;
+    combatDirector.nextArenaAt=0;combatDirector.update(.01);
+    const evt=combatDirector.activeArenaEvent;
+    const gold=totalGold,hp=player.hp,tokens=combatDirector.tokens;
+    evt.update(20);
+    return JSON.stringify({expired:evt.dead,remaining:combatDirector.activeArenaEvent,
+      expiredCount:combatDirector.stats.arenaExpired,goldBefore:gold,goldAfter:totalGold,
+      hpBefore:hp,hpAfter:player.hp,threatTokens:tokens});
+  })()`));
+  assert.equal(state.expired,true);
+  assert.equal(state.remaining,null);
+  assert.equal(state.expiredCount,1);
+  assert.equal(state.goldAfter,state.goldBefore);
+  assert.equal(state.hpAfter,state.hpBefore);
+});
+
+test('M2.3 optional arena event renders using mock canvas without error', () => {
+  const { run }=setup();
+  const state=JSON.parse(run(`(() => {
+    startNewGame();wave=8;totalTime=150;nextBossTime=500;
+    combatDirector.nextArenaAt=0;combatDirector.update(.01);
+    combatDirector.activeArenaEvent.draw(ctx);
+    drawOffscreenIndicators();
+    return JSON.stringify({kind:combatDirector.activeArenaEvent.kind,offered:combatDirector.stats.arenaOffered});
+  })()`));
+  assert.equal(state.kind,'RELAY');
+  assert.equal(state.offered,1);
+});
