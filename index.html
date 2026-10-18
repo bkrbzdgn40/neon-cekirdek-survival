@@ -268,6 +268,20 @@
         @media(max-width:639px){#tabProtocolContent{grid-template-columns:minmax(0,1fr);}.menu-chassis-v2{min-height:0;}}
         @media(prefers-reduced-motion:reduce){.menu-core-v2::before{animation:none}}
 
+
+        /* M4.2.1: no giant empty full-height dashboard column. */
+        #preflightDashboard > section {align-self:start;}
+        #preflightReadiness {flex:none;}
+        #preflightReadiness .menu-panel-v2 {background:linear-gradient(120deg,rgba(8,21,37,.94),rgba(9,12,25,.96));}
+        #preflightReadiness #menuLoadoutSummary > div {min-height:73px;}
+        @media(min-width:1024px) {
+            #preflightDashboard {align-items:start;}
+            #preflightDashboard > section {height:auto;min-height:0;}
+        }
+        @media(max-width:1023px) {
+            #preflightDashboard {display:flex;flex-direction:column;}
+            #preflightDashboard > section {width:100%;}
+        }
     </style>
 </head>
 <body class="relative w-screen h-screen overflow-hidden select-none">
@@ -475,7 +489,7 @@
     </div>
 
     <div id="startModal" class="fixed inset-0 z-30 w-screen h-[100dvh] bg-black/60 backdrop-blur-[4px] overflow-y-auto">
-        <div class="w-full min-h-[100dvh] flex flex-col justify-between terminal-shell p-3 sm:p-5 lg:p-6 xl:p-8 gap-3 sm:gap-4 lg:gap-5">
+        <div class="w-full max-w-[1800px] mx-auto min-h-[100dvh] flex flex-col justify-center terminal-shell p-3 sm:p-5 lg:p-6 xl:p-8 gap-3 sm:gap-4 lg:gap-5">
             
             <!-- Row 1: Top Command Telemetry Header (Fixed Height) -->
             <header class="shrink-0 flex flex-wrap items-center justify-between gap-3 bg-gray-950/90 border border-cyan-500/30 rounded-xl px-4 py-2.5 sm:py-3 shadow-[0_0_25px_rgba(0,0,0,0.6)]">
@@ -498,11 +512,11 @@
                 </div>
             </header>
 
-            <!-- Row 2: Main Symmetrical Bento Grid (Stretches to fill viewport height cleanly) -->
-            <main class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 xl:gap-6 items-stretch">
+            <!-- M4.2.1: Natural height dashboard, content determines each panel. -->
+            <main id="preflightDashboard" class="shrink-0 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 xl:gap-6 items-start">
                 
-                <!-- Left Column: Hero Identity, Chassis Selection & Telemetry (5 Cols, Full Height) -->
-                <section class="lg:col-span-5 flex flex-col justify-between gap-3.5 xl:gap-4 min-h-0 h-full">
+                <!-- Left: identity and chassis choice. Content-sized. -->
+                <section class="lg:col-span-5 flex flex-col gap-3.5 xl:gap-4 min-w-0">
                     
                     <!-- Hero Identity & Pilot Record Card -->
                     <div class="bg-gray-950/85 border border-cyan-500/30 rounded-xl p-4 sm:p-5 xl:p-6 flex flex-col justify-between gap-4 shadow-[0_0_35px_rgba(0,0,0,0.6)]">
@@ -577,17 +591,11 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Current run setup: stay in sync with meta upgrades and selection -->
-                    <div class="menu-panel-v2 rounded-xl p-3.5 sm:p-4 flex flex-col gap-2">
-                        <div class="font-cyber text-xs font-bold text-cyan-300">BAŞLANGIÇ GÜCÜ</div>
-                        <p class="text-[11px] text-gray-400">Kalıcı geliştirmelerin ve şasinin ilk koşudaki toplam etkisi.</p>
-                        <div id="menuLoadoutSummary" class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-semibold text-gray-300"></div>
-                    </div>
 
                 </section>
 
-                <!-- Right Column: Tactical Briefing Tabs & Action Triggers (7 Cols, Full Height) -->
-                <section class="lg:col-span-7 flex flex-col gap-3.5 bg-gray-950/85 border border-cyan-500/30 p-4 sm:p-6 xl:p-7 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] min-h-0 h-full gap-4">
+                <!-- Right: mechanic guide, live run readiness, Start. Content-sized. -->
+                <section class="lg:col-span-7 flex flex-col gap-3.5 bg-gray-950/85 border border-cyan-500/30 p-4 sm:p-5 xl:p-6 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] min-w-0">
                     
                     <!-- Top Tab Header -->
                     <div class="shrink-0 flex flex-wrap items-center justify-between border-b border-gray-800 pb-3 gap-2">
@@ -604,7 +612,7 @@
 
                     
                     <!-- M4.2: concise but actionable mechanic explanations -->
-                    <div id="tabProtocolContent" class="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 text-left content-start">
+                    <div id="tabProtocolContent" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 text-left content-start">
                       <div class="menu-protocol-v2 rounded-xl p-3.5">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-cyan-300 text-xs"><i class="fa-solid fa-arrows-up-down-left-right mr-2" aria-hidden="true"></i>HAREKET</h3></div>
                           <div class="key text-cyan-200">WASD · OK TUŞLARI</div>
@@ -648,8 +656,8 @@
 <div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">3</div><div><div class="text-[11px] font-cyber font-bold text-white">BOSS GELİYOR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">Uyarı çizgisinden çık; Atılım, EMP ve Cinnet zamanlamanı koru.</p></div></div>
                       </div>
                     </div>
-                    <!-- TAB 2: Enemy Threat Codex (Expands to fill available vertical space) -->
-                    <div id="tabCodexContent" class="hidden flex-1 min-h-0 grid-cols-1 sm:grid-cols-2 gap-3 xl:gap-4 text-left items-stretch overflow-y-auto pr-1">
+                    <!-- TAB 2: Enemy Threat Codex -->
+                    <div id="tabCodexContent" class="hidden grid-cols-1 sm:grid-cols-2 gap-3 xl:gap-4 text-left items-stretch">
                         <div class="bg-gray-900/80 border-l-4 border-red-500 p-3.5 xl:p-4 rounded-r-xl flex flex-col justify-center">
                             <div class="font-cyber text-xs sm:text-sm font-bold text-red-400 mb-1">KAMİKAZE & HAYALET SUİKASTÇI</div>
                             <p class="text-xs text-gray-300 leading-relaxed">Kamikazeler temas anında patlar; Dalga 5+ sonrası gelen Suikastçılar ise zikzak çizerek yüksek hızda saldırır.</p>
@@ -672,8 +680,18 @@
                         </div>
                     </div>
 
-                    <!-- Bottom Action Triggers (Fixed Height) -->
-                    <div class="shrink-0 pt-3 border-t border-gray-800 flex flex-col sm:flex-row gap-3.5">
+                    <!-- M4.2.1: Live readiness metrics, next to the Start action -->
+                    <div id="preflightReadiness">
+                        <!-- Live setup, always next to launch -->
+                    <div class="menu-panel-v2 rounded-xl p-3.5 sm:p-4 flex flex-col gap-2">
+                        <div class="font-cyber text-xs font-bold text-cyan-300">BAŞLANGIÇ GÜCÜ</div>
+                        <p class="text-[11px] text-gray-400">Kalıcı geliştirmelerin ve şasinin ilk koşudaki toplam etkisi.</p>
+                        <div id="menuLoadoutSummary" class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-semibold text-gray-300"></div>
+                    </div>
+                    </div>
+
+                    <!-- Main dashboard actions: directly after the preparation content -->
+                    <div class="pt-3 border-t border-gray-800 flex flex-col sm:flex-row gap-3.5">
                         <button id="openShopFromMenuBtn" type="button" class="cyber-action-btn sm:w-2/5 py-4 xl:py-5 px-5 bg-gray-900 hover:bg-gray-800 font-cyber font-bold text-xs sm:text-sm tracking-wider text-yellow-300 border border-yellow-400/70 flex items-center justify-center gap-2.5 cursor-pointer shadow-[0_0_20px_rgba(255,230,0,0.15)]">
                             <i class="fa-solid fa-microchip text-yellow-400 text-base"></i> SİBER LABORATUVAR
                         </button>
@@ -686,7 +704,7 @@
 
             </main>
 
-            <!-- Row 3: Bottom Responsive Telemetry Footer (Fixed Height) -->
+            <!-- Supporting keyboard shortcuts -->
             <footer class="shrink-0 flex flex-wrap items-center justify-between gap-2 bg-gray-950/85 border border-cyan-500/20 rounded-xl px-4 py-2.5 text-[11px] font-cyber text-gray-400">
                 <div class="flex items-center gap-2">
                     <span class="text-cyan-400 font-bold"><i class="fa-solid fa-keyboard mr-1"></i> HIZLI KISAYOLLAR:</span>
