@@ -282,6 +282,42 @@
             #preflightDashboard {display:flex;flex-direction:column;}
             #preflightDashboard > section {width:100%;}
         }
+    
+        /* M4.2.2 — Fit desktop dashboard to the visible viewport, not a scroll page. */
+        #startMenuShell {transform-origin:top center;}
+        #startModal {overscroll-behavior:contain;}
+        .menu-protocol-v2 {position:relative;}
+        .menu-protocol-tip {margin-top:auto;}
+        .menu-protocol-tip summary {cursor:pointer;list-style:none;color:#91b9c9;
+            font:700 9px 'Orbitron',sans-serif;letter-spacing:.06em;border-top:1px solid rgba(100,130,148,.27);
+            padding-top:.35rem;}
+        .menu-protocol-tip summary::-webkit-details-marker {display:none;}
+        .menu-protocol-tip summary::after {content:' ▾';}
+        .menu-protocol-tip[open] {z-index:40;}
+        .menu-protocol-tip[open] summary::after {content:' ▴';}
+        .menu-protocol-tip[open] p {position:absolute;z-index:50;top:calc(100% - 5px);left:-1px;right:-1px;
+            margin:0;padding:.8rem;border-radius:.5rem;border:1px solid rgba(0,243,255,.4);
+            background:#0a192d;box-shadow:0 9px 24px rgba(0,0,0,.65);line-height:1.55;}
+        .menu-protocol-tip:focus-within summary {outline:2px solid #9ceefa;outline-offset:2px;}
+        @media(min-width:1024px) and (max-height:1020px) {
+            #startMenuShell {padding-top:.75rem!important;padding-bottom:.75rem!important;gap:.6rem!important;}
+            #startMenuShell > header {padding-top:.55rem!important;padding-bottom:.55rem!important;}
+            #startMenuShell > footer {padding-top:.4rem!important;padding-bottom:.4rem!important;}
+            #preflightDashboard {gap:.75rem!important;}
+            #preflightDashboard > section {gap:.65rem!important;}
+            #preflightDashboard > section:nth-child(2) {padding:.85rem!important;}
+            .menu-protocol-v2 {min-height:0!important;padding:.6rem .7rem!important;gap:.3rem!important;}
+            #tabProtocolContent {gap:.55rem!important;}
+            #preflightReadiness .menu-panel-v2 {padding:.65rem!important;gap:.35rem!important;}
+            #preflightReadiness #menuLoadoutSummary > div {min-height:0!important;padding:.5rem!important;}
+            .menu-chassis-v2 {min-height:0!important;padding:.65rem!important;gap:.45rem!important;}
+            .menu-detail-v2 {padding:.65rem!important;}
+            #openShopFromMenuBtn, #startBtn {padding-top:.7rem!important;padding-bottom:.7rem!important;}
+        }
+        @media(min-width:1024px) and (max-height:790px) {
+            #startMenuShell > footer, #menuRunSteps {display:none;}
+        }
+
     </style>
 </head>
 <body class="relative w-screen h-screen overflow-hidden select-none">
@@ -489,7 +525,7 @@
     </div>
 
     <div id="startModal" class="fixed inset-0 z-30 w-screen h-[100dvh] bg-black/60 backdrop-blur-[4px] overflow-y-auto">
-        <div class="w-full max-w-[1800px] mx-auto min-h-[100dvh] flex flex-col justify-center terminal-shell p-3 sm:p-5 lg:p-6 xl:p-8 gap-3 sm:gap-4 lg:gap-5">
+        <div id="startMenuShell" class="w-full max-w-[1800px] mx-auto min-h-[100dvh] flex flex-col justify-center terminal-shell p-3 sm:p-5 lg:p-6 xl:p-8 gap-3 sm:gap-4 lg:gap-5">
             
             <!-- Row 1: Top Command Telemetry Header (Fixed Height) -->
             <header class="shrink-0 flex flex-wrap items-center justify-between gap-3 bg-gray-950/90 border border-cyan-500/30 rounded-xl px-4 py-2.5 sm:py-3 shadow-[0_0_25px_rgba(0,0,0,0.6)]">
@@ -617,40 +653,40 @@
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-cyan-300 text-xs"><i class="fa-solid fa-arrows-up-down-left-right mr-2" aria-hidden="true"></i>HAREKET</h3></div>
                           <div class="key text-cyan-200">WASD · OK TUŞLARI</div>
                           <p class="text-xs text-gray-200">Yakındaki hedeflere otomatik ateş edersin. Düşmanların arasına sıkışmamak için sürekli yer değiştir.</p>
-                          <p class="text-[11px] text-cyan-200/80 mt-auto border-t border-gray-700/50 pt-2">Hareket ettikçe Momentum birikir; atış temposunu destekler.</p>
+                          <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-cyan-200/90">Hareket ettikçe Momentum birikir; atış temposunu destekler.</p></details>
                       </div>
 <div class="menu-protocol-v2 rounded-xl p-3.5">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-yellow-300 text-xs"><i class="fa-solid fa-bolt mr-2" aria-hidden="true"></i>ATILIM</h3></div>
                           <div class="key text-yellow-200">BOŞLUK · SOL TIK</div>
                           <p class="text-xs text-gray-200">Kısa bir hamleyle mermilerden ve boss saldırılarından sıyrıl. Atılımın kısa dokunulmazlık süresi var.</p>
-                          <p class="text-[11px] text-yellow-200/80 mt-auto border-t border-gray-700/50 pt-2">Atılımı, turuncu baskın uyarısı geldiğinde saklamak işe yarar.</p>
+                          <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-yellow-200/90">Atılımı, turuncu baskın uyarısı geldiğinde saklamak işe yarar.</p></details>
                       </div>
 <div class="menu-protocol-v2 rounded-xl p-3.5">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-purple-300 text-xs"><i class="fa-solid fa-burst mr-2" aria-hidden="true"></i>EMP NOVA</h3></div>
                           <div class="key text-purple-200">E · SAĞ TIK</div>
                           <p class="text-xs text-gray-200">Yakınındaki düşmanları geri iter, tehlikeli mermileri temizler. Köşeye sıkıştığında güvenli alan açar.</p>
-                          <p class="text-[11px] text-purple-200/80 mt-auto border-t border-gray-700/50 pt-2">Boss ve elit kalabalığını dağıtmak için kullan.</p>
+                          <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-purple-200/90">Boss ve elit kalabalığını dağıtmak için kullan.</p></details>
                       </div>
 <div class="menu-protocol-v2 rounded-xl p-3.5">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-sky-300 text-xs"><i class="fa-solid fa-gauge-high mr-2" aria-hidden="true"></i>MOMENTUM</h3></div>
                           <div class="key text-sky-200">HAREKETLE DOLAR</div>
                           <p class="text-xs text-gray-200">Aktif hareket savaş temposunu artırır. Yerinde durmak yerine kontrollü tur atarak baskını azalt.</p>
-                          <p class="text-[11px] text-sky-200/80 mt-auto border-t border-gray-700/50 pt-2">Hayalet ile kaçınma ve saldırı ritmini birlikte güçlendir.</p>
+                          <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-sky-200/90">Hayalet ile kaçınma ve saldırı ritmini birlikte güçlendir.</p></details>
                       </div>
 <div class="menu-protocol-v2 rounded-xl p-3.5">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-pink-300 text-xs"><i class="fa-solid fa-fire mr-2" aria-hidden="true"></i>SİBER CİNNET</h3></div>
                           <div class="key text-pink-200">BAR DOLUNCA</div>
                           <p class="text-xs text-gray-200">Dolduğunda kısa süreli güçlü savaş moduna geçersin. Atış ve kritik gücünü artırır; modül evrimleriyle birleşir.</p>
-                          <p class="text-[11px] text-pink-200/80 mt-auto border-t border-gray-700/50 pt-2">Kritik boss anları için gücü zamanlamak önemli.</p>
+                          <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-pink-200/90">Kritik boss anları için gücü zamanlamak önemli.</p></details>
                       </div>
 <div class="menu-protocol-v2 rounded-xl p-3.5">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-emerald-300 text-xs"><i class="fa-solid fa-heart-circle-bolt mr-2" aria-hidden="true"></i>DEFİBRİLATÖR</h3></div>
                           <div class="key text-emerald-200">CAN 0 OLUNCA</div>
                           <p class="text-xs text-gray-200">Diriliş hakkın varsa koşuya geri dönersin. Yakın tehditleri uzaklaştıran güçlü bir patlama da yaşanır.</p>
-                          <p class="text-[11px] text-emerald-200/80 mt-auto border-t border-gray-700/50 pt-2">Öncü, başlangıçta bir fazladan ücretsiz hakla gelir.</p>
+                          <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-emerald-200/90">Öncü, başlangıçta bir fazladan ücretsiz hakla gelir.</p></details>
                       </div>
                       <div class="sm:col-span-2 xl:col-span-3 text-[10px] text-gray-400 border-t border-gray-800 pt-2">M · KONTROL MODU　 P · ESC · DURAKLAT</div>
-                      <div class="sm:col-span-2 xl:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
+                      <div id="menuRunSteps" class="sm:col-span-2 xl:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
                        <div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">1</div><div><div class="text-[11px] font-cyber font-bold text-white">İLK DALGALAR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">XP kürelerini topla; hasar ve güvenlik temelini kur.</p></div></div>
 <div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">2</div><div><div class="text-[11px] font-cyber font-bold text-white">BUILD KUR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">Aynı modülü üçüncü kademeye çıkar, sinerji hedeflerini takip et.</p></div></div>
 <div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">3</div><div><div class="text-[11px] font-cyber font-bold text-white">BOSS GELİYOR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">Uyarı çizgisinden çık; Atılım, EMP ve Cinnet zamanlamanı koru.</p></div></div>
@@ -5410,6 +5446,51 @@
             });
         });
 
+
+        // Desktop: fit the full menu including Start without hiding buttons.
+        // Compact CSS handles most cases; proportional adjustment absorbs font/UI scaling.
+        function fitStartMenuToViewport() {
+            const modal = document.getElementById('startModal');
+            const shell = document.getElementById('startMenuShell');
+            if (!modal || !shell) return;
+            shell.style.transform = '';
+            if (window.innerWidth < 1024 || window.innerHeight < 680) {
+                modal.style.overflowY = 'auto';
+                return;
+            }
+            const available = modal.clientHeight || window.innerHeight;
+            const needed = shell.scrollHeight || available;
+            const factor = Math.min(1, (available - 4) / Math.max(needed, 1));
+            if (factor < 0.78) {
+                // Unusually short windows stay accessible; never clip the Start button.
+                modal.style.overflowY = 'auto';
+                return;
+            }
+            modal.style.overflowY = 'hidden';
+            shell.style.transform = factor < 0.999 ? `scale(${factor.toFixed(4)})` : '';
+        }
+
+        let menuFitFramePending = false;
+        function scheduleMenuFit() {
+            if (menuFitFramePending) return;
+            menuFitFramePending = true;
+            requestAnimationFrame(() => {
+                menuFitFramePending = false;
+                fitStartMenuToViewport();
+            });
+        }
+
+        window.addEventListener('resize', scheduleMenuFit);
+        if (typeof ResizeObserver !== 'undefined') {
+            const menuObserver = new ResizeObserver(scheduleMenuFit);
+            menuObserver.observe(document.getElementById('startMenuShell'));
+            menuObserver.observe(document.getElementById('preflightDashboard'));
+        }
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleMenuFit);
+        document.querySelectorAll('.menu-protocol-tip').forEach(
+            el => el.addEventListener('toggle', scheduleMenuFit)
+        );
+
         const tabProtocolBtn = document.getElementById('tabProtocolBtn');
         const tabCodexBtn = document.getElementById('tabCodexBtn');
         const tabProtocolContent = document.getElementById('tabProtocolContent');
@@ -5422,6 +5503,7 @@
             tabCodexContent.classList.remove('grid');
             tabProtocolBtn.className = 'px-4 py-2 rounded-lg font-cyber text-xs font-bold tracking-wider border border-cyan-400/60 text-cyan-300 bg-cyan-950/50 transition cursor-pointer';
             tabCodexBtn.className = 'px-4 py-2 rounded-lg font-cyber text-xs font-bold tracking-wider border border-transparent text-gray-400 hover:text-white hover:bg-gray-900 transition cursor-pointer';
+            scheduleMenuFit();
         });
 
         tabCodexBtn.addEventListener('click', () => {
@@ -5431,6 +5513,7 @@
             tabProtocolContent.classList.remove('grid');
             tabCodexBtn.className = 'px-4 py-2 rounded-lg font-cyber text-xs font-bold tracking-wider border border-pink-500/60 text-pink-300 bg-pink-950/50 transition cursor-pointer';
             tabProtocolBtn.className = 'px-4 py-2 rounded-lg font-cyber text-xs font-bold tracking-wider border border-transparent text-gray-400 hover:text-white hover:bg-gray-900 transition cursor-pointer';
+            scheduleMenuFit();
         });
 
         function returnToMainMenu() {
@@ -5446,6 +5529,7 @@
             document.getElementById('gameOverModal').classList.remove('flex');
             document.getElementById('startModal').classList.remove('hidden');
             updateMenuCounters();
+            scheduleMenuFit();
         }
 
         document.getElementById('menuFromPauseBtn').addEventListener('click', returnToMainMenu);
@@ -5512,6 +5596,7 @@
             resizeCanvas();
             initMenuDemoNodes();
             updateMenuCounters();
+            scheduleMenuFit();
             requestAnimationFrame(gameLoop);
         };
     </script>

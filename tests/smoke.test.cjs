@@ -1654,3 +1654,74 @@ test('M4.2.1 both dashboard tabs and all game entry points are still wired', () 
   assert.ok(html.includes('overflow-y-auto'));
   assert.equal(html.includes('lg:h-[100dvh]'),false);
 });
+
+
+test('M4.2.2 desktop menu fits an overflowing viewport without vertical scrolling', () => {
+  const {run}=setup();
+  const data=JSON.parse(run(`(() => {
+    window.innerWidth=1650;window.innerHeight=927;
+    const modal=document.getElementById('startModal');
+    const shell=document.getElementById('startMenuShell');
+    modal.clientHeight=927;shell.scrollHeight=1080;
+    fitStartMenuToViewport();
+    return JSON.stringify({overflow:modal.style.overflowY,transform:shell.style.transform});
+  })()`));
+  assert.equal(data.overflow,'hidden');
+  assert.match(data.transform,/^scale\(0\.85\d+\)$/);
+});
+
+test('M4.2.2 desktop menu avoids scaling if its content fits naturally', () => {
+  const {run}=setup();
+  const data=JSON.parse(run(`(() => {
+    window.innerWidth=1650;window.innerHeight=927;
+    const modal=document.getElementById('startModal');
+    const shell=document.getElementById('startMenuShell');
+    modal.clientHeight=927;shell.scrollHeight=860;
+    fitStartMenuToViewport();
+    return JSON.stringify({overflow:modal.style.overflowY,transform:shell.style.transform});
+  })()`));
+  assert.equal(data.overflow,'hidden');
+  assert.equal(data.transform,'');
+});
+
+test('M4.2.2 mobile and very short windows preserve access to full content', () => {
+  const {run}=setup();
+  const data=JSON.parse(run(`(() => {
+    const modal=document.getElementById('startModal');
+    const shell=document.getElementById('startMenuShell');
+    modal.clientHeight=720;shell.scrollHeight=1090;
+    window.innerWidth=390;window.innerHeight=720;
+    fitStartMenuToViewport();
+    const mobile={overflow:modal.style.overflowY,transform:shell.style.transform};
+    window.innerWidth=1600;window.innerHeight=620;
+    fitStartMenuToViewport();
+    const short={overflow:modal.style.overflowY,transform:shell.style.transform};
+    window.innerWidth=1600;window.innerHeight=720;
+    fitStartMenuToViewport();
+    const tooTall={overflow:modal.style.overflowY,transform:shell.style.transform};
+    return JSON.stringify({mobile,short,tooTall});
+  })()`));
+  assert.equal(data.mobile.overflow,'auto');
+  assert.equal(data.mobile.transform,'');
+  assert.equal(data.short.overflow,'auto');
+  assert.equal(data.tooTall.overflow,'auto');
+});
+
+test('M4.2.2 explanations remain available as six native accessible tip disclosures', () => {
+  assert.equal((html.match(/class="menu-protocol-tip"/g)||[]).length,6);
+  assert.equal((html.match(/<summary>İPUCU<\/summary>/g)||[]).length,6);
+  assert.ok(html.includes('Yakındaki hedeflere otomatik ateş edersin'));
+  assert.ok(html.includes('Köşeye sıkıştığında güvenli alan açar'));
+  assert.ok(html.includes('Kritik boss anları için gücü zamanlamak önemli'));
+  assert.ok(html.includes('prefers-reduced-motion'));
+});
+
+test('M4.2.2 fit refreshes after tab switches, returns and delayed font loading', () => {
+  for (const anchor of ['function fitStartMenuToViewport()', 'function scheduleMenuFit()',
+    'window.addEventListener(\'resize\', scheduleMenuFit)',
+    'document.fonts.ready.then(scheduleMenuFit)',
+    'menuObserver.observe(document.getElementById(\'startMenuShell\'))',
+    'class="menu-protocol-tip"', '#startMenuShell > footer, #menuRunSteps {display:none;}'])
+    assert.ok(html.includes(anchor),anchor);
+  assert.equal((html.match(/scheduleMenuFit\(\);/g)||[]).length>=3,true);
+});
