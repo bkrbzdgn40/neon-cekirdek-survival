@@ -1315,7 +1315,7 @@
                         player.addOverdrive(25);
                         createFloatingText(player.x, player.y - 45, `🏆 GÖREV TAMAMLANDI! +${goldWon} ALTIN`, '#00ff66', 18);
                     }
-                    showDopamineBanner(`🏆 GÖREV TAMAMLANDI: +${goldWon} ALTIN ÇEKİRDEK!`, '#00ff66');
+                    showDopamineBanner(`GÖREV · +${goldWon} ALTIN`, '#00ff66');
                     generateNextQuest();
                 } else {
                     updateQuestHud();
@@ -1326,7 +1326,8 @@
         function updateQuestHud() {
             const el = document.getElementById('questHudText');
             if (el && activeQuest) {
-                el.textContent = `Görev: ${activeQuest.desc} (${activeQuest.progress}/${activeQuest.target}) [+${activeQuest.rewardGold}🪙]`;
+                const shortType = {KILLS:'AV', ORBS:'KÜRE', COMBO:'KOMBO'}[activeQuest.type] || 'GÖREV';
+                el.textContent = `${shortType} · ${activeQuest.progress}/${activeQuest.target} · +${activeQuest.rewardGold}`;
             }
         }
 
@@ -1467,7 +1468,7 @@
                     screenShake = 12;
                     audio.playJackpot();
                     shockwaves.push(new Shockwave(this.x, this.y, 220, '#ff007f', 0.4));
-                    showDopamineBanner('🔥 SİBER CİNNET AKTİF! (HIZ & KRİTİK ARTIŞI) 🔥', '#ff007f');
+                    showDopamineBanner('SİBER CİNNET', '#ff007f');
                     document.getElementById('overdriveOverlay').classList.remove('hidden');
                     if (this.evolutions.has('overdrive_boost')) {
                         // Once per Overdrive activation, never once per frame.
@@ -2767,9 +2768,9 @@
                 comboTimer = COMBO_MAX_TIME;
                 advanceQuest('COMBO', combo);
 
-                if (combo === 15) showDopamineBanner('⚡ SÜPER SERİ! (x15 KOMBO) ⚡', '#00f3ff');
-                else if (combo === 30) showDopamineBanner('🔥 DURDURULAMAZ! (x30 KOMBO) 🔥', '#ff007f');
-                else if (combo === 50) showDopamineBanner('👑 SİBER TANRI! (x50 KOMBO) 👑', '#ffe600');
+                if (combo === 15) showDopamineBanner('15 KOMBO', '#00f3ff');
+                else if (combo === 30) showDopamineBanner('30 KOMBO', '#ff007f');
+                else if (combo === 50) showDopamineBanner('50 KOMBO', '#ffe600');
 
                 score += Math.round(this.scoreValue * (1 + combo * 0.12));
                 player.addOverdrive(this.isBoss ? 45 : (this.isElite ? 16 : 2.8));
@@ -2823,7 +2824,7 @@
                     hitStopTimer = 0.045;
                     screenShake = 12;
                     if (combatDirector && combatDirector.registerChestDrop('elite', this.x, this.y)) {
-                        createFloatingText(this.x, this.y - 30, '★ ELİT SANDIĞI DÜŞTÜ! ★', '#ffe600', 16);
+                        createFloatingText(this.x, this.y - 30, 'ELİT SANDIK', '#ffe600', 16);
                     }
                 }
 
@@ -2853,7 +2854,7 @@
                             i < 8
                         );
                     }
-                    showDopamineBanner(`★ ${this.bossName} İMHA EDİLDİ! ★`, '#ffe600');
+                    showDopamineBanner(`${this.bossName} · İMHA`, '#ffe600');
                 } else {
                     const dropGold = Math.random() < (this.type === 'TANK' ? 0.42 : 0.11);
                     emitEnergyOrb(this.x, this.y, this.xpValue, dropGold);
@@ -4086,9 +4087,9 @@
             hudBoss.classList.add('flex');
 
             if (bossCount > 1) {
-                showDopamineBanner(`⚠ ÇOKLU BOSS BASKINI (${bossCount}X): ${spawnedNames.join(' & ')}! ⚠`, '#ff0055');
+                showDopamineBanner(`${bossCount} BOSS · ${spawnedNames.join(' + ')}`, '#ff0055');
             } else {
-                showDopamineBanner(`⚠ BOSS ALARMI: ${spawnedNames[0]} ARENADA! ⚠`, '#ff0055');
+                showDopamineBanner(`BOSS · ${spawnedNames[0]}`, '#ff0055');
             }
         }
 
@@ -4143,8 +4144,8 @@
                 const upcomingCount = (bossEncounterCount + 1) === 1 ? 1 : ((bossEncounterCount + 1) >= 3 && (bossEncounterCount + 1) % 2 === 1 ? 3 : 2);
                 if (warnText) {
                     warnText.textContent = upcomingCount > 1
-                        ? `⚠ UYARI: ${upcomingCount}X ÇOKLU BOSS BASKINI YAKLAŞIYOR! ⚠`
-                        : `⚠ UYARI: SİBER BOSS TEHDİDİ YAKLAŞIYOR! ⚠`;
+                        ? `${upcomingCount} BOSS YAKLAŞIYOR`
+                        : `BOSS YAKLAŞIYOR`;
                 }
                 warnBanner.classList.remove('hidden');
             } else {
@@ -4587,9 +4588,9 @@
                 const dmgPct = Math.round((metaUpgrades.baseDamage || 0) * 8 + (selectedChassis === 'VANGUARD' ? 12 : 0));
                 const revives = 1 + (metaUpgrades.defibrillator || 0) + (selectedChassis === 'VANGUARD' ? 1 : 0);
                 summaryEl.innerHTML = `
-                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Hasar: <span class="text-pink-400 font-bold">+%${dmgPct} (K.${metaUpgrades.baseDamage || 0})</span></div>
-                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Zırh: <span class="text-green-400 font-bold">${hpTotal} HP (K.${metaUpgrades.maxHp || 0})</span></div>
-                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Diriliş: <span class="text-emerald-400 font-bold">${revives}x Ücretsiz</span></div>
+                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Hasar: <span class="text-pink-400 font-bold">+%${dmgPct}</span></div>
+                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Zırh: <span class="text-green-400 font-bold">${hpTotal} HP</span></div>
+                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Diriliş: <span class="text-emerald-400 font-bold">${revives}x</span></div>
                 `;
             }
         }
@@ -4606,18 +4607,18 @@
             document.getElementById('momentumBar').style.width = `${momPct}%`;
             const momText = document.getElementById('momentumText');
             if (momPct >= 80) {
-                momText.textContent = `⚡ KİNETİK AŞIRI YÜK! (%${momPct})`;
+                momText.textContent = `MOMENTUM · %${momPct}`;
             } else {
-                momText.textContent = `⚡ MOMENTUM: %${momPct}`;
+                momText.textContent = `MOMENTUM · %${momPct}`;
             }
 
             const odPct = Math.min(100, player.overdrive);
             document.getElementById('overdriveBar').style.width = `${odPct}%`;
             const odText = document.getElementById('overdriveText');
             if (player.overdriveActive) {
-                odText.textContent = `🔥 SİBER CİNNET! (${player.overdriveTimer.toFixed(1)}s) 🔥`;
+                odText.textContent = `CİNNET · ${player.overdriveTimer.toFixed(1)}s`;
             } else {
-                odText.textContent = `🔥 SİBER CİNNET: %${Math.floor(odPct)}`;
+                odText.textContent = `CİNNET · %${Math.floor(odPct)}`;
             }
 
             const hpPct = Math.max(0, (player.hp / player.maxHp) * 100);
@@ -4693,7 +4694,7 @@
                 const nameEl = document.getElementById('bossNameText');
                 if (nameEl) {
                     const prefix = activeBosses.length > 1 ? `⚠ AKTİF BOSS (${activeBosses.length}X): ` : '⚠ ';
-                    nameEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation animate-bounce"></i> ${prefix}${names.join(' + ')}`;
+                    nameEl.textContent = `${prefix}${names.join(' + ')}`;
                 }
             }
 
@@ -4734,7 +4735,7 @@
                 if (!upg) return '';
                 const isEvolved = count >= 3 && !!EVOLUTION_DEFS[id];
                 return `
-                    <div title="${upg.name} (Kademe ${count})${isEvolved ? ' · ' + EVOLUTION_DEFS[id].name : ''}" class="flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-cyber font-bold" style="border-color:${isEvolved ? '#ffe600' : upg.color}; color:${isEvolved ? '#ffe600' : '#fff'}; background:rgba(0,0,0,0.6);">
+                    <div title="${upg.name} · K${count}${isEvolved ? ' · ' + EVOLUTION_DEFS[id].name : ''}" class="flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-cyber font-bold" style="border-color:${isEvolved ? '#ffe600' : upg.color}; color:${isEvolved ? '#ffe600' : '#fff'}; background:rgba(0,0,0,0.6);">
                         <i class="${upg.icon}" style="color:${upg.color}"></i>
                         <span>${isEvolved ? '★' + count : count}</span>
                     </div>
@@ -4836,7 +4837,7 @@
             document.getElementById('upgradeModal').classList.remove('flex');
             gameState = 'PLAYING';
             shockwaves.push(new Shockwave(player.x, player.y, 170, rarity.border, 0.4));
-            createFloatingText(player.x, player.y - 30, `${upg.name} (K.${nextLvl})`, rarity.textCol, 17);
+            createFloatingText(player.x, player.y - 30, `${upg.name} · K${nextLvl}`, rarity.textCol, 17);
             updateModulesDock();
             updateHUD();
             // A collected stacked orb may grant more than one full level.
@@ -4983,9 +4984,9 @@
 
                 const confirmBtn = document.getElementById('confirmReviveBtn');
                 if (canUseFree) {
-                    confirmBtn.innerHTML = `⚡ ÜCRETSİZ DEFİBRİLATÖR İLE DİRİL (${player.freeRevives} HAK) [BOŞLUK]`;
+                    confirmBtn.innerHTML = `DİRİL · ${player.freeRevives} HAK · BOŞLUK`;
                 } else {
-                    confirmBtn.innerHTML = `⚡ ${goldReviveCost} ALTIN KARŞILIĞI REAKTÖRÜ BAŞLAT [BOŞLUK]`;
+                    confirmBtn.innerHTML = `DİRİL · ${goldReviveCost} ALTIN · BOŞLUK`;
                 }
 
                 const modal = document.getElementById('reviveModal');
@@ -5030,7 +5031,7 @@
             audio.playJackpot();
             screenShake = 18;
             shockwaves.push(new Shockwave(player.x, player.y, 380, '#10b981', 0.6));
-            showDopamineBanner('⚡ SİBER DİRİLİŞ AKTİF! (3.5S DOKUNULMAZLIK & TAM GÜÇ) ⚡', '#10b981');
+            showDopamineBanner('⚡ DİRİLİŞ · 3,5s KORUMA ⚡', '#10b981');
 
             const modal = document.getElementById('reviveModal');
             modal.classList.add('hidden');
@@ -5260,8 +5261,8 @@
             controlMode = controlMode === 'HYBRID' ? 'KEYBOARD' : 'HYBRID';
             const txt = document.getElementById('ctrlModeText');
             txt.textContent = controlMode === 'HYBRID'
-                ? 'Mod: Hibrit (Fare + WASD) [M]'
-                : 'Mod: Sadece Klavye (WASD) [M]';
+                ? 'HİBRİT · M'
+                : 'KLAVYE · M';
         }
 
         document.getElementById('startBtn').addEventListener('click', startNewGame);
@@ -5305,13 +5306,13 @@
                 const badge = document.getElementById('selectedChassisBadge');
                 const dot = document.getElementById('menuCorePreviewDot');
                 if (selectedChassis === 'VANGUARD') {
-                    badge.textContent = 'ÖNCÜ (DENGELİ)';
+                    badge.textContent = 'ÖNCÜ';
                     dot.style.backgroundColor = '#00f3ff';
                 } else if (selectedChassis === 'PHANTOM') {
-                    badge.textContent = 'HAYALET (KRİTİK & HIZ)';
+                    badge.textContent = 'HAYALET';
                     dot.style.backgroundColor = '#ff007f';
                 } else {
-                    badge.textContent = 'TİTAN (AĞIR ZIRH & UYDU)';
+                    badge.textContent = 'TİTAN';
                     dot.style.backgroundColor = '#00ff66';
                 }
                 audio.init();
