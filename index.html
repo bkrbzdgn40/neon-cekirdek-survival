@@ -1389,6 +1389,18 @@
 
                 this.trail = [];
                 this.upgradeCounts = {};
+                this.evolutions = new Set();
+                this.synergies = new Set();
+                this.evolutionPulseTimer = 5.5;
+                this.buildStats = { railShots: 0, clusterBursts: 0, arcSurges: 0,
+                    orbitalPulses: 0, aegisPulses: 0, prismBounces: 0 };
+            }
+
+            refreshBuildTraits() {
+                this.evolutions = new Set(Object.keys(EVOLUTION_DEFS).filter(
+                    id => (this.upgradeCounts[id] || 0) >= 3));
+                this.synergies = new Set(SYNERGY_DEFS.filter(syn =>
+                    syn.modules.every(id => (this.upgradeCounts[id] || 0) >= 2)).map(syn => syn.id));
             }
 
             addOverdrive(amount) {
@@ -1434,7 +1446,7 @@
                 }
 
                 if (this.hasShield && !this.shieldActive) {
-                    this.shieldCooldown -= dt;
+                    this.shieldCooldown -= dt * (this.synergies.has('orbital_aegis') ? 1.12 : 1);
                     if (this.shieldCooldown <= 0) {
                         this.shieldActive = true;
                         createFloatingText(this.x, this.y - 25, 'KALKAN AKTİF!', '#00f3ff', 15);
@@ -1540,6 +1552,20 @@
                 if (this.trail.length > 10) this.trail.shift();
 
                 this.orbitalAngle += this.orbitalSpeed * dt * (this.overdriveActive ? 1.4 : 1.0);
+                if (this.evolutions.has('orbital') && this.orbitals > 0) {
+                    this.evolutionPulseTimer -= dt;
+                    if (this.evolutionPulseTimer <= 0) {
+                        this.evolutionPulseTimer += 6;
+                        this.buildStats.orbitalPulses++;
+                        shockwaves.push(new Shockwave(this.x, this.y, 145, '#ffe600', 0.4));
+                        for (const target of enemies) {
+                            if (target.dead) continue;
+                            if (Math.hypot(target.x - this.x, target.y - this.y) <= 145) {
+                                target.takeDamage(this.damage * 0.62, 0, 0, false, false);
+                            }
+                        }
+                    }
+                }
 
                 const odFireBonus = this.overdriveActive ? this.overdriveFireRateMult : 1.0;
                 this.fireTimer -= dt * (1 + (this.momentum / 100) * 0.3) * odFireBonus * (this.hasteTimer > 0 ? 1.2 : 1.0);
@@ -1576,35 +1602,48 @@
 
                 for (let i = 0; i < this.multishot; i++) {
                     const angle = startAngle + i * spread;
-                    bullets.push(new Bullet(
+                    const shell = new Bullet(
                         this.x + Math.cos(angle) * 14,
                         this.y + Math.sin(angle) * 14,
                         Math.cos(angle) * this.bulletSpeed,
                         Math.sin(angle) * this.bulletSpeed,
                         finalDamage,
                         this.bulletSize + (isCrit ? 2 : 0),
-                        this.pierce,
-                        this.ricochet,
+                        this.pierce + (isCrit && this.synergies.has('prism_optics') ? 1 : 0),
+                        this.ricochet + (isCrit && this.synergies.has('prism_optics') ? 1 : 0),
                         isCrit,
                         false
-                    ));
+                    );
+                    if (this.evolutions.has('pierce_ricochet')) shell.prismEvolved = true;
+                    bullets.push(shell);
                 }
 
-                if (this.homingMissiles > 0 && this.shotCounter % 3 === 0) {
-                    for (let m = 0; m < this.homingMissiles; m++) {
+                if (this.evolutions.has('multishot') && this.shotCounter % 4 === 0) {
+                    const rail = new Bullet(this.x + Math.cos(baseAngle) * 14,
+                        this.y + Math.sin(baseAngle) * 14,
+                        Math.cos(baseAngle) * this.bulletSpeed * 1.2,
+                        Math.sin(baseAngle) * this.bulletSpeed * 1.2,
+                        this.damage * 1.45, 9, Math.min(this.pierce + 2, 9), 0, false, false);
+                    rail.evoRail = true;
+                    bullets.push(rail);
+                    this.buildStats.railShots++;
+                }
+
+                const missileInterval = this.synergies.has('swarm_guidance') ? 2 : 3;
+                if (this.homingMissiles > 0 && this.shotCounter % missileInterval === 0) {
+                    for (let m = 0; m < Math.min(this.homingMissiles, 5); m++) {
                         const mAngle = baseAngle + (m - (this.homingMissiles - 1) / 2) * 0.5;
-                        bullets.push(new Bullet(
+                        const missile = new Bullet(
                             this.x,
                             this.y,
                             Math.cos(mAngle) * (this.bulletSpeed * 0.78),
                             Math.sin(mAngle) * (this.bulletSpeed * 0.78),
                             this.damage * 1.35,
-                            6,
-                            1,
-                            0,
-                            true,
-                            true
-                        ));
+                            6, 1, 0, true, true
+                        );
+                        missile.clusterPayload = this.evolutions.has('homing');
+                        missile.forceChain = this.synergies.has('ionic_guidance');
+                        bullets.push(missile);
                     }
                 }
 
@@ -1662,6 +1701,14 @@
                     audio.playExplosion(false);
                     screenShake = 10;
                     shockwaves.push(new Shockwave(this.x, this.y, 130, '#00f3ff', 0.3));
+                    if (this.synergies.has('orbital_aegis')) {
+                        this.buildStats.aegisPulses++;
+                        for (const target of enemies) {
+                            if (!target.dead && Math.hypot(target.x - this.x, target.y - this.y) < 130) {
+                                target.takeDamage(this.damage * 0.8, 0, 0, false, false);
+                            }
+                        }
+                    }
                     createFloatingText(this.x, this.y - 20, 'KALKAN KIRILDI!', '#00f3ff', 16);
                     return;
                 }
@@ -1806,6 +1853,12 @@
                 this.dead = false;
                 this.hitIds = new Set();
                 this.life = 2.6;
+                this.prismEvolved = false;
+                this.evoRail = false;
+                this.clusterPayload = false;
+                this.clusterUsed = false;
+                this.forceChain = false;
+                this.baseDamage = damage;
             }
 
             update(dt) {
@@ -1847,6 +1900,7 @@
                         this.ricochet--;
                         this.vx = -this.vx;
                         this.x = Math.max(this.radius, Math.min(worldWidth - this.radius, this.x));
+                        if (this.prismEvolved) retargetPrismShell(this);
                         this.hitIds.clear();
                     } else {
                         this.dead = true;
@@ -1858,6 +1912,7 @@
                         this.ricochet--;
                         this.vy = -this.vy;
                         this.y = Math.max(this.radius, Math.min(worldHeight - this.radius, this.y));
+                        if (this.prismEvolved) retargetPrismShell(this);
                         this.hitIds.clear();
                     } else {
                         this.dead = true;
@@ -1867,7 +1922,9 @@
 
             draw(ctx) {
                 ctx.save();
-                const col = this.isHoming ? '#00ff66' : (this.isCrit ? '#ffe600' : '#00f3ff');
+                const col = this.evoRail ? '#ffffff' : this.prismEvolved ? '#b36bff' :
+                    this.isHoming ? (this.clusterPayload ? '#7dffba' : '#00ff66') :
+                    (this.isCrit ? '#ffe600' : '#00f3ff');
                 ctx.shadowBlur = 12;
                 ctx.shadowColor = col;
                 ctx.fillStyle = col;
@@ -2464,7 +2521,7 @@
                 }
             }
 
-            takeDamage(amount, knockVx = 0, knockVy = 0, isCrit = false, triggerChain = true) {
+            takeDamage(amount, knockVx = 0, knockVy = 0, isCrit = false, triggerChain = true, forceChain = false) {
                 let finalDmg = amount;
                 if (this.type === 'SHIELD_BEARER' && !isCrit) {
                     finalDmg *= 0.55;
@@ -2491,14 +2548,17 @@
                     isCrit ? 17 : 13
                 );
 
-                if (triggerChain && player.chainLightning > 0 && Math.random() < 0.35) {
-                    let jumps = player.chainLightning;
+                const evolvedArc = player.evolutions.has('lightning');
+                if (triggerChain && player.chainLightning > 0 &&
+                    (forceChain || (evolvedArc && isCrit) || Math.random() < 0.35)) {
+                    if (evolvedArc) player.buildStats.arcSurges++;
+                    let jumps = Math.min(player.chainLightning, 8);
                     let lastTarget = this;
                     const visited = new Set([this.id]);
 
                     while (jumps > 0) {
                         let nextTarget = null;
-                        let minDist = 190;
+                        let minDist = evolvedArc ? 235 : 190;
                         for (const other of enemies) {
                             if (visited.has(other.id) || other.dead) continue;
                             const d = Math.hypot(other.x - lastTarget.x, other.y - lastTarget.y);
