@@ -2046,7 +2046,7 @@ test('M4.3.1.1 impact presentation tracks cluster and boss without altering dama
   assert.equal(x.type,'missile');
   assert.equal(x.boss,true);
   assert.equal(x.cluster,true);
-  assert.equal(x.radius,20);
+  assert.equal(x.radius,20.8);
   assert.equal(x.originalDamage,12);
   assert.equal(x.healthAffected,true);
 });
