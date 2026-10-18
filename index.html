@@ -1656,7 +1656,7 @@
                         false
                     );
                     if (this.evolutions.has('pierce_ricochet')) shell.prismEvolved = true;
-                    bullets.push(shell);
+                    if (bullets.length < MAX_PLAYER_PROJECTILES) bullets.push(shell);
                 }
 
                 if (this.evolutions.has('firerate') && this.shotCounter % 5 === 0 &&
@@ -1673,7 +1673,8 @@
                     this.buildStats.reactorBursts++;
                 }
 
-                if (this.evolutions.has('multishot') && this.shotCounter % 4 === 0) {
+                if (this.evolutions.has('multishot') && this.shotCounter % 4 === 0 &&
+                    bullets.length < MAX_PLAYER_PROJECTILES) {
                     const rail = new Bullet(this.x + Math.cos(baseAngle) * 14,
                         this.y + Math.sin(baseAngle) * 14,
                         Math.cos(baseAngle) * this.bulletSpeed * 1.2,
@@ -1686,7 +1687,8 @@
 
                 const missileInterval = this.synergies.has('swarm_guidance') ? 2 : 3;
                 if (this.homingMissiles > 0 && this.shotCounter % missileInterval === 0) {
-                    for (let m = 0; m < Math.min(this.homingMissiles, 5); m++) {
+                    for (let m = 0; m < Math.min(this.homingMissiles, 5) &&
+                        bullets.length < MAX_PLAYER_PROJECTILES; m++) {
                         const mAngle = baseAngle + (m - (this.homingMissiles - 1) / 2) * 0.5;
                         const missile = new Bullet(
                             this.x,
@@ -2030,7 +2032,7 @@
         }
 
         function spawnClusterFragments(shell, struckEnemy) {
-            if (!shell.clusterPayload || shell.clusterUsed || bullets.length > 248) return 0;
+            if (!shell.clusterPayload || shell.clusterUsed || bullets.length > MAX_PLAYER_PROJECTILES - 2) return 0;
             shell.clusterUsed = true;
             const heading = Math.atan2(shell.vy, shell.vx);
             for (const deviation of [-0.55, 0.55]) {
@@ -3431,6 +3433,7 @@
         let shockwaves = [];
         let lightningBolts = [];
         const MAX_ACTIVE_ORBS = 240;
+        const MAX_PLAYER_PROJECTILES = 260;
         let pendingMetaSave = false;
         let spawnTimer = 0;
         let conduitSpawnTimer = 4.0;
