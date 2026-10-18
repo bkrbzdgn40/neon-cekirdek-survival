@@ -850,3 +850,232 @@ test('M2.3 optional arena event renders using mock canvas without error', () => 
   assert.equal(state.kind,'RELAY');
   assert.equal(state.offered,1);
 });
+
+
+test('M3.1 build metadata defines five real evolutions and four two-module recipes', () => {
+  const { run } = setup();
+  const info = JSON.parse(run(`(() => JSON.stringify({
+    evolutions: Object.keys(EVOLUTION_DEFS),
+    synergies: SYNERGY_DEFS.map(s=>({id:s.id,modules:s.modules})),
+    upgrades: UPGRADES_POOL.map(u=>u.id)
+  }))()`));
+  assert.equal(info.evolutions.length,5);
+  assert.equal(info.synergies.length,4);
+  for(const id of info.evolutions) assert.ok(info.upgrades.includes(id));
+  for(const s of info.synergies) {
+    assert.equal(s.modules.length,2);
+    assert.ok(s.modules.every(id=>info.upgrades.includes(id)));
+  }
+});
+
+test('M3.1 third tier upgrades unlock distinct rail projectile, not generic damage buff', () => {
+  const { run }=setup();
+  const r=JSON.parse(run(`(() => {
+    startNewGame();
+    const u=UPGRADES_POOL.find(u=>u.id==='multishot');
+    u.apply(player,RARITIES[0]);u.apply(player,RARITIES[0]);
+    player.upgradeCounts.multishot=2;player.refreshBuildTraits();
+    const beforeDamage=player.damage;
+    gameState='LEVEL_UP';currentUpgradeChoices=[{upg:u,rarity:RARITIES[0]}];
+    selectUpgradeOption(0);
+    const damageRatio=player.damage/beforeDamage;
+    enemies.push(new Enemy(player.x+110,player.y,'SWARM'));
+    player.shotCounter=3; player.autoShoot();
+    return JSON.stringify({evolved:[...player.evolutions],damageRatio,
+      rails:bullets.filter(b=>b.evoRail).length,railPierce:bullets.find(b=>b.evoRail)?.pierce,
+      railSize:bullets.find(b=>b.evoRail)?.radius,
+      snapshot:window.getNeonBuildSnapshot().effects.railShots});
+  })()`));
+  assert.deepEqual(r.evolved,['multishot']);
+  assert.ok(r.damageRatio>1.07 && r.damageRatio<1.09);
+  assert.equal(r.rails,1);
+  assert.equal(r.railSize,9);
+  assert.ok(r.railPierce>=3);
+  assert.equal(r.snapshot,1);
+});
+
+test('M3.1 live synergy pairs unlock only when both reach level two', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    player.upgradeCounts.multishot=2;
+    player.upgradeCounts.homing=1;
+    player.refreshBuildTraits();
+    const before=[...player.synergies];
+    const preview=newSynergiesForUpgrade(player.upgradeCounts,'homing').map(s=>s.id);
+    const u=UPGRADES_POOL.find(u=>u.id==='homing');
+    gameState='LEVEL_UP';currentUpgradeChoices=[{upg:u,rarity:RARITIES[0]}];
+    selectUpgradeOption(0);
+    const after=[...player.synergies];
+    enemies.push(new Enemy(player.x+120,player.y,'SWARM'));
+    player.shotCounter=1; player.autoShoot();
+    return JSON.stringify({before,preview,after,missiles:bullets.filter(b=>b.isHoming).length});
+  })()`));
+  assert.deepEqual(x.before,[]);
+  assert.deepEqual(x.preview,['swarm_guidance']);
+  assert.deepEqual(x.after,['swarm_guidance']);
+  assert.equal(x.missiles,1);
+});
+
+test('M3.1 cluster missile creates two bounded non-recursive fragments on hit', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const target=new Enemy(player.x+100,player.y,'TANK');
+    enemies.push(target);
+    player.upgradeCounts.homing=3;player.refreshBuildTraits();
+    player.homingMissiles=1;player.shotCounter=2;player.autoShoot();
+    const missile=bullets.find(b=>b.isHoming);
+    const count=spawnClusterFragments(missile,target);
+    const again=spawnClusterFragments(missile,target);
+    const fragments=bullets.filter(b=>b!==missile && b.isHoming);
+    return JSON.stringify({evolved:player.evolutions.has('homing'),payload:missile.clusterPayload,
+      count,again,fragments:fragments.length,
+      protected:fragments.every(b=>b.hitIds.has(target.id) && !b.clusterPayload),
+      stats:player.buildStats.clusterBursts});
+  })()`));
+  assert.equal(x.evolved,true);
+  assert.equal(x.payload,true);
+  assert.equal(x.count,2);
+  assert.equal(x.again,0);
+  assert.equal(x.fragments,2);
+  assert.equal(x.protected,true);
+  assert.equal(x.stats,1);
+});
+
+test('M3.1 cluster payload integrates with indexed projectile collision', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();player.fireTimer=100;
+    const target=new Enemy(player.x+80,player.y,'TANK');target.speed=0;
+    enemies.push(target);
+    const missile=new Bullet(target.x,target.y,0,0,10,6,1,0,true,true);
+    missile.clusterPayload=true;
+    bullets.push(missile);
+    updateGame(.016);
+    return JSON.stringify({bursts:player.buildStats.clusterBursts,
+      fragments:bullets.filter(b=>b.isHoming && b!==missile).length,dead:missile.dead,
+      targetHp:target.hp,maxHp:target.maxHp});
+  })()`));
+  assert.equal(x.bursts,1);
+  assert.equal(x.fragments,2);
+  assert.equal(x.dead,true);
+  assert.ok(x.targetHp<x.maxHp);
+});
+
+test('M3.1 evolved critical lightning arcs to a second enemy deterministically', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    player.chainLightning=1;player.upgradeCounts.lightning=3;player.refreshBuildTraits();
+    const a=new Enemy(200,200,'TANK'),b=new Enemy(300,200,'TANK');
+    enemies.push(a,b);
+    const before=b.hp;
+    a.takeDamage(10,0,0,true,true);
+    return JSON.stringify({before,after:b.hp,arcs:player.buildStats.arcSurges,
+      bolts:lightningBolts.length});
+  })()`));
+  assert.ok(x.after<x.before);
+  assert.equal(x.arcs,1);
+  assert.equal(x.bolts,1);
+});
+
+test('M3.1 evolved orbitals pulse on interval and keep old direct contacts', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const target=new Enemy(player.x+75,player.y,'TANK');target.speed=0;
+    enemies.push(target);
+    player.upgradeCounts.orbital=3;player.refreshBuildTraits();player.orbitals=1;
+    player.evolutionPulseTimer=.01;
+    const before=target.hp;
+    player.update(.05);
+    return JSON.stringify({before,after:target.hp,pulses:player.buildStats.orbitalPulses,
+      cooldown:player.evolutionPulseTimer,orbitals:player.orbitals});
+  })()`));
+  assert.ok(x.after<x.before);
+  assert.equal(x.pulses,1);
+  assert.ok(x.cooldown>5);
+  assert.equal(x.orbitals,1);
+});
+
+test('M3.1 evolved ricochet retargets and applies capped bounce damage', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const target=new Enemy(worldWidth-250,worldHeight/2+80,'TANK');
+    enemies.push(target);
+    const shell=new Bullet(worldWidth-6,worldHeight/2,180,0,20,5,2,3);
+    shell.prismEvolved=true;
+    shell.update(.1);
+    return JSON.stringify({vx:shell.vx,vy:shell.vy,damage:shell.damage,
+      bounces:player.buildStats.prismBounces,remaining:shell.ricochet});
+  })()`));
+  assert.ok(x.vx<0 && x.vy>0);
+  assert.equal(x.damage,24);
+  assert.equal(x.remaining,2);
+  assert.equal(x.bounces,1);
+});
+
+test('M3.1 shield orbital synergy counters one blocked hit and shortens recharge', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const target=new Enemy(player.x+65,player.y,'TANK');target.speed=0;enemies.push(target);
+    player.upgradeCounts.orbital=2;player.upgradeCounts.aegis_shield=2;player.refreshBuildTraits();
+    player.hasShield=true;player.shieldActive=true;player.shieldMaxCooldown=10;
+    const hp=target.hp;
+    player.takeDamage(40);
+    const before=player.shieldCooldown;
+    player.update(.5);
+    return JSON.stringify({synergy:[...player.synergies],blockedHp:player.hp,
+      targetBefore:hp,targetAfter:target.hp,shieldActive:player.shieldActive,
+      initialCooldown:before,remaining:player.shieldCooldown,
+      pulses:player.buildStats.aegisPulses});
+  })()`));
+  assert.ok(x.synergy.includes('orbital_aegis'));
+  assert.equal(x.blockedHp,100);
+  assert.ok(x.targetAfter<x.targetBefore);
+  assert.equal(x.shieldActive,false);
+  assert.ok(x.remaining<9.5);
+  assert.equal(x.pulses,1);
+});
+
+test('M3.1 crit plus prism synergy adds precisely one pierce and ricochet', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();player.critChance=1;
+    player.upgradeCounts.pierce_ricochet=2;player.upgradeCounts.crit_mastery=2;
+    player.refreshBuildTraits();
+    player.pierce=2;player.ricochet=1;
+    enemies.push(new Enemy(player.x+90,player.y,'TANK'));
+    player.autoShoot();
+    const b=bullets[0];
+    return JSON.stringify({synergy:player.synergies.has('prism_optics'),
+      crit:b.isCrit,pierce:b.pierce,ricochet:b.ricochet});
+  })()`));
+  assert.equal(x.synergy,true);
+  assert.equal(x.crit,true);
+  assert.equal(x.pierce,3);
+  assert.equal(x.ricochet,2);
+});
+
+test('M3.1 upgrade offers one level-two evolution when available and resets next run', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    player.upgradeCounts.homing=2;player.refreshBuildTraits();
+    populateUpgradeCards();
+    const offered=currentUpgradeChoices.map(x=>x.upg.id);
+    player.upgradeCounts.homing=3;player.refreshBuildTraits();
+    const pre=window.getNeonBuildSnapshot();
+    startNewGame();
+    const post=window.getNeonBuildSnapshot();
+    return JSON.stringify({offered,evolutions:pre.evolutions,after:post});
+  })()`));
+  assert.ok(x.offered.includes('homing'));
+  assert.deepEqual(x.evolutions,['homing']);
+  assert.deepEqual(x.after.evolutions,[]);
+  assert.deepEqual(x.after.synergies,[]);
+  assert.deepEqual(x.after.modules,{});
+});
