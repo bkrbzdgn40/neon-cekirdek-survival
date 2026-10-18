@@ -281,7 +281,7 @@
                     </div>
                 </div>
 
-                <!-- Wave & Timer -->
+                <!-- Wave, timer and Combat Director phase -->
                 <div class="bg-gray-950/85 border border-purple-500/40 px-4 py-1.5 rounded-xl backdrop-blur-md flex items-center gap-3">
                     <div class="text-center">
                         <span class="text-[10px] text-purple-300 block leading-none">DALGA</span>
@@ -291,6 +291,11 @@
                     <div class="text-center">
                         <span class="text-[10px] text-gray-400 block leading-none">SÜRE</span>
                         <span id="timeText" class="font-cyber text-base sm:text-lg font-bold text-cyan-300">00:00</span>
+                    </div>
+                    <div class="hidden sm:block h-6 w-px bg-gray-800"></div>
+                    <div class="hidden sm:block text-center min-w-[70px]">
+                        <span class="text-[10px] text-gray-400 block leading-none">TEHDİT</span>
+                        <span id="directorPhaseText" class="font-cyber text-[10px] font-bold text-yellow-300">HAZIRLIK</span>
                     </div>
                 </div>
 
@@ -2524,8 +2529,9 @@
                 if (this.isElite) {
                     hitStopTimer = 0.045;
                     screenShake = 12;
-                    lootChests.push(new LootChest(this.x, this.y));
-                    createFloatingText(this.x, this.y - 30, '★ ELİT SANDIĞI DÜŞTÜ! ★', '#ffe600', 16);
+                    if (combatDirector && combatDirector.registerChestDrop('elite', this.x, this.y)) {
+                        createFloatingText(this.x, this.y - 30, '★ ELİT SANDIĞI DÜŞTÜ! ★', '#ffe600', 16);
+                    }
                 }
 
                 if (this.isBoss) {
@@ -2535,11 +2541,17 @@
                     if (activeBosses.length === 0) {
                         // The recovery window begins AFTER the final boss dies.
                         nextBossTime = totalTime + Math.max(42, 58 - bossEncounterCount * 3);
+                        if (combatDirector) combatDirector.onBossCleared();
                         document.getElementById('bossHudContainer').classList.add('hidden');
                         document.getElementById('bossHudContainer').classList.remove('flex');
                     }
                     shockwaves.push(new Shockwave(this.x, this.y, 350, '#ffe600', 0.65));
-                    lootChests.push(new LootChest(this.x, this.y));
+                    if (combatDirector) {
+                        combatDirector.stats.bossKills++;
+                        combatDirector.registerChestDrop('boss', this.x, this.y);
+                    } else {
+                        lootChests.push(new LootChest(this.x, this.y));
+                    }
                     for (let i = 0; i < 16; i++) {
                         emitEnergyOrb(
                             this.x + (Math.random() - 0.5) * 90,
@@ -2740,6 +2752,7 @@
 
                     const roll = Math.random();
                     if (roll < 0.38) {
+                        if (combatDirector) combatDirector.onChestOpened('goldHeal');
                         const bonusGold = Math.round((22 + wave * 6) * player.greedBonus);
                         totalGold += bonusGold;
                         sessionGold += bonusGold;
@@ -2747,10 +2760,12 @@
                         player.hp = Math.min(player.maxHp, player.hp + 30);
                         showDopamineBanner(`🎰 SİBER JACKPOT: +${bonusGold} ALTIN & +30 CAN! 🎰`, '#ffe600');
                     } else if (roll < 0.72) {
+                        if (combatDirector) combatDirector.onChestOpened('overdriveXp');
                         player.addOverdrive(55);
                         player.gainXp(player.xpToNext * 0.45);
                         showDopamineBanner('🎰 SİBER JACKPOT: +%55 CİNNET ŞARJI & DEV XP! 🎰', '#ff007f');
                     } else {
+                        if (combatDirector) combatDirector.onChestOpened('bulletNova');
                         for (let i = 0; i < 24; i++) {
                             const a = (i * Math.PI * 2) / 24;
                             bullets.push(new Bullet(player.x, player.y, Math.cos(a) * 650, Math.sin(a) * 650, player.damage * 2.5, 7, 4, 2, true, false));
@@ -3067,6 +3082,7 @@
         let performanceSampleMs = 0;
         let bulletCollisionGrid = new Map();
         let largestBulletRadius = 0;
+        let combatDirector = null;
 
         function emitEnergyOrb(x, y, value, isGold = false) {
             if (orbs.length >= MAX_ACTIVE_ORBS) {
@@ -3189,19 +3205,152 @@
             { type: 'GRAV_WELL', from: 6, weight: 5 }
         ];
 
-        function pickEnemyTypeForWave(currentWave, roll) {
-            const available = ENEMY_SPAWN_WEIGHTS.filter(entry => currentWave >= entry.from);
-            const totalWeight = available.reduce((sum, entry) => sum + entry.weight, 0);
+        const ENEMY_THREAT_COST = {
+            SWARM: 1, SPLITTER: 1.5, KAMIKAZE: 1.4, DASHER: 1.6,
+            SHOOTER: 2, TANK: 3, SHIELD_BEARER: 3, SNIPER: 2.3,
+            ASSASSIN: 2.1, GRAV_WELL: 2.6
+        };
+        const DIRECTOR_THEMES = ['SURGE', 'SIEGE', 'HUNT'];
+        const THEME_WEIGHTS = {
+            SURGE: { SWARM: 1.6, SPLITTER: 1.3, KAMIKAZE: 1.6, DASHER: 1.5 },
+            SIEGE: { TANK: 2.1, SHIELD_BEARER: 2.1, SHOOTER: 1.8, GRAV_WELL: 1.3 },
+            HUNT: { DASHER: 1.3, ASSASSIN: 2.3, SNIPER: 2.1, GRAV_WELL: 1.5 }
+        };
+        const DIRECTOR_PHASES = {
+            BUILDUP: { label: 'HAZIRLIK', multiplier: 0.65, interval: 0.5, cap: 85 },
+            PRESSURE: { label: 'BASKI', multiplier: 1.0, interval: 0.33, cap: 130 },
+            CRISIS: { label: 'KRİZ', multiplier: 1.4, interval: 0.23, cap: 160 },
+            RECOVERY: { label: 'NEFES', multiplier: 0.28, interval: 0.8, cap: 75 },
+            WARNING: { label: 'BOSS UYARISI', multiplier: 0.15, interval: 1.0, cap: 80 },
+            BOSS: { label: 'BOSS', multiplier: 0.4, interval: 0.85, cap: 105 }
+        };
+
+        function pickEnemyTypeForWave(currentWave, roll, theme = 'BALANCED', credits = Infinity) {
+            const available = ENEMY_SPAWN_WEIGHTS.filter(entry =>
+                currentWave >= entry.from && ENEMY_THREAT_COST[entry.type] <= credits);
+            if (!available.length) return null;
+            const bias = THEME_WEIGHTS[theme] || {};
+            const totalWeight = available.reduce((sum, entry) => sum + entry.weight * (bias[entry.type] || 1), 0);
             let ticket = Math.max(0, Math.min(0.999999999, roll)) * totalWeight;
             for (const entry of available) {
-                ticket -= entry.weight;
+                ticket -= entry.weight * (bias[entry.type] || 1);
                 if (ticket < 0) return entry.type;
             }
-            return 'SWARM';
+            return available[available.length - 1].type;
+        }
+
+        function getDirectorProfile(seconds, currentWave, activeBossCount, nextBossAt, afterBossUntil, hpFraction) {
+            const cycle = ((seconds % 64) + 64) % 64;
+            let phase = cycle < 12 ? 'BUILDUP' : cycle < 34 ? 'PRESSURE' : cycle < 49 ? 'CRISIS' : 'RECOVERY';
+            if (activeBossCount > 0) phase = 'BOSS';
+            else if (seconds < afterBossUntil) phase = 'RECOVERY';
+            else if (Number.isFinite(nextBossAt) && seconds >= nextBossAt - 3.8 && seconds < nextBossAt) phase = 'WARNING';
+
+            const def = DIRECTOR_PHASES[phase];
+            const hpAssist = hpFraction < 0.30 ? 0.78 : hpFraction < 0.50 ? 0.90 : 1;
+            const theme = DIRECTOR_THEMES[Math.floor((Math.max(1, currentWave) - 1) / 3) % DIRECTOR_THEMES.length];
+            return {
+                phase, label: def.label, theme,
+                interval: Math.max(0.19, def.interval * (currentWave >= 13 ? 0.91 : 1)),
+                tokenRate: (2.25 + Math.min(4.4, currentWave * 0.16)) * def.multiplier * hpAssist,
+                cap: def.cap,
+                eliteChance: phase === 'RECOVERY' || phase === 'WARNING' ? 0 :
+                    Math.min(0.12, (phase === 'CRISIS' ? 0.08 : phase === 'PRESSURE' ? 0.055 : 0.035) + currentWave * 0.0015)
+            };
+        }
+
+        class CombatDirector {
+            constructor() {
+                this.tokens = 4;
+                this.afterBossUntil = -Infinity;
+                this.lastEliteChestAt = -Infinity;
+                this.elitePity = 0;
+                this.bossChestAwarded = false;
+                this.eliteChestTimes = [];
+                this.profile = getDirectorProfile(0, 1, 0, 55, -Infinity, 1);
+                this.stats = {
+                    spawned: 0, eliteSpawned: 0, eliteKills: 0, bossKills: 0,
+                    encounters: 0, chestDrops: { elite: 0, boss: 0 },
+                    chestOpened: { goldHeal: 0, overdriveXp: 0, bulletNova: 0 }
+                };
+            }
+
+            update(dt) {
+                const hpFraction = player ? player.hp / Math.max(1, player.maxHp) : 1;
+                const previous = this.profile.phase;
+                this.profile = getDirectorProfile(totalTime, wave, activeBosses.length,
+                    nextBossTime, this.afterBossUntil, hpFraction);
+                this.tokens = Math.min(14, this.tokens + dt * this.profile.tokenRate);
+                if (this.profile.phase !== previous && this.profile.phase !== 'BOSS' &&
+                    this.profile.phase !== 'WARNING') {
+                    createFloatingText(player.x, player.y - 52,
+                        `TEHDİT: ${this.profile.label}`, '#00f3ff', 14);
+                }
+            }
+
+            trySpawn() {
+                if (enemies.length >= Math.min(MAX_ACTIVE_ENEMIES, this.profile.cap) || this.tokens < 1) return false;
+                const type = pickEnemyTypeForWave(wave, Math.random(), this.profile.theme, this.tokens);
+                if (!type) return false;
+                const elite = wave >= 2 && Math.random() < this.profile.eliteChance;
+                const spawned = spawnEnemy(false, type, elite);
+                if (!spawned) return false;
+                this.tokens -= ENEMY_THREAT_COST[type];
+                this.stats.spawned++;
+                if (elite) this.stats.eliteSpawned++;
+                return true;
+            }
+
+            onBossEncounter() {
+                this.stats.encounters++;
+                this.bossChestAwarded = false;
+            }
+
+            onBossCleared() {
+                this.afterBossUntil = totalTime + 9;
+            }
+
+            registerChestDrop(source, x, y) {
+                if (source === 'boss') {
+                    if (this.bossChestAwarded) return false;
+                    this.bossChestAwarded = true;
+                    this.stats.chestDrops.boss++;
+                    lootChests.push(new LootChest(x, y));
+                    return true;
+                }
+                this.stats.eliteKills++;
+                this.elitePity++;
+                this.eliteChestTimes = this.eliteChestTimes.filter(t => totalTime - t < 60);
+                if (totalTime - this.lastEliteChestAt < 12 || this.eliteChestTimes.length >= 3 ||
+                    lootChests.length >= 6) return false;
+                if (this.elitePity < 7 && Math.random() >= 0.24) return false;
+                this.lastEliteChestAt = totalTime;
+                this.eliteChestTimes.push(totalTime);
+                this.elitePity = 0;
+                this.stats.chestDrops.elite++;
+                lootChests.push(new LootChest(x, y));
+                return true;
+            }
+
+            onChestOpened(reward) {
+                if (this.stats.chestOpened[reward] !== undefined) this.stats.chestOpened[reward]++;
+            }
+
+            getDiagnostics() {
+                const drops = this.stats.chestDrops.elite + this.stats.chestDrops.boss;
+                return {
+                    timeSeconds: Math.round(totalTime), wave,
+                    phase: this.profile.phase, theme: this.profile.theme,
+                    threatTokens: Math.round(this.tokens * 10) / 10,
+                    ...this.stats,
+                    chestsPerMinute: totalTime > 0 ? Math.round(600 * drops / totalTime) / 10 : 0
+                };
+            }
         }
 
         function spawnBossEncounter() {
             bossEncounterCount++;
+            if (combatDirector) combatDirector.onBossEncounter();
             nextBossTime = Number.POSITIVE_INFINITY;
             let bossCount = 1;
             if (bossEncounterCount === 2) bossCount = 2;
@@ -3230,18 +3379,20 @@
             }
         }
 
-        function spawnEnemy(forceBoss = false) {
+        function spawnEnemy(forceBoss = false, typeOverride = null, eliteOverride = null) {
             if (forceBoss) {
                 spawnBossEncounter();
-                return;
+                return true;
             }
-
-            if (enemies.length >= MAX_ACTIVE_ENEMIES) return;
+            if (enemies.length >= MAX_ACTIVE_ENEMIES) return false;
+            const type = typeOverride || pickEnemyTypeForWave(wave, Math.random());
+            if (!type) return false;
+            const isElite = eliteOverride === null
+                ? wave >= 2 && Math.random() < Math.min(0.12, 0.03 + wave * 0.002)
+                : eliteOverride;
             const pos = getRandomEdgePosition(45);
-            const type = pickEnemyTypeForWave(wave, Math.random());
-            const eliteChance = wave >= 2 ? Math.min(0.24, 0.03 + wave * 0.013) : 0;
-            const isElite = Math.random() < eliteChance;
             enemies.push(new Enemy(pos.x, pos.y, type, isElite));
+            return true;
         }
 
         function updateGame(dt) {
@@ -3320,12 +3471,11 @@
             gridOffset.x = (gridOffset.x - player.vx * 0.15 * dt) % 48;
             gridOffset.y = (gridOffset.y - player.vy * 0.15 * dt) % 48;
 
+            combatDirector.update(dt);
             spawnTimer -= dt;
             if (spawnTimer <= 0) {
-                const baseInterval = Math.max(0.35, 1.12 - wave * 0.042);
-                spawnTimer += baseInterval;
-                const count = wave >= 10 ? 3 : (wave >= 6 ? 2 : 1);
-                for (let i = 0; i < count && enemies.length < MAX_ACTIVE_ENEMIES; i++) spawnEnemy(false);
+                spawnTimer += combatDirector.profile.interval;
+                combatDirector.trySpawn();
             }
 
             for (let i = conduitZones.length - 1; i >= 0; i--) {
@@ -3751,6 +3901,8 @@
 
             document.getElementById('waveText').textContent = wave;
             document.getElementById('timeText').textContent = formatTime(totalTime);
+            const phaseEl = document.getElementById('directorPhaseText');
+            if (phaseEl && combatDirector) phaseEl.textContent = combatDirector.profile.label;
             document.getElementById('scoreText').textContent = score.toLocaleString('tr-TR');
 
             const comboContainer = document.getElementById('comboContainer');
@@ -3860,6 +4012,7 @@
             totalTime = 0;
             nextBossTime = 55;
             bossEncounterCount = 0;
+            combatDirector = new CombatDirector();
             activeBosses = [];
             bossWarningTimer = 0;
             kills = 0;
@@ -4441,7 +4594,7 @@
                 if (performanceSampleMs >= 1000) {
                     const fps = Math.round(performanceSampleFrames * 1000 / performanceSampleMs);
                     document.getElementById('perfOverlay').textContent =
-                        `FPS ${fps} | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length} | Küre ${orbs.length}/${orbs.reduce((sum, orb) => sum + orb.count, 0)} | Efekt ${particles.length} | Sandık ${lootChests.length}`;
+                        `FPS ${fps} | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length} | Küre ${orbs.length}/${orbs.reduce((sum, orb) => sum + orb.count, 0)} | Efekt ${particles.length} | Sandık ${lootChests.length} | ${combatDirector ? combatDirector.profile.label + '/' + combatDirector.profile.theme : '-'} | Sandık/dk ${combatDirector ? combatDirector.getDiagnostics().chestsPerMinute : 0}`;
                     performanceSampleFrames = 0;
                     performanceSampleMs = 0;
                 }
@@ -4475,6 +4628,8 @@
             requestAnimationFrame(gameLoop);
         }
 
+        // Read-only run counters for balancing; no data leaves the local browser.
+        window.getNeonRunDiagnostics = () => combatDirector ? combatDirector.getDiagnostics() : null;
         window.onload = function () {
             loadMetaProgress();
             resizeCanvas();
