@@ -1123,3 +1123,226 @@ test('M3.1 cluster fragments respect hard projectile allocation ceiling', () => 
   assert.equal(x.emitted,2);
   assert.equal(x.atCap,250);
 });
+
+
+test('M3.2 all eleven modules now have unique third-tier evolutions', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => JSON.stringify({
+    names:UPGRADES_POOL.map(u=>u.id),evolutions:Object.keys(EVOLUTION_DEFS),
+    missing:UPGRADES_POOL.filter(u=>!EVOLUTION_DEFS[u.id]).map(u=>u.id)
+  }))()`));
+  assert.equal(x.names.length,11);
+  assert.equal(x.evolutions.length,11);
+  assert.deepEqual(x.missing,[]);
+});
+
+test('M3.2 reactor rhythm fires two bounded flank shots every fifth salvo', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    player.upgradeCounts.firerate=3;player.refreshBuildTraits();
+    enemies.push(new Enemy(player.x+100,player.y,'TANK'));
+    for(let i=0;i<5;i++)player.autoShoot();
+    const pulses=bullets.filter(b=>b.reactorPulse);
+    return JSON.stringify({pulses:pulses.length,bursts:player.buildStats.reactorBursts,
+      damage:pulses.map(b=>b.damage),base:player.damage,
+      total:bullets.length});
+  })()`));
+  assert.equal(x.pulses,2);
+  assert.equal(x.bursts,1);
+  assert.ok(x.damage.every(v=>v===x.base*.5));
+  assert.equal(x.total,7);
+});
+
+test('M3.2 cyber overdrive clears only nearby projectiles once per activation', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();player.upgradeCounts.overdrive_boost=3;player.refreshBuildTraits();
+    for(let i=0;i<20;i++)enemyProjectiles.push(new EnemyProjectile(player.x+20,player.y+20,0,0,5,10));
+    const remote=new EnemyProjectile(player.x+360,player.y,0,0,5,10);
+    enemyProjectiles.push(remote);
+    player.addOverdrive(200);
+    const cleared=enemyProjectiles.filter(b=>b.dead).length;
+    player.addOverdrive(200);
+    return JSON.stringify({cleared,remoteDead:remote.dead,active:player.overdriveActive,
+      discharges:player.buildStats.overdriveDischarges});
+  })()`));
+  assert.equal(x.cleared,12);
+  assert.equal(x.remoteDead,false);
+  assert.equal(x.active,true);
+  assert.equal(x.discharges,1);
+});
+
+test('M3.2 weakpoint critical mark increases real noncrit damage but cannot stack', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();totalTime=10;
+    player.upgradeCounts.crit_mastery=3;player.refreshBuildTraits();
+    const target=new Enemy(150,150,'TANK');
+    target.takeDamage(10,0,0,true,false);
+    const marked=target.weakpointUntil>totalTime;
+    const afterCrit=target.hp;
+    target.takeDamage(10,0,0,false,false);
+    const boostedDamage=afterCrit-target.hp;
+    target.takeDamage(10,0,0,true,false);
+    const counter=player.buildStats.weakpointMarks;
+    totalTime=14;
+    const afterExpire=target.hp;
+    target.takeDamage(10,0,0,false,false);
+    return JSON.stringify({marked,boostedDamage,counter,normalDamage:afterExpire-target.hp});
+  })()`));
+  assert.equal(x.marked,true);
+  assert.ok(Math.abs(x.boostedDamage-11.2)<.001);
+  assert.equal(x.counter,1);
+  assert.ok(Math.abs(x.normalDamage-10)<.001);
+});
+
+test('M3.2 blood reactor heals once per five non-boss kills with cooldown', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();totalTime=10;
+    player.hp=40;player.upgradeCounts.vampiric=3;player.refreshBuildTraits();
+    for(let i=0;i<5;i++)new Enemy(120+i*8,120,'SWARM').die();
+    const first=player.hp;
+    for(let i=0;i<5;i++)new Enemy(120+i*8,120,'SWARM').die();
+    const blocked=player.hp, stored=player.bloodReactorKills;
+    totalTime=15;new Enemy(200,200,'SWARM').die();
+    return JSON.stringify({first,blocked,stored,after:player.hp,
+      heals:player.buildStats.bloodReactorHeals});
+  })()`));
+  assert.equal(x.first,48);
+  assert.equal(x.blocked,48);
+  assert.equal(x.stored,5);
+  assert.equal(x.after,56);
+  assert.equal(x.heals,2);
+});
+
+test('M3.2 aegis evolution counters only one blocked hit with at most three homing bolts', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();player.upgradeCounts.aegis_shield=3;player.refreshBuildTraits();
+    player.hasShield=true;player.shieldActive=true;
+    for(let i=0;i<5;i++)enemies.push(new Enemy(player.x+65+i*18,player.y,'TANK'));
+    const beforeHp=player.hp;player.takeDamage(25);
+    player.takeDamage(25);
+    return JSON.stringify({hp:player.hp,beforeHp,active:player.shieldActive,
+      bolts:bullets.filter(b=>b.isHoming).length,deflections:player.buildStats.aegisDeflections});
+  })()`));
+  assert.equal(x.hp,x.beforeHp);
+  assert.equal(x.active,false);
+  assert.equal(x.bolts,3);
+  assert.equal(x.deflections,3);
+});
+
+test('M3.2 kinetic evolution triggers a cooldown-limited post-dash vortex and orb magnet', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();totalTime=10;
+    player.upgradeCounts.kinetic_magnet=3;player.refreshBuildTraits();
+    const target=new Enemy(player.x+260,player.y,'TANK');
+    enemies.push(target);
+    const orb=new EnergyOrb(player.x+250,player.y,10,false);
+    orbs.push(orb);
+    const hp=target.hp;
+    player.triggerDash();player.update(.20);
+    const first=player.buildStats.kineticVortices;
+    player.isDashing=true;player.dashTimer=.01;player.update(.02);
+    return JSON.stringify({first,pulses:player.buildStats.kineticVortices,
+      magnet:orb.magnetized,hit:target.hp<hp,readyAt:player.kineticVortexReadyAt});
+  })()`));
+  assert.equal(x.first,1);
+  assert.equal(x.pulses,1);
+  assert.equal(x.magnet,true);
+  assert.equal(x.hit,true);
+  assert.equal(x.readyAt,14);
+});
+
+test('M3.2 build stat normalization caps runaway high-rarity stacking', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    for(let n=0;n<16;n++) {
+      for(const id of ['multishot','firerate','homing','crit_mastery','kinetic_magnet','vampiric']) {
+        UPGRADES_POOL.find(u=>u.id===id).apply(player,RARITIES[3]);
+      }
+    }
+    normalizePlayerBuildPower(player);
+    return JSON.stringify({damage:player.damage,crit:player.critChance,
+      delay:player.fireDelay,multi:player.multishot,missiles:player.homingMissiles,
+      speed:player.speed,magnet:player.magnetRadius,heal:player.vampiricHeal});
+  })()`));
+  assert.ok(x.damage<=240 && x.crit<=.60 && x.delay>=.12);
+  assert.ok(x.multi<=7 && x.missiles<=5 && x.speed<=470);
+  assert.ok(x.magnet<=280 && x.heal<=12);
+});
+
+test('M3.2 full-tier modules never appear again in upgrade draft', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();player.upgradeCounts.homing=3;
+    player.upgradeCounts.firerate=2;
+    player.refreshBuildTraits();
+    populateUpgradeCards();
+    return JSON.stringify({choices:currentUpgradeChoices.map(c=>c.upg.id),
+      fire:currentUpgradeChoices.find(c=>c.upg.id==='firerate')?.upg.id});
+  })()`));
+  assert.equal(x.choices.includes('homing'),false);
+  assert.equal(x.fire,'firerate');
+});
+
+test('M3.2 fully completed 33-tier run does not open an empty choice dialog', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    for(const u of UPGRADES_POOL)player.upgradeCounts[u.id]=3;
+    player.refreshBuildTraits();
+    player.hp=player.maxHp-40;
+    triggerLevelUp();
+    return JSON.stringify({state:gameState,hp:player.hp,max:player.maxHp,
+      evolutions:player.evolutions.size,choices:currentUpgradeChoices.length});
+  })()`));
+  assert.equal(x.state,'PLAYING');
+  assert.equal(x.hp,x.max-20);
+  assert.equal(x.evolutions,11);
+});
+
+test('M3.2 build guide reports active traits, near goals and correct counts', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    player.upgradeCounts.multishot=3;
+    player.upgradeCounts.homing=1;
+    player.upgradeCounts.orbital=2;
+    player.upgradeCounts.aegis_shield=2;
+    player.refreshBuildTraits();
+    updateModulesDock();
+    const guide=getBuildGuideModel(player);
+    const snapshot=window.getNeonBuildSnapshot();
+    return JSON.stringify({guide,summary:document.getElementById('buildGuideLabel').textContent,
+      included:snapshot.guide.totalTiers===guide.totalTiers});
+  })()`));
+  assert.equal(x.guide.totalModules,4);
+  assert.equal(x.guide.totalTiers,8);
+  assert.ok(x.guide.evolutions.includes('Odak Rayı'));
+  assert.ok(x.guide.synergies.includes('Savunma Matrisi'));
+  assert.ok(x.guide.nextEvolutions.some(e=>e.name==='Küme Roketleri' && e.missing===2));
+  assert.ok(x.summary.includes('1 EVRİM / 1 SİNERJİ'));
+  assert.equal(x.included,true);
+});
+
+test('M3.2 new run resets evolution cooldowns, counters and build guide', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    player.upgradeCounts.firerate=3;player.refreshBuildTraits();
+    player.buildStats.reactorBursts=5;player.kineticVortexReadyAt=50;
+    startNewGame();
+    return JSON.stringify({evolutions:[...player.evolutions],
+      burst:player.buildStats.reactorBursts,readyAt:player.kineticVortexReadyAt,
+      guide:getBuildGuideModel(player)});
+  })()`));
+  assert.deepEqual(x.evolutions,[]);
+  assert.equal(x.burst,0);
+  assert.equal(x.readyAt,0);
+  assert.equal(x.guide.totalModules,0);
+});
