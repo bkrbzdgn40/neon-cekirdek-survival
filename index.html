@@ -2061,6 +2061,9 @@
                 this.secondaryTimer = 3.0 + Math.random() * 1.5;
                 this.state = 'CHASE';
                 this.enraged = false;
+                this.bossPhase = 1;
+                this.bossSpecial = null;
+                this.bossSpecialCount = 0;
 
                 // Predictable, sub-exponential late-game scaling; wave 30 stays playable.
                 const elapsedWaves = Math.max(0, wave - 1);
@@ -2208,11 +2211,14 @@
                     const projSpeedScale = Math.min(1.7, 1 + (wave - 1) * 0.042);
                     const enemyDmgScale = Math.min(2.7, 1 + (wave - 1) * 0.08);
 
-                    if (this.isBoss && !this.enraged && this.hp < this.maxHp * 0.45) {
-                        this.enraged = true;
-                        this.speed *= 1.25;
-                        shockwaves.push(new Shockwave(this.x, this.y, 220, this.color, 0.4));
-                        createFloatingText(this.x, this.y - this.radius - 15, `⚠ ${this.bossName}: ÖFKE MODU!`, this.color, 16);
+                    if (this.isBoss) {
+                        this.updateBossPhases(dt, dx, dy);
+                        if (!this.enraged && this.hp < this.maxHp * 0.45) {
+                            this.enraged = true;
+                            this.speed *= 1.25;
+                            shockwaves.push(new Shockwave(this.x, this.y, 220, this.color, 0.4));
+                            createFloatingText(this.x, this.y - this.radius - 15, `⚠ ${this.bossName}: ÖFKE MODU!`, this.color, 16);
+                        }
                     }
 
                     if (this.type === 'ASSASSIN') {
@@ -2417,6 +2423,29 @@
                 this.rotation += (this.isBoss ? (this.enraged ? 2.2 : 1.3) : 2.5) * dt;
             }
 
+            updateBossPhases(dt, dx, dy) {
+                const ratio = this.hp / Math.max(1, this.maxHp);
+                const nextPhase = ratio <= 0.35 ? 3 : ratio <= 0.70 ? 2 : 1;
+                if (nextPhase > this.bossPhase) {
+                    this.bossPhase = nextPhase;
+                    const aimAngle = Math.atan2(dy, dx);
+                    this.bossSpecial = { angle: aimAngle, timer: nextPhase === 3 ? 1.35 : 1.15, phase: nextPhase };
+                    createFloatingText(this.x, this.y - this.radius - 30,
+                        nextPhase === 3 ? '⚠ SON FAZ: ÖZEL SALDIRI!' : '⚠ 2. FAZ: ÖZEL SALDIRI!',
+                        this.color, 16);
+                    shockwaves.push(new Shockwave(this.x, this.y, 170, this.color, 0.55));
+                }
+                if (!this.bossSpecial) return;
+                this.bossSpecial.timer -= dt;
+                if (this.bossSpecial.timer <= 0) {
+                    const attack = this.bossSpecial;
+                    this.bossSpecial = null;
+                    fireBossPhaseAttack(this, attack.angle, attack.phase);
+                    this.bossSpecialCount++;
+                    if (combatDirector) combatDirector.stats.bossSpecialAttacks++;
+                }
+            }
+
             takeDamage(amount, knockVx = 0, knockVy = 0, isCrit = false, triggerChain = true) {
                 let finalDmg = amount;
                 if (this.type === 'SHIELD_BEARER' && !isCrit) {
@@ -2586,6 +2615,22 @@
 
             draw(ctx) {
                 ctx.save();
+
+                if (this.isBoss && this.bossSpecial) {
+                    const attack = this.bossSpecial;
+                    const reach = Math.max(worldWidth, worldHeight);
+                    ctx.save();
+                    ctx.strokeStyle = this.type === 'BOSS_PRISM' ? '#00f3ff' : '#ffe600';
+                    ctx.lineWidth = attack.phase === 3 ? 5 : 3;
+                    ctx.globalAlpha = Math.max(0.3, 0.85 - attack.timer * 0.2);
+                    ctx.setLineDash([12, 8]);
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(this.x + Math.cos(attack.angle) * reach,
+                        this.y + Math.sin(attack.angle) * reach);
+                    ctx.stroke();
+                    ctx.restore();
+                }
 
                 if ((this.type === 'DASHER' || this.type === 'BOSS_TITAN') && this.state === 'CHARGE') {
                     ctx.beginPath();
@@ -3216,6 +3261,62 @@
             SIEGE: { TANK: 2.1, SHIELD_BEARER: 2.1, SHOOTER: 1.8, GRAV_WELL: 1.3 },
             HUNT: { DASHER: 1.3, ASSASSIN: 2.3, SNIPER: 2.1, GRAV_WELL: 1.5 }
         };
+        // Directional incoming threats have explicit warning time and spend director tokens.
+        const SPECIAL_ENCOUNTER_WARNING = 1.65;
+        const SPECIAL_ENCOUNTER_GAP = 39;
+
+        function formationEdgePoint(side, slot, count, offset = 48) {
+            const fraction = (slot + 1) / (count + 1);
+            if (side === 0) return { x: fraction * worldWidth, y: -offset };
+            if (side === 1) return { x: worldWidth + offset, y: fraction * worldHeight };
+            if (side === 2) return { x: fraction * worldWidth, y: worldHeight + offset };
+            return { x: -offset, y: fraction * worldHeight };
+        }
+
+        function getSpecialEncounterPlan(currentWave, theme, side, index) {
+            const type = (index % 2 === 0) ? 'PINCER' : 'SPEARHEAD';
+            if (type === 'PINCER') {
+                return {
+                    type, side, label: 'ÇİFT YÖNLÜ KISKAÇ', warning: SPECIAL_ENCOUNTER_WARNING,
+                    units: [
+                        { type: 'SWARM', side, slot: 0, count: 2 },
+                        { type: currentWave >= 2 ? 'DASHER' : 'SWARM', side, slot: 1, count: 2 },
+                        { type: 'SWARM', side: (side + 2) % 4, slot: 0, count: 2 },
+                        { type: currentWave >= 2 ? 'DASHER' : 'SWARM', side: (side + 2) % 4, slot: 1, count: 2 }
+                    ]
+                };
+            }
+            const guard = currentWave >= 4 && theme === 'SIEGE' ? 'SHIELD_BEARER' : 'TANK';
+            return {
+                type, side, label: 'ÖNCÜ HÜCUMU', warning: SPECIAL_ENCOUNTER_WARNING,
+                units: [
+                    { type: 'SWARM', side, slot: 0, count: 3 },
+                    { type: guard, side, slot: 1, count: 3 },
+                    { type: currentWave >= 3 ? 'SHOOTER' : 'SWARM', side, slot: 2, count: 3 }
+                ]
+            };
+        }
+
+        function fireBossPhaseAttack(boss, angle, phase) {
+            const baseSpeed = phase === 3 ? 330 : 275;
+            const damage = Math.round(boss.damage * (phase === 3 ? 0.55 : 0.45));
+            const configs = {
+                BOSS_DESTROYER: { count: phase === 3 ? 7 : 5, spread: 0.30, color: '#ff0055' },
+                BOSS_TITAN: { count: phase === 3 ? 5 : 3, spread: 0.22, color: '#ff8800' },
+                BOSS_VOID: { count: phase === 3 ? 7 : 5, spread: 0.38, color: '#b000ff' },
+                BOSS_PRISM: { count: phase === 3 ? 5 : 3, spread: 0.18, color: '#00f3ff' }
+            };
+            const config = configs[boss.type];
+            if (!config || boss.dead) return 0;
+            for (let i = 0; i < config.count; i++) {
+                const a = angle + (i - (config.count - 1) / 2) * config.spread;
+                enemyProjectiles.push(new EnemyProjectile(boss.x, boss.y,
+                    Math.cos(a) * baseSpeed, Math.sin(a) * baseSpeed, 7, damage, config.color));
+            }
+            audio.playExplosion(false);
+            return config.count;
+        }
+
         const DIRECTOR_PHASES = {
             BUILDUP: { label: 'HAZIRLIK', multiplier: 0.65, interval: 0.5, cap: 85 },
             PRESSURE: { label: 'BASKI', multiplier: 1.0, interval: 0.33, cap: 130 },
@@ -3267,10 +3368,15 @@
                 this.elitePity = 0;
                 this.bossChestAwarded = false;
                 this.eliteChestTimes = [];
+                this.pendingEncounter = null;
+                this.nextEncounterAt = 26;
+                this.encounterIndex = 0;
+                this.lastEncounterAt = -Infinity;
                 this.profile = getDirectorProfile(0, 1, 0, 55, -Infinity, 1);
                 this.stats = {
                     spawned: 0, eliteSpawned: 0, eliteKills: 0, bossKills: 0,
-                    encounters: 0, chestDrops: { elite: 0, boss: 0 },
+                    encounters: 0, specialEncounters: 0, specialUnits: 0, specialCancelled: 0,
+                    bossSpecialAttacks: 0, chestDrops: { elite: 0, boss: 0 },
                     chestOpened: { goldHeal: 0, overdriveXp: 0, bulletNova: 0 }
                 };
             }
@@ -3281,11 +3387,59 @@
                 this.profile = getDirectorProfile(totalTime, wave, activeBosses.length,
                     nextBossTime, this.afterBossUntil, hpFraction);
                 this.tokens = Math.min(14, this.tokens + dt * this.profile.tokenRate);
+                this.updateSpecialEncounter(dt);
                 if (this.profile.phase !== previous && this.profile.phase !== 'BOSS' &&
                     this.profile.phase !== 'WARNING') {
                     createFloatingText(player.x, player.y - 52,
                         `TEHDİT: ${this.profile.label}`, '#00f3ff', 14);
                 }
+            }
+
+            updateSpecialEncounter(dt) {
+                const inCombat = this.profile.phase === 'PRESSURE' || this.profile.phase === 'CRISIS';
+                const bossImminent = activeBosses.length > 0 || nextBossTime - totalTime < 7;
+                if (this.pendingEncounter) {
+                    if (bossImminent || this.profile.phase === 'RECOVERY' || this.profile.phase === 'WARNING' ||
+                        this.profile.phase === 'BOSS') {
+                        this.pendingEncounter = null;
+                        this.stats.specialCancelled++;
+                        return;
+                    }
+                    this.pendingEncounter.warning -= dt;
+                    if (this.pendingEncounter.warning <= 0) this.resolveSpecialEncounter();
+                    return;
+                }
+                if (!inCombat || bossImminent || wave < 3 || totalTime < this.nextEncounterAt ||
+                    enemies.length > this.profile.cap - 12 || this.tokens < 8) return;
+                const side = Math.floor(Math.random() * 4);
+                this.pendingEncounter = getSpecialEncounterPlan(wave, this.profile.theme, side, this.encounterIndex);
+                this.encounterIndex++;
+                this.lastEncounterAt = totalTime;
+                this.nextEncounterAt = totalTime + SPECIAL_ENCOUNTER_GAP;
+                createFloatingText(player.x, player.y - 70,
+                    `⚠ ${this.pendingEncounter.label}: KENARLARDAN GELİYOR!`, '#ffe600', 16);
+            }
+
+            resolveSpecialEncounter() {
+                const plan = this.pendingEncounter;
+                this.pendingEncounter = null;
+                if (!plan || activeBosses.length > 0) return 0;
+                let spawned = 0;
+                for (const unit of plan.units) {
+                    const cost = ENEMY_THREAT_COST[unit.type];
+                    if (this.tokens < cost || enemies.length >= Math.min(MAX_ACTIVE_ENEMIES, this.profile.cap)) break;
+                    const pos = formationEdgePoint(unit.side, unit.slot, unit.count);
+                    if (spawnEnemy(false, unit.type, false, pos)) {
+                        this.tokens -= cost;
+                        this.stats.spawned++;
+                        spawned++;
+                    }
+                }
+                if (spawned) {
+                    this.stats.specialEncounters++;
+                    this.stats.specialUnits += spawned;
+                }
+                return spawned;
             }
 
             trySpawn() {
@@ -3304,6 +3458,10 @@
             onBossEncounter() {
                 this.stats.encounters++;
                 this.bossChestAwarded = false;
+                if (this.pendingEncounter) {
+                    this.pendingEncounter = null;
+                    this.stats.specialCancelled++;
+                }
             }
 
             onBossCleared() {
@@ -3342,6 +3500,8 @@
                     timeSeconds: Math.round(totalTime), wave,
                     phase: this.profile.phase, theme: this.profile.theme,
                     threatTokens: Math.round(this.tokens * 10) / 10,
+                    pendingEncounter: this.pendingEncounter ? this.pendingEncounter.type : null,
+                    warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
                     ...this.stats,
                     chestsPerMinute: totalTime > 0 ? Math.round(600 * drops / totalTime) / 10 : 0
                 };
@@ -3379,7 +3539,7 @@
             }
         }
 
-        function spawnEnemy(forceBoss = false, typeOverride = null, eliteOverride = null) {
+        function spawnEnemy(forceBoss = false, typeOverride = null, eliteOverride = null, positionOverride = null) {
             if (forceBoss) {
                 spawnBossEncounter();
                 return true;
@@ -3390,7 +3550,7 @@
             const isElite = eliteOverride === null
                 ? wave >= 2 && Math.random() < Math.min(0.12, 0.03 + wave * 0.002)
                 : eliteOverride;
-            const pos = getRandomEdgePosition(45);
+            const pos = positionOverride || getRandomEdgePosition(45);
             enemies.push(new Enemy(pos.x, pos.y, type, isElite));
             return true;
         }
@@ -3659,6 +3819,36 @@
             }
         }
 
+        function drawSpecialEncounterWarning() {
+            if (!combatDirector || !combatDirector.pendingEncounter || gameState !== 'PLAYING') return;
+            const plan = combatDirector.pendingEncounter;
+            const progress = Math.max(0.2, Math.min(1, plan.warning / SPECIAL_ENCOUNTER_WARNING));
+            const sides = [...new Set(plan.units.map(unit => unit.side))];
+            ctx.save();
+            ctx.lineWidth = 4;
+            ctx.setLineDash([14, 9]);
+            ctx.globalAlpha = 0.35 + 0.45 * (1 - progress);
+            ctx.strokeStyle = '#ffe600';
+            ctx.fillStyle = 'rgba(255, 180, 0, 0.08)';
+            const band = Math.min(70, Math.min(worldWidth, worldHeight) * 0.13);
+            for (const side of sides) {
+                if (side === 0) {
+                    ctx.fillRect(0, 0, worldWidth, band);
+                    ctx.beginPath(); ctx.moveTo(0, band); ctx.lineTo(worldWidth, band); ctx.stroke();
+                } else if (side === 1) {
+                    ctx.fillRect(worldWidth - band, 0, band, worldHeight);
+                    ctx.beginPath(); ctx.moveTo(worldWidth - band, 0); ctx.lineTo(worldWidth - band, worldHeight); ctx.stroke();
+                } else if (side === 2) {
+                    ctx.fillRect(0, worldHeight - band, worldWidth, band);
+                    ctx.beginPath(); ctx.moveTo(0, worldHeight - band); ctx.lineTo(worldWidth, worldHeight - band); ctx.stroke();
+                } else {
+                    ctx.fillRect(0, 0, band, worldHeight);
+                    ctx.beginPath(); ctx.moveTo(band, 0); ctx.lineTo(band, worldHeight); ctx.stroke();
+                }
+            }
+            ctx.restore();
+        }
+
         function drawOffscreenIndicators() {
             if (!player || gameState !== 'PLAYING') return;
             const pad = 34;
@@ -3722,6 +3912,7 @@
             }
 
             drawBackgroundGrid();
+            drawSpecialEncounterWarning();
 
             if (gameState === 'MENU') {
                 for (const n of menuDemoNodes) {
@@ -4594,7 +4785,7 @@
                 if (performanceSampleMs >= 1000) {
                     const fps = Math.round(performanceSampleFrames * 1000 / performanceSampleMs);
                     document.getElementById('perfOverlay').textContent =
-                        `FPS ${fps} | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length} | Küre ${orbs.length}/${orbs.reduce((sum, orb) => sum + orb.count, 0)} | Efekt ${particles.length} | Sandık ${lootChests.length} | ${combatDirector ? combatDirector.profile.label + '/' + combatDirector.profile.theme : '-'} | Sandık/dk ${combatDirector ? combatDirector.getDiagnostics().chestsPerMinute : 0}`;
+                        `FPS ${fps} | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length} | Küre ${orbs.length}/${orbs.reduce((sum, orb) => sum + orb.count, 0)} | Efekt ${particles.length} | Sandık ${lootChests.length} | ${combatDirector ? combatDirector.profile.label + '/' + combatDirector.profile.theme : '-'} | Baskın ${combatDirector?.pendingEncounter?.type || '-'} | Sandık/dk ${combatDirector ? combatDirector.getDiagnostics().chestsPerMinute : 0}`;
                     performanceSampleFrames = 0;
                     performanceSampleMs = 0;
                 }
