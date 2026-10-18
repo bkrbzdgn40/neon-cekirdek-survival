@@ -1968,12 +1968,25 @@
                 }
 
                 if (this.muzzleFlash > 0) {
-                    const fx = this.x + Math.cos(this.aimAngle) * (this.radius + 6);
-                    const fy = this.y + Math.sin(this.aimAngle) * (this.radius + 6);
+                    const ca = Math.cos(this.aimAngle), sa = Math.sin(this.aimAngle);
+                    const fx = this.x + ca * (this.radius + 7);
+                    const fy = this.y + sa * (this.radius + 7);
+                    const reach = (this.overdriveActive ? 27 : 20) * this.muzzleFlash;
+                    const spread = 8 * this.muzzleFlash;
+                    ctx.save();
+                    ctx.globalAlpha = Math.min(1, this.muzzleFlash);
+                    ctx.fillStyle = this.overdriveActive ? '#ffb6dc' : '#dbfdff';
                     ctx.beginPath();
-                    ctx.arc(fx, fy, 7 * this.muzzleFlash, 0, Math.PI * 2);
+                    ctx.moveTo(fx - sa * spread, fy + ca * spread);
+                    ctx.lineTo(fx + ca * reach, fy + sa * reach);
+                    ctx.lineTo(fx + sa * spread, fy - ca * spread);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(fx, fy, 4.5 * this.muzzleFlash, 0, Math.PI * 2);
                     ctx.fillStyle = '#ffffff';
                     ctx.fill();
+                    ctx.restore();
                 }
 
                 ctx.shadowBlur = 22;
@@ -2102,6 +2115,7 @@
                         ctx.stroke();
                     }
                 }
+                ctx.globalAlpha = 1;
                 ctx.fillStyle = visual.color;
                 ctx.shadowColor = visual.color;
                 ctx.shadowBlur = compact ? 0 : visual.glow;
@@ -3578,8 +3592,8 @@
         let lightningBolts = [];
         let weaponImpacts = [];
         let weaponImpactFrameCount = 0;
-        const MAX_WEAPON_IMPACTS = 80;
-        const MAX_IMPACTS_PER_FRAME = 10;
+        const MAX_WEAPON_IMPACTS = 56;
+        const MAX_IMPACTS_PER_FRAME = 7;
         const MAX_ACTIVE_ORBS = 240;
         const MAX_PLAYER_PROJECTILES = 260;
         let pendingMetaSave = false;
@@ -3647,17 +3661,24 @@
         }
 
         function emitWeaponImpact(bullet, target) {
-            // Impact effects have separate caps and do not affect real damage or hit-stop.
-            if (gameState !== 'PLAYING' || weaponImpactFrameCount >= MAX_IMPACTS_PER_FRAME ||
-                weaponImpacts.length >= MAX_WEAPON_IMPACTS) return false;
+            // Important hits reserve visual slots; regular body hits never starve them.
+            if (gameState !== 'PLAYING' || weaponImpactFrameCount >= MAX_IMPACTS_PER_FRAME)
+                return false;
             const style = getProjectileVisualStyle(bullet);
+            const important = style.type !== 'plasma' || target.isBoss;
+            if (!important && weaponImpactFrameCount >= MAX_IMPACTS_PER_FRAME - 2)
+                return false;
+            if (weaponImpacts.length >= MAX_WEAPON_IMPACTS) {
+                if (!important) return false;
+                weaponImpacts.shift();
+            }
             const type = style.type;
+            const duration = type === 'rail' ? 0.26 : type === 'critical' ? 0.23 : 0.17;
             weaponImpacts.push({
-                x: bullet.x, y: bullet.y,
-                type, color: style.color, core: style.core,
-                duration: type === 'rail' ? 0.26 : type === 'critical' ? 0.23 : 0.17,
-                life: type === 'rail' ? 0.26 : type === 'critical' ? 0.23 : 0.17,
-                radius: Math.min(31, Math.max(10, target.radius * 0.52)),
+                x: bullet.x, y: bullet.y, type,
+                color: style.color, core: style.core,
+                duration, life: duration, important,
+                radius: Math.min(35, Math.max(10, target.radius * 0.52)),
                 angle: Math.atan2(bullet.vy, bullet.vx)
             });
             weaponImpactFrameCount++;
@@ -4776,17 +4797,24 @@
             drawWeaponImpacts();
 
             for (const lb of lightningBolts) {
+                // Distinct double-layer electric arc, without per-frame random jitter.
+                const dx = lb.x2 - lb.x1, dy = lb.y2 - lb.y1;
+                const inv = 1 / (Math.hypot(dx, dy) || 1);
+                const bend = 11 * Math.sin(totalTime * 31 + lb.x1 * .017);
+                const mx = (lb.x1 + lb.x2) * .5 - dy * inv * bend;
+                const my = (lb.y1 + lb.y2) * .5 + dx * inv * bend;
                 ctx.save();
-                ctx.strokeStyle = '#ffe600';
-                ctx.lineWidth = 2.5;
-                ctx.shadowBlur = 12;
-                ctx.shadowColor = '#ffe600';
+                ctx.strokeStyle = '#ffc447';
+                ctx.lineWidth = 5;
+                ctx.globalAlpha = 0.48;
                 ctx.beginPath();
-                ctx.moveTo(lb.x1, lb.y1);
-                const midX = (lb.x1 + lb.x2) / 2 + (Math.random() - 0.5) * 18;
-                const midY = (lb.y1 + lb.y2) / 2 + (Math.random() - 0.5) * 18;
-                ctx.lineTo(midX, midY);
-                ctx.lineTo(lb.x2, lb.y2);
+                ctx.moveTo(lb.x1, lb.y1); ctx.lineTo(mx, my); ctx.lineTo(lb.x2, lb.y2);
+                ctx.stroke();
+                ctx.strokeStyle = '#fff8dd';
+                ctx.lineWidth = 1.8;
+                ctx.globalAlpha = 0.96;
+                ctx.beginPath();
+                ctx.moveTo(lb.x1, lb.y1); ctx.lineTo(mx, my); ctx.lineTo(lb.x2, lb.y2);
                 ctx.stroke();
                 ctx.restore();
             }
