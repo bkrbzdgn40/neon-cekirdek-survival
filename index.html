@@ -2221,7 +2221,10 @@
                         }
                     }
 
-                    if (this.type === 'ASSASSIN') {
+                    if (this.isBoss && this.bossSpecial) {
+                        // Do not mix a regular boss attack with an announced phase salvo.
+                        this.actionTimer = Math.max(this.actionTimer, 0.7);
+                    } else if (this.type === 'ASSASSIN') {
                         this.strafePhase += dt * 7;
                         const perpX = -dy / dist;
                         const perpY = dx / dist;
@@ -2430,6 +2433,10 @@
                     this.bossPhase = nextPhase;
                     const aimAngle = Math.atan2(dy, dx);
                     this.bossSpecial = { angle: aimAngle, timer: nextPhase === 3 ? 1.35 : 1.15, phase: nextPhase };
+                    // The phase attack has its own clearly readable wind-up.
+                    this.actionTimer = Math.max(this.actionTimer, 1.2);
+                    this.secondaryTimer = Math.max(this.secondaryTimer, 1.2);
+                    if (this.type === 'BOSS_TITAN') this.state = 'CHASE';
                     createFloatingText(this.x, this.y - this.radius - 30,
                         nextPhase === 3 ? '⚠ SON FAZ: ÖZEL SALDIRI!' : '⚠ 2. FAZ: ÖZEL SALDIRI!',
                         this.color, 16);
@@ -2441,6 +2448,8 @@
                     const attack = this.bossSpecial;
                     this.bossSpecial = null;
                     fireBossPhaseAttack(this, attack.angle, attack.phase);
+                    this.actionTimer = Math.max(this.actionTimer, 1.0);
+                    this.secondaryTimer = Math.max(this.secondaryTimer, 1.0);
                     this.bossSpecialCount++;
                     if (combatDirector) combatDirector.stats.bossSpecialAttacks++;
                 }
