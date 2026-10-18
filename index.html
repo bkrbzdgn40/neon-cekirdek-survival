@@ -641,6 +641,7 @@
                           <p class="text-xs text-gray-200">Diriliş hakkın varsa koşuya geri dönersin. Yakın tehditleri uzaklaştıran güçlü bir patlama da yaşanır.</p>
                           <p class="text-[11px] text-emerald-200/80 mt-auto border-t border-gray-700/50 pt-2">Öncü, başlangıçta bir fazladan ücretsiz hakla gelir.</p>
                       </div>
+                      <div class="sm:col-span-2 xl:col-span-3 text-[10px] text-gray-400 border-t border-gray-800 pt-2">M · KONTROL MODU　 P · ESC · DURAKLAT</div>
                       <div class="sm:col-span-2 xl:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
                        <div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">1</div><div><div class="text-[11px] font-cyber font-bold text-white">İLK DALGALAR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">XP kürelerini topla; hasar ve güvenlik temelini kur.</p></div></div>
 <div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">2</div><div><div class="text-[11px] font-cyber font-bold text-white">BUILD KUR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">Aynı modülü üçüncü kademeye çıkar, sinerji hedeflerini takip et.</p></div></div>
@@ -4591,22 +4592,77 @@
             return { label: 'D', col: '#64748b' };
         }
 
+
+        const MENU_CHASSIS_DETAILS = {
+            VANGUARD: {
+                title: 'ÖNCÜ · DENGELİ', difficulty: 'KOLAY',
+                detail: 'İlk saldırıları %12 güçlendirir ve bir ek ücretsiz diriliş hakkı verir. Güvenli büyümek isteyen oyuncular için.',
+                advice: 'ÖNERİ · Önce silah ve savunma modülü seç.',
+                color: '#00f3ff'
+            },
+            PHANTOM: {
+                title: 'HAYALET · ÇEVİK', difficulty: 'ORTA',
+                detail: '%15 daha hızlı hareket eder, kritik şansına 15 yüzde puanı ekler. Atılım beklemesi %20 kısadır; mermi delme ve sekme bonusu ile başlar.',
+                advice: 'ÖNERİ · Kritik ve sekme sinerjisini hedefle.',
+                color: '#ff007f'
+            },
+            TITAN: {
+                title: 'TİTAN · DAYANIKLI', difficulty: 'KOLAY',
+                detail: '50 ek can, aktif enerji kalkanı ve bir uydu ile başlar. Yakın düşman baskısına karşı savunma odaklı ilerlemek için.',
+                advice: 'ÖNERİ · Uydu ve kalkan modüllerini geliştir.',
+                color: '#00ff66'
+            }
+        };
+        function refreshSelectedChassisDetails() {
+            const info = MENU_CHASSIS_DETAILS[selectedChassis] || MENU_CHASSIS_DETAILS.VANGUARD;
+            const assign = (id, value) => {
+                const element = document.getElementById(id);
+                if (element) element.textContent = value;
+            };
+            assign('menuChassisDetailTitle', info.title);
+            assign('menuChassisDetail', info.detail);
+            assign('menuChassisDifficulty', 'ZORLUK · ' + info.difficulty);
+            assign('menuChassisAdvice', info.advice);
+            const preview = document.getElementById('menuCorePreview');
+            if (preview) {
+                preview.style.borderColor = info.color;
+                preview.style.color = info.color;
+            }
+        }
+
         function updateMenuCounters() {
             document.getElementById('menuHighScore').textContent = savedHighScore.toLocaleString('tr-TR');
             document.getElementById('menuMaxWave').textContent = savedMaxWave;
             document.getElementById('menuGoldText').textContent = totalGold.toLocaleString('tr-TR');
             document.getElementById('shopGoldBalance').textContent = totalGold.toLocaleString('tr-TR');
+            refreshSelectedChassisDetails();
 
             const summaryEl = document.getElementById('menuLoadoutSummary');
             if (summaryEl) {
-                const hpTotal = 100 + (metaUpgrades.maxHp || 0) * 18 + (selectedChassis === 'TITAN' ? 50 : 0);
-                const dmgPct = Math.round((metaUpgrades.baseDamage || 0) * 8 + (selectedChassis === 'VANGUARD' ? 12 : 0));
-                const revives = 1 + (metaUpgrades.defibrillator || 0) + (selectedChassis === 'VANGUARD' ? 1 : 0);
-                summaryEl.innerHTML = `
-                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Hasar: <span class="text-pink-400 font-bold">+%${dmgPct}</span></div>
-                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Zırh: <span class="text-green-400 font-bold">${hpTotal} HP</span></div>
-                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Diriliş: <span class="text-emerald-400 font-bold">${revives}x</span></div>
-                `;
+                const base = metaUpgrades.baseDamage || 0;
+                const hpTotal = 100 + (metaUpgrades.maxHp || 0) * 18 +
+                    (selectedChassis === 'TITAN' ? 50 : 0);
+                const dmgPct = Math.round(100 * ((1 + base * 0.08) *
+                    (selectedChassis === 'VANGUARD' ? 1.12 : 1) - 1));
+                const critPct = Math.round(100 * (0.04 + base * 0.012 +
+                    (selectedChassis === 'PHANTOM' ? 0.15 : 0)));
+                const revives = 1 + (metaUpgrades.defibrillator || 0) +
+                    (selectedChassis === 'VANGUARD' ? 1 : 0);
+                const cards = [
+                    { title:'SALDIRI', value:'+' + dmgPct + '% başlangıç hasarı',
+                      detail:'Kritik şansı · ' + critPct + '%', color:'pink' },
+                    { title:'DAYANIKLILIK', value:hpTotal + ' toplam can',
+                      detail:selectedChassis === 'TITAN' ? 'Kalkan ve uydu hazır' : 'Kalkan modülle açılır',
+                      color:'emerald' },
+                    { title:'GÜVENLİK', value:revives + ' diriliş hakkı',
+                      detail:'Can bittiğinde koşuyu kurtarır', color:'cyan' }
+                ];
+                summaryEl.innerHTML = cards.map(item =>
+                    `<div class="min-w-0 bg-gray-900/75 border border-gray-700/50 rounded-lg p-2.5">
+                        <div class="font-cyber text-[10px] text-gray-400">${item.title}</div>
+                        <div class="font-bold text-${item.color}-300 text-xs mt-1">${item.value}</div>
+                        <div class="text-[10px] text-gray-400 mt-1">${item.detail}</div>
+                    </div>`).join('');
             }
         }
 
