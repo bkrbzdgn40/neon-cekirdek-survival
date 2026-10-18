@@ -1514,3 +1514,87 @@ test('M4.1 selected chassis badges and mode labels stay short', () => {
   assert.equal(a.keyboard,'KLAVYE · M');
   assert.equal(a.hybrid,'HİBRİT · M');
 });
+
+
+test('M4.2 menu exposes unique chassis controls, details and six mechanic cards', () => {
+  for (const cls of ['VANGUARD','PHANTOM','TITAN'])
+    assert.equal((html.match(new RegExp('data-chassis="' + cls + '"','g'))||[]).length,1);
+  for (const id of ['tabProtocolContent','menuChassisDetail','menuChassisDetailTitle',
+    'menuChassisAdvice','menuChassisDifficulty','menuCorePreviewDot',
+    'menuLoadoutSummary','startBtn','tabCodexContent'])
+    assert.equal((html.match(new RegExp('id="' + id + '"','g'))||[]).length,1,id);
+  for (const label of ['HAREKET','ATILIM','EMP NOVA','MOMENTUM',
+    'SİBER CİNNET','DEFİBRİLATÖR','M · KONTROL MODU'])
+    assert.ok(html.includes(label),label);
+  assert.equal((html.match(/class="menu-protocol-v2 rounded-xl/g)||[]).length,6);
+});
+
+test('M4.2 selected chassis displays accurate contextual advantages', () => {
+  const {run}=setup();
+  const result=JSON.parse(run(`(() => {
+    const data={};
+    for(const chassis of ['VANGUARD','PHANTOM','TITAN']){
+      selectedChassis=chassis; updateMenuCounters();
+      const get=(id)=>document.getElementById(id).textContent;
+      data[chassis]={title:get('menuChassisDetailTitle'),desc:get('menuChassisDetail'),
+        advice:get('menuChassisAdvice'),difficulty:get('menuChassisDifficulty'),
+        metrics:document.getElementById('menuLoadoutSummary').innerHTML};
+    }
+    return JSON.stringify(data);
+  })()`));
+  assert.match(result.VANGUARD.desc,/%12/);
+  assert.match(result.PHANTOM.desc,/%15/);
+  assert.match(result.PHANTOM.desc,/15 yüzde puanı/);
+  assert.match(result.PHANTOM.desc,/%20/);
+  assert.match(result.TITAN.desc,/50 ek can/);
+  assert.match(result.TITAN.desc,/kalkan/);
+  assert.ok(result.VANGUARD.metrics.includes('2 diriliş hakkı'));
+  assert.ok(result.PHANTOM.metrics.includes('19%'));
+  assert.ok(result.TITAN.metrics.includes('150 toplam can'));
+  for(const state of Object.values(result)){
+    assert.doesNotMatch(state.desc,/\([^)]*\)/);
+    assert.match(state.advice,/ÖNERİ/);
+    assert.match(state.difficulty,/ZORLUK/);
+  }
+});
+
+test('M4.2 displayed HP and revives equal actual new-run player stats', () => {
+  const {run}=setup();
+  const result=JSON.parse(run(`(() => {
+    const data={};
+    for(const chassis of ['VANGUARD','PHANTOM','TITAN']){
+      selectedChassis=chassis;updateMenuCounters();startNewGame();
+      data[chassis]={hp:player.maxHp,revives:player.freeRevives,
+        damage:player.damage,crit:player.critChance,
+        shield:player.hasShield,orbitals:player.orbitals,
+        display:document.getElementById('menuLoadoutSummary').innerHTML};
+    }
+    return JSON.stringify(data);
+  })()`));
+  for(const data of Object.values(result)){
+    assert.ok(data.display.includes(data.hp+' toplam can'));
+    assert.ok(data.display.includes(data.revives+' diriliş hakkı'));
+  }
+  assert.equal(result.TITAN.shield,true);
+  assert.equal(result.TITAN.orbitals,1);
+  assert.ok(result.PHANTOM.crit>result.VANGUARD.crit);
+  assert.ok(result.VANGUARD.damage>result.PHANTOM.damage);
+});
+
+test('M4.2 keeps previous game and menu entry points intact', () => {
+  for(const id of ['openShopFromMenuBtn','tabProtocolBtn','tabCodexBtn',
+    'tabCodexContent','startBtn','selectedChassisBadge','menuHighScore',
+    'menuMaxWave','menuGoldText','shopGoldBalance'])
+    assert.equal((html.match(new RegExp('id="' + id + '"','g'))||[]).length,1,id);
+  for(const anchor of ['function startNewGame()','class CombatDirector',
+    'const EVOLUTION_DEFS','playThreatCue'])
+    assert.ok(html.includes(anchor),anchor);
+});
+
+test('M4.2 restores scrolling and removes redundant footer status', () => {
+  const tag=html.match(/<div id="startModal"[^>]+>/)?.[0]||'';
+  assert.ok(tag.includes('overflow-y-auto'));
+  assert.equal(tag.includes('lg:overflow-hidden'),false);
+  assert.equal(html.includes('100% DİNAMİK TAM EKRAN ARAYÜZ AKTİF'),false);
+  assert.ok(html.includes('xl:grid-cols-3 gap-2.5 items-stretch'));
+});
