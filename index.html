@@ -1960,7 +1960,7 @@
         }
 
         function spawnClusterFragments(shell, struckEnemy) {
-            if (!shell.clusterPayload || shell.clusterUsed || bullets.length >= 250) return 0;
+            if (!shell.clusterPayload || shell.clusterUsed || bullets.length > 248) return 0;
             shell.clusterUsed = true;
             const heading = Math.atan2(shell.vy, shell.vx);
             for (const deviation of [-0.55, 0.55]) {
