@@ -515,7 +515,7 @@
             <!-- M4.2.1: Natural height dashboard, content determines each panel. -->
             <main id="preflightDashboard" class="shrink-0 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 xl:gap-6 items-start">
                 
-                <!-- Left Column: Hero Identity, Chassis Selection & Telemetry (5 Cols, Full Height) -->
+                <!-- Left: identity and chassis choice. Content-sized. -->
                 <section class="lg:col-span-5 flex flex-col gap-3.5 xl:gap-4 min-w-0">
                     
                     <!-- Hero Identity & Pilot Record Card -->
@@ -594,7 +594,7 @@
 
                 </section>
 
-                <!-- Right Column: Tactical Briefing Tabs & Action Triggers (7 Cols, Full Height) -->
+                <!-- Right: mechanic guide, live run readiness, Start. Content-sized. -->
                 <section class="lg:col-span-7 flex flex-col gap-3.5 bg-gray-950/85 border border-cyan-500/30 p-4 sm:p-5 xl:p-6 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] min-w-0">
                     
                     <!-- Top Tab Header -->
@@ -656,7 +656,7 @@
 <div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">3</div><div><div class="text-[11px] font-cyber font-bold text-white">BOSS GELİYOR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">Uyarı çizgisinden çık; Atılım, EMP ve Cinnet zamanlamanı koru.</p></div></div>
                       </div>
                     </div>
-                    <!-- TAB 2: Enemy Threat Codex (Expands to fill available vertical space) -->
+                    <!-- TAB 2: Enemy Threat Codex -->
                     <div id="tabCodexContent" class="hidden grid-cols-1 sm:grid-cols-2 gap-3 xl:gap-4 text-left items-stretch">
                         <div class="bg-gray-900/80 border-l-4 border-red-500 p-3.5 xl:p-4 rounded-r-xl flex flex-col justify-center">
                             <div class="font-cyber text-xs sm:text-sm font-bold text-red-400 mb-1">KAMİKAZE & HAYALET SUİKASTÇI</div>
@@ -681,7 +681,8 @@
                     </div>
 
                     <!-- M4.2.1: Live readiness metrics, next to the Start action -->
-                    <div id="preflightReadiness">                    <!-- Current run setup: stay in sync with meta upgrades and selection -->
+                    <div id="preflightReadiness">
+                        <!-- Live setup, always next to launch -->
                     <div class="menu-panel-v2 rounded-xl p-3.5 sm:p-4 flex flex-col gap-2">
                         <div class="font-cyber text-xs font-bold text-cyan-300">BAŞLANGIÇ GÜCÜ</div>
                         <p class="text-[11px] text-gray-400">Kalıcı geliştirmelerin ve şasinin ilk koşudaki toplam etkisi.</p>
@@ -703,7 +704,7 @@
 
             </main>
 
-            <!-- Row 3: Bottom Responsive Telemetry Footer (Fixed Height) -->
+            <!-- Supporting keyboard shortcuts -->
             <footer class="shrink-0 flex flex-wrap items-center justify-between gap-2 bg-gray-950/85 border border-cyan-500/20 rounded-xl px-4 py-2.5 text-[11px] font-cyber text-gray-400">
                 <div class="flex items-center gap-2">
                     <span class="text-cyan-400 font-bold"><i class="fa-solid fa-keyboard mr-1"></i> HIZLI KISAYOLLAR:</span>
