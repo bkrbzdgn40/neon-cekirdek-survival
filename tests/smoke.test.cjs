@@ -1417,7 +1417,7 @@ test('M4.1 all basic HUD values and quest progress remain available with short c
   assert.match(a.overdrive,/^CİNNET · %\d+$/);
   assert.equal(a.level,1);
   assert.match(a.hp,/\d+\/\d+/);
-  assert.notMatch(a.mode,/\(/);
+  assert.doesNotMatch(a.mode,/\(/);
   assert.equal(a.score,'0');
 });
 
