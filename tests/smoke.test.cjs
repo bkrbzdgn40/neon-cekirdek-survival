@@ -453,3 +453,208 @@ test('director state resets cleanly between runs and diagnostics stay read-only'
   assert.equal(x.newPhase,'BUILDUP');
   assert.equal(x.tokens,4);
 });
+
+
+test('M2.2 directional plans advertise the exact sides they will use', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    const pincer = getSpecialEncounterPlan(7,'HUNT',0,0);
+    const spear = getSpecialEncounterPlan(7,'SIEGE',3,1);
+    const point = formationEdgePoint(3,1,3);
+    return JSON.stringify({
+      pincer:pincer.type, pincerSides:[...new Set(pincer.units.map(u=>u.side))].sort(),
+      pincerCount:pincer.units.length,
+      spear:spear.type, spearSides:[...new Set(spear.units.map(u=>u.side))],
+      spearTypes:spear.units.map(u=>u.type), point,
+      warning:pincer.warning
+    });
+  })()`));
+  assert.equal(x.pincer,'PINCER');
+  assert.deepEqual(x.pincerSides,[0,2]);
+  assert.equal(x.pincerCount,4);
+  assert.equal(x.spear,'SPEARHEAD');
+  assert.deepEqual(x.spearSides,[3]);
+  assert.ok(x.spearTypes.includes('SHIELD_BEARER'));
+  assert.ok(x.point.x < 0 && x.point.y > 0);
+  assert.ok(x.warning >= 1.5);
+});
+
+test('incoming formations appear only after telegraph and spend actual threat tokens', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave=7; totalTime=29; nextBossTime=150;
+    combatDirector.tokens=12;
+    combatDirector.update(.02);
+    const warning = combatDirector.pendingEncounter?.warning;
+    const before=enemies.length;
+    const regularDuringWarning=combatDirector.trySpawn();
+    combatDirector.update(1.1);
+    const stillWaiting=enemies.length;
+    combatDirector.update(.65);
+    return JSON.stringify({ warning, before, regularDuringWarning, stillWaiting,
+      after:enemies.length, tokens:combatDirector.tokens,
+      pending:combatDirector.pendingEncounter,
+      specials:combatDirector.stats.specialEncounters,
+      units:combatDirector.stats.specialUnits, tracked:combatDirector.stats.spawned });
+  })()`));
+  assert.ok(x.warning >= 1.5);
+  assert.equal(x.before,0);
+  assert.equal(x.regularDuringWarning,false);
+  assert.equal(x.stillWaiting,0);
+  assert.ok(x.after >= 2 && x.after <= 4);
+  assert.equal(x.pending,null);
+  assert.equal(x.specials,1);
+  assert.equal(x.units,x.after);
+  assert.equal(x.tracked,x.after);
+  assert.ok(x.tokens >= 0);
+});
+
+test('special encounter cannot begin during boss warning or recovery', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave=9; totalTime=30; combatDirector.tokens=12;
+    nextBossTime=34; combatDirector.update(.03);
+    const bossImminent=combatDirector.pendingEncounter;
+    nextBossTime=150; combatDirector.afterBossUntil=39;
+    combatDirector.update(.03); const recovering=combatDirector.pendingEncounter;
+    combatDirector.afterBossUntil=-Infinity;
+    combatDirector.update(.03); const pending=!!combatDirector.pendingEncounter;
+    combatDirector.onBossEncounter();
+    return JSON.stringify({bossImminent,recovering,pending,
+      afterCancel:combatDirector.pendingEncounter,cancelled:combatDirector.stats.specialCancelled});
+  })()`));
+  assert.equal(x.bossImminent,null);
+  assert.equal(x.recovering,null);
+  assert.equal(x.pending,true);
+  assert.equal(x.afterCancel,null);
+  assert.equal(x.cancelled,1);
+});
+
+test('a formation respects enemy cap and costs even if room runs out', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave=12; totalTime=30;
+    combatDirector.profile=getDirectorProfile(30,12,0,150,-Infinity,1);
+    combatDirector.tokens=13;
+    enemies=Array(combatDirector.profile.cap-2).fill({dead:false});
+    combatDirector.pendingEncounter=getSpecialEncounterPlan(wave,'SURGE',1,0);
+    const count=combatDirector.resolveSpecialEncounter();
+    return JSON.stringify({count,cap:combatDirector.profile.cap,active:enemies.length,
+      remaining:combatDirector.tokens,specialUnits:combatDirector.stats.specialUnits});
+  })()`));
+  assert.equal(x.count,2);
+  assert.equal(x.active,x.cap);
+  assert.ok(x.remaining >= 0 && x.remaining < 13);
+  assert.equal(x.specialUnits,2);
+});
+
+test('boss enters second and final phase, each with a locked warning before attack', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave=10;
+    const boss=new Enemy(100,100,'BOSS_DESTROYER');
+    boss.hp=boss.maxHp*.68;
+    boss.updateBossPhases(.05,200,0);
+    const phase2=boss.bossPhase, warning2=boss.bossSpecial?.timer;
+    const initial=enemyProjectiles.length;
+    boss.updateBossPhases(1.20,-200,0);
+    const first=enemyProjectiles.length;
+    boss.hp=boss.maxHp*.34;
+    boss.updateBossPhases(.05,0,200);
+    const phase3=boss.bossPhase, warning3=boss.bossSpecial?.timer;
+    boss.updateBossPhases(1.40,0,-200);
+    return JSON.stringify({phase2,warning2,initial,first,phase3,warning3,
+      total:enemyProjectiles.length,attacks:boss.bossSpecialCount,
+      tracked:combatDirector.stats.bossSpecialAttacks,remaining:boss.bossSpecial});
+  })()`));
+  assert.equal(x.phase2,2);
+  assert.ok(x.warning2 >= 1);
+  assert.equal(x.initial,0);
+  assert.equal(x.first,5);
+  assert.equal(x.phase3,3);
+  assert.ok(x.warning3 >= 1.2);
+  assert.equal(x.total,12);
+  assert.equal(x.attacks,2);
+  assert.equal(x.tracked,2);
+  assert.equal(x.remaining,null);
+});
+
+test('four boss archetypes use distinct and bounded special volleys', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave=11;
+    const result={};
+    for(const type of ['BOSS_DESTROYER','BOSS_TITAN','BOSS_VOID','BOSS_PRISM']) {
+      const boss=new Enemy(180,180,type);
+      const before=enemyProjectiles.length;
+      const spawned=fireBossPhaseAttack(boss,0,2);
+      result[type]={spawned,actual:enemyProjectiles.length-before};
+    }
+    const dead=new Enemy(180,180,'BOSS_VOID');
+    dead.dead=true;
+    result.dead=fireBossPhaseAttack(dead,0,3);
+    return JSON.stringify(result);
+  })()`));
+  assert.deepEqual(Object.values(x).slice(0,4).map(v=>v.spawned),[5,3,5,3]);
+  for(const item of Object.values(x).slice(0,4)) assert.equal(item.spawned,item.actual);
+  assert.equal(x.dead,0);
+});
+
+test('special encounter counters and pending warnings clear on restart', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave=8; totalTime=30; nextBossTime=150;
+    combatDirector.tokens=12; combatDirector.update(.02);
+    const before=window.getNeonRunDiagnostics();
+    startNewGame();
+    const after=window.getNeonRunDiagnostics();
+    return JSON.stringify({before:before.pendingEncounter,
+      after:after.pendingEncounter,units:after.specialUnits,
+      specials:after.specialEncounters,bossAttacks:after.bossSpecialAttacks});
+  })()`));
+  assert.equal(x.before,'PINCER');
+  assert.equal(x.after,null);
+  assert.equal(x.units,0);
+  assert.equal(x.specials,0);
+  assert.equal(x.bossAttacks,0);
+});
+
+test('boss warning render and directional warning render are safe with canvas mock', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave=6; totalTime=29; nextBossTime=150;
+    combatDirector.tokens=12; combatDirector.update(.01);
+    drawSpecialEncounterWarning();
+    const boss=new Enemy(300,300,'BOSS_PRISM');
+    boss.hp=boss.maxHp*.69;
+    boss.updateBossPhases(.01,100,0);
+    boss.draw(ctx);
+    return JSON.stringify({ warning:!!combatDirector.pendingEncounter,
+      bossWarning:!!boss.bossSpecial,phase:boss.bossPhase });
+  })()`));
+  assert.equal(x.warning,true);
+  assert.equal(x.bossWarning,true);
+  assert.equal(x.phase,2);
+});
+
+
+test('boss phase telegraph suppresses simultaneous regular attack', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave=7;
+    const boss = new Enemy(player.x+220,player.y,'BOSS_DESTROYER');
+    boss.hp=boss.maxHp*.68;
+    boss.actionTimer=0;
+    for(let i=0;i<14;i++) boss.update(.05);
+    const before=enemyProjectiles.length;
+    for(let i=0;i<12;i++) boss.update(.05);
+    return JSON.stringify({ before,after:enemyProjectiles.length,
+      phase:boss.bossPhase, specials:boss.bossSpecialCount,
+      normalTimer:boss.actionTimer });
+  })()`));
+  assert.equal(x.before,0);
+  assert.equal(x.phase,2);
+  assert.equal(x.after,5);
+  assert.equal(x.specials,1);
+  assert.ok(x.normalTimer > 0);
+});
