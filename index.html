@@ -3443,6 +3443,8 @@
             }
 
             trySpawn() {
+                // Give a formation its full telegraph interval without extra random flanks.
+                if (this.pendingEncounter) return false;
                 if (enemies.length >= Math.min(MAX_ACTIVE_ENEMIES, this.profile.cap) || this.tokens < 1) return false;
                 const type = pickEnemyTypeForWave(wave, Math.random(), this.profile.theme, this.tokens);
                 if (!type) return false;
