@@ -249,6 +249,25 @@
         .upgrade-card:hover {
             transform: translateY(-6px) scale(1.02);
         }
+    
+        /* M4.2: content-density without placeholder-sized cards. */
+        .menu-panel-v2 {background:linear-gradient(145deg,rgba(7,15,30,.94),rgba(6,9,20,.95));border:1px solid rgba(0,218,238,.24);}
+        .menu-chassis-v2{min-height:174px;gap:10px;align-content:start;}
+        .menu-chassis-v2.active{outline:2px solid rgba(0,243,255,.35);outline-offset:-2px;}
+        .menu-feature-v2{display:inline-flex;align-items:center;padding:.27rem .47rem;border-radius:.4rem;font-size:11px;font-weight:700;border:1px solid rgba(148,163,184,.26);background:rgba(8,18,32,.83);}
+        .menu-protocol-v2{min-height:146px;background:linear-gradient(145deg,rgba(12,20,38,.86),rgba(7,12,24,.93));border:1px solid rgba(100,142,171,.24);display:flex;flex-direction:column;gap:7px;}
+        .menu-protocol-v2 p{line-height:1.46;}
+        .menu-protocol-v2 .key{font:700 10px 'Orbitron',sans-serif;letter-spacing:.025em;opacity:.95;}
+        .menu-detail-v2{background:linear-gradient(125deg,rgba(7,19,34,.92),rgba(8,12,25,.96));border:1px solid rgba(56,189,248,.24);}
+        .menu-core-v2{width:68px;height:68px;min-width:68px;display:flex;align-items:center;justify-content:center;border-radius:16px;border:1px solid rgba(0,243,255,.25);position:relative;background:radial-gradient(circle,rgba(0,243,255,.11),rgba(4,9,24,.85));}
+        .menu-core-v2::before{content:'';position:absolute;inset:9px;border:2px dashed var(--neon-cyan);border-radius:50%;animation:menu-core-spin 18s linear infinite;opacity:.8;}
+        @keyframes menu-core-spin{to{transform:rotate(360deg)}}
+        .menu-core-v2 .core-center{width:17px;height:17px;border:2px solid white;border-radius:50%;box-shadow:0 0 16px currentColor;}
+        @media(min-width:1280px){#tabProtocolContent{grid-template-columns:repeat(3,minmax(0,1fr));}}
+        @media(max-width:1279px){#tabProtocolContent{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        @media(max-width:639px){#tabProtocolContent{grid-template-columns:minmax(0,1fr);}.menu-chassis-v2{min-height:0;}}
+        @media(prefers-reduced-motion:reduce){.menu-core-v2::before{animation:none}}
+
     </style>
 </head>
 <body class="relative w-screen h-screen overflow-hidden select-none">
@@ -455,8 +474,8 @@
         </div>
     </div>
 
-    <div id="startModal" class="fixed inset-0 z-30 w-screen h-[100dvh] bg-black/60 backdrop-blur-[4px] overflow-y-auto lg:overflow-hidden">
-        <div class="w-full min-h-[100dvh] lg:h-[100dvh] flex flex-col justify-between terminal-shell p-3 sm:p-5 lg:p-6 xl:p-8 gap-3 sm:gap-4 lg:gap-5">
+    <div id="startModal" class="fixed inset-0 z-30 w-screen h-[100dvh] bg-black/60 backdrop-blur-[4px] overflow-y-auto">
+        <div class="w-full min-h-[100dvh] flex flex-col justify-between terminal-shell p-3 sm:p-5 lg:p-6 xl:p-8 gap-3 sm:gap-4 lg:gap-5">
             
             <!-- Row 1: Top Command Telemetry Header (Fixed Height) -->
             <header class="shrink-0 flex flex-wrap items-center justify-between gap-3 bg-gray-950/90 border border-cyan-500/30 rounded-xl px-4 py-2.5 sm:py-3 shadow-[0_0_25px_rgba(0,0,0,0.6)]">
@@ -516,91 +535,59 @@
                         </div>
                     </div>
 
-                    <!-- Chassis Selector Card (Expands to fill middle space) -->
-                    <div class="flex-1 bg-gray-950/85 border border-cyan-500/30 rounded-xl p-4 sm:p-5 flex flex-col justify-between gap-3 shadow-[0_0_35px_rgba(0,0,0,0.6)]">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-cyber font-bold text-cyan-300 tracking-wider uppercase flex items-center gap-2">
-                                <i class="fa-solid fa-shuttle-space text-cyan-400"></i> ŞASİ SEÇ
-                            </span>
-
+                    
+                    <!-- M4.2: Compact, informative chassis selection -->
+                    <div class="menu-panel-v2 rounded-xl p-4 sm:p-5 flex flex-col gap-3">
+                        <div class="flex flex-wrap justify-between gap-2 items-start">
+                            <div>
+                                <h2 class="font-cyber font-black text-cyan-300 text-sm">ŞASİ SEÇ</h2>
+                                <p class="text-xs text-gray-400 mt-1">Şasi, koşuya hangi avantajlarla başladığını belirler.</p>
+                            </div>
+                            <span class="text-[10px] font-bold text-cyan-200 bg-cyan-950/50 border border-cyan-700/40 rounded-full px-3 py-1">3 OYUN TARZI</span>
                         </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 items-stretch">
-                            <button type="button" data-chassis="VANGUARD" class="chassis-card active p-3.5 xl:p-4 rounded-xl text-left cursor-pointer flex flex-col justify-between">
-                                <div>
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="font-cyber text-xs sm:text-sm font-black text-cyan-300">ÖNCÜ</span>
-                                        <span class="w-7 h-7 rounded-lg bg-cyan-500/15 border border-cyan-400/40 flex items-center justify-center text-cyan-400 text-xs">
-                                            <i class="fa-solid fa-crosshairs"></i>
-                                        </span>
-                                    </div>
-                                    <p class="text-xs text-gray-300 leading-relaxed">Dengeli hasar · Ek diriliş</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-stretch"><button type="button" data-chassis="VANGUARD" class="chassis-card menu-chassis-v2 active rounded-xl p-3.5 text-left cursor-pointer flex flex-col justify-between">
+  <div class="flex justify-between gap-2 items-start"><div><div class="font-cyber text-cyan-300 text-sm font-black">ÖNCÜ</div><div class="mt-1 text-[10px] tracking-widest text-cyan-300/70 font-bold">DENGELİ</div></div><i class="fa-solid fa-crosshairs text-cyan-300" aria-hidden="true"></i></div>
+  <p class="text-xs text-gray-200 leading-relaxed">Başlangıç hasarı ve ek diriliş hakkı ile hata payı sunar.</p>
+  <div class="flex flex-wrap gap-1.5"><span class="menu-feature-v2 text-cyan-200">+%12 hasar</span><span class="menu-feature-v2 text-cyan-200">+1 diriliş</span></div>
+  <div class="text-[10px] text-gray-400 border-t border-gray-700/50 pt-2">Yeni başlayanlar ve uzun koşular</div>
+</button>
+<button type="button" data-chassis="PHANTOM" class="chassis-card menu-chassis-v2  rounded-xl p-3.5 text-left cursor-pointer flex flex-col justify-between">
+  <div class="flex justify-between gap-2 items-start"><div><div class="font-cyber text-pink-300 text-sm font-black">HAYALET</div><div class="mt-1 text-[10px] tracking-widest text-pink-300/70 font-bold">ÇEVİK</div></div><i class="fa-solid fa-bolt text-pink-300" aria-hidden="true"></i></div>
+  <p class="text-xs text-gray-200 leading-relaxed">Hız, kritik ve hızlı atılım ile saldırı aralarında konum değiştir.</p>
+  <div class="flex flex-wrap gap-1.5"><span class="menu-feature-v2 text-pink-200">+%15 hız</span><span class="menu-feature-v2 text-pink-200">+15 puan kritik</span><span class="menu-feature-v2 text-pink-200">20% kısa atılım</span></div>
+  <div class="text-[10px] text-gray-400 border-t border-gray-700/50 pt-2">Hareket ve kaçınma odaklı oyun</div>
+</button>
+<button type="button" data-chassis="TITAN" class="chassis-card menu-chassis-v2  rounded-xl p-3.5 text-left cursor-pointer flex flex-col justify-between">
+  <div class="flex justify-between gap-2 items-start"><div><div class="font-cyber text-emerald-300 text-sm font-black">TİTAN</div><div class="mt-1 text-[10px] tracking-widest text-emerald-300/70 font-bold">DAYANIKLI</div></div><i class="fa-solid fa-shield-halved text-emerald-300" aria-hidden="true"></i></div>
+  <p class="text-xs text-gray-200 leading-relaxed">Ek can, aktif kalkan ve uydu ile yakın tehditleri yönet.</p>
+  <div class="flex flex-wrap gap-1.5"><span class="menu-feature-v2 text-emerald-200">+50 can</span><span class="menu-feature-v2 text-emerald-200">Kalkan</span><span class="menu-feature-v2 text-emerald-200">+1 uydu</span></div>
+  <div class="text-[10px] text-gray-400 border-t border-gray-700/50 pt-2">Alan kontrolü ve savunma</div>
+</button></div>
+                        <div class="menu-detail-v2 rounded-xl p-3.5 flex gap-3 items-center">
+                            <div class="menu-core-v2 shrink-0 text-cyan-400" id="menuCorePreview">
+                                <span id="menuCorePreviewDot" class="core-center bg-cyan-400"></span>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex flex-wrap justify-between gap-2 items-baseline">
+                                    <h3 id="menuChassisDetailTitle" class="font-cyber font-bold text-cyan-300 text-sm">ÖNCÜ · DENGELİ</h3>
+                                    <span id="menuChassisDifficulty" class="text-[10px] text-gray-400">ZORLUK · KOLAY</span>
                                 </div>
-                                <div class="mt-3 pt-2 border-t border-gray-800 text-[11px] font-cyber font-bold text-cyan-300">
-                                    ★ +1 DEFİBRİLATÖR
-                                </div>
-                            </button>
-
-                            <button type="button" data-chassis="PHANTOM" class="chassis-card p-3.5 xl:p-4 rounded-xl text-left cursor-pointer flex flex-col justify-between">
-                                <div>
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="font-cyber text-xs sm:text-sm font-black text-pink-400">HAYALET</span>
-                                        <span class="w-7 h-7 rounded-lg bg-pink-500/15 border border-pink-400/40 flex items-center justify-center text-pink-400 text-xs">
-                                            <i class="fa-solid fa-bolt"></i>
-                                        </span>
-                                    </div>
-                                    <p class="text-xs text-gray-300 leading-relaxed">Hız · Kritik · Atılım</p>
-                                </div>
-                                <div class="mt-3 pt-2 border-t border-gray-800 text-[11px] font-cyber font-bold text-pink-400">
-                                    ★ DELİCİ & SEKEN MERMİ
-                                </div>
-                            </button>
-
-                            <button type="button" data-chassis="TITAN" class="chassis-card p-3.5 xl:p-4 rounded-xl text-left cursor-pointer flex flex-col justify-between">
-                                <div>
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="font-cyber text-xs sm:text-sm font-black text-emerald-400">TİTAN</span>
-                                        <span class="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-400/40 flex items-center justify-center text-emerald-400 text-xs">
-                                            <i class="fa-solid fa-shield-halved"></i>
-                                        </span>
-                                    </div>
-                                    <p class="text-xs text-gray-300 leading-relaxed">+50 can · Kalkan · Uydu</p>
-                                </div>
-                                <div class="mt-3 pt-2 border-t border-gray-800 text-[11px] font-cyber font-bold text-emerald-400">
-                                    ★ KALKAN & 1 UYDU
-                                </div>
-                            </button>
+                                <p id="menuChassisDetail" class="text-xs leading-relaxed text-gray-200 mt-1.5">İlk dalgalarda daha yüksek hasar verir. Fazladan diriliş hakkı, hata yaptığında koşuyu kurtarmana yardım eder.</p>
+                                <p id="menuChassisAdvice" class="text-[11px] text-cyan-200/80 mt-1.5">Öneri: İlk önce bir silah, ardından savunma modülü seç.</p>
+                            </div>
                         </div>
                     </div>
-
-                    <!-- Live Animated Core Schematic & Loadout Telemetry -->
-                    <div class="shrink-0 bg-gray-950/85 border border-cyan-500/35 rounded-xl p-3.5 sm:p-4 flex items-center gap-4 shadow-[0_0_25px_rgba(0,0,0,0.5)]">
-                        <div class="relative w-14 h-14 sm:w-16 sm:h-16 shrink-0 flex items-center justify-center bg-gray-900/80 rounded-xl border border-cyan-500/20">
-                            <svg viewBox="0 0 100 100" class="w-full h-full animate-spin-slow p-1">
-                                <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(0,243,255,0.3)" stroke-width="2" stroke-dasharray="10 6"/>
-                                <polygon points="50,10 85,30 85,70 50,90 15,70 15,30" fill="none" stroke="rgba(255,0,127,0.5)" stroke-width="2"/>
-                            </svg>
-                            <svg viewBox="0 0 100 100" class="w-10 h-10 absolute animate-spin-reverse">
-                                <circle cx="50" cy="50" r="28" fill="none" stroke="#00f3ff" stroke-width="2.5" stroke-dasharray="18 10"/>
-                            </svg>
-                            <div id="menuCorePreviewDot" class="w-3.5 h-3.5 rounded-full bg-cyan-400 shadow-[0_0_15px_#00f3ff] border-2 border-white"></div>
-                        </div>
-                        <div class="text-left flex-1 min-w-0">
-                            <div class="text-[11px] font-cyber font-bold text-cyan-400 tracking-widest uppercase mb-1">
-                                BAŞLANGIÇ GÜCÜ
-                            </div>
-                            <div id="menuLoadoutSummary" class="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-xs text-gray-300 font-semibold">
-                                <div>Hasar: <span class="text-pink-400">Kademe 0</span></div>
-                                <div>Zırh: <span class="text-green-400">100 HP</span></div>
-                                <div>Diriliş: <span class="text-emerald-400">2x Hak</span></div>
-                            </div>
-                        </div>
+                    <!-- Current run setup: stay in sync with meta upgrades and selection -->
+                    <div class="menu-panel-v2 rounded-xl p-3.5 sm:p-4 flex flex-col gap-2">
+                        <div class="font-cyber text-xs font-bold text-cyan-300">BAŞLANGIÇ GÜCÜ</div>
+                        <p class="text-[11px] text-gray-400">Kalıcı geliştirmelerin ve şasinin ilk koşudaki toplam etkisi.</p>
+                        <div id="menuLoadoutSummary" class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-semibold text-gray-300"></div>
                     </div>
 
                 </section>
 
                 <!-- Right Column: Tactical Briefing Tabs & Action Triggers (7 Cols, Full Height) -->
-                <section class="lg:col-span-7 flex flex-col justify-between bg-gray-950/85 border border-cyan-500/30 p-4 sm:p-6 xl:p-7 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] min-h-0 h-full gap-4">
+                <section class="lg:col-span-7 flex flex-col gap-3.5 bg-gray-950/85 border border-cyan-500/30 p-4 sm:p-6 xl:p-7 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] min-h-0 h-full gap-4">
                     
                     <!-- Top Tab Header -->
                     <div class="shrink-0 flex flex-wrap items-center justify-between border-b border-gray-800 pb-3 gap-2">
@@ -615,35 +602,52 @@
 
                     </div>
 
-                    <!-- TAB 1: Combat Protocol & Controls (Expands to fill available vertical space) -->
-                    <div id="tabProtocolContent" class="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left items-stretch">
-                        <div class="brief-control rounded-xl border border-cyan-500/30 bg-gray-900/70 px-5 py-5 flex flex-col justify-center gap-3">
-                            <i class="fa-solid fa-arrows-up-down-left-right text-cyan-300 text-xl" aria-hidden="true"></i>
-                            <h3 class="font-cyber text-cyan-200 font-bold text-sm">HAREKET</h3>
-                            <p class="text-white font-cyber text-sm">WASD · OK TUŞLARI</p>
-                            <p class="text-gray-400 text-xs">Otomatik nişan ve ateş</p>
-                        </div>
-                        <div class="brief-control rounded-xl border border-yellow-500/30 bg-gray-900/70 px-5 py-5 flex flex-col justify-center gap-3">
-                            <i class="fa-solid fa-bolt text-yellow-300 text-xl" aria-hidden="true"></i>
-                            <h3 class="font-cyber text-yellow-200 font-bold text-sm">ATILIM</h3>
-                            <p class="text-white font-cyber text-sm">BOŞLUK · SOL TIK</p>
-                            <p class="text-gray-400 text-xs">Kısa dokunulmazlık</p>
-                        </div>
-                        <div class="brief-control rounded-xl border border-purple-500/30 bg-gray-900/70 px-5 py-5 flex flex-col justify-center gap-3">
-                            <i class="fa-solid fa-burst text-purple-300 text-xl" aria-hidden="true"></i>
-                            <h3 class="font-cyber text-purple-200 font-bold text-sm">EMP NOVA</h3>
-                            <p class="text-white font-cyber text-sm">E · SAĞ TIK</p>
-                            <p class="text-gray-400 text-xs">Mermi temizleme</p>
-                        </div>
-                        <div class="brief-control rounded-xl border border-pink-500/30 bg-gray-900/70 px-5 py-5 flex flex-col justify-center gap-3">
-                            <i class="fa-solid fa-gamepad text-pink-300 text-xl" aria-hidden="true"></i>
-                            <h3 class="font-cyber text-pink-200 font-bold text-sm">DİĞER</h3>
-                            <p class="text-white font-cyber text-sm">M · KONTROL MODU</p>
-                            <p class="text-white font-cyber text-sm">P · ESC · DURAKLAT</p>
-                        </div>
+                    
+                    <!-- M4.2: concise but actionable mechanic explanations -->
+                    <div id="tabProtocolContent" class="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 text-left content-start">
+                      <div class="menu-protocol-v2 rounded-xl p-3.5">
+                          <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-cyan-300 text-xs"><i class="fa-solid fa-arrows-up-down-left-right mr-2" aria-hidden="true"></i>HAREKET</h3></div>
+                          <div class="key text-cyan-200">WASD · OK TUŞLARI</div>
+                          <p class="text-xs text-gray-200">Yakındaki hedeflere otomatik ateş edersin. Düşmanların arasına sıkışmamak için sürekli yer değiştir.</p>
+                          <p class="text-[11px] text-cyan-200/80 mt-auto border-t border-gray-700/50 pt-2">Hareket ettikçe Momentum birikir; atış temposunu destekler.</p>
+                      </div>
+<div class="menu-protocol-v2 rounded-xl p-3.5">
+                          <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-yellow-300 text-xs"><i class="fa-solid fa-bolt mr-2" aria-hidden="true"></i>ATILIM</h3></div>
+                          <div class="key text-yellow-200">BOŞLUK · SOL TIK</div>
+                          <p class="text-xs text-gray-200">Kısa bir hamleyle mermilerden ve boss saldırılarından sıyrıl. Atılımın kısa dokunulmazlık süresi var.</p>
+                          <p class="text-[11px] text-yellow-200/80 mt-auto border-t border-gray-700/50 pt-2">Atılımı, turuncu baskın uyarısı geldiğinde saklamak işe yarar.</p>
+                      </div>
+<div class="menu-protocol-v2 rounded-xl p-3.5">
+                          <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-purple-300 text-xs"><i class="fa-solid fa-burst mr-2" aria-hidden="true"></i>EMP NOVA</h3></div>
+                          <div class="key text-purple-200">E · SAĞ TIK</div>
+                          <p class="text-xs text-gray-200">Yakınındaki düşmanları geri iter, tehlikeli mermileri temizler. Köşeye sıkıştığında güvenli alan açar.</p>
+                          <p class="text-[11px] text-purple-200/80 mt-auto border-t border-gray-700/50 pt-2">Boss ve elit kalabalığını dağıtmak için kullan.</p>
+                      </div>
+<div class="menu-protocol-v2 rounded-xl p-3.5">
+                          <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-sky-300 text-xs"><i class="fa-solid fa-gauge-high mr-2" aria-hidden="true"></i>MOMENTUM</h3></div>
+                          <div class="key text-sky-200">HAREKETLE DOLAR</div>
+                          <p class="text-xs text-gray-200">Aktif hareket savaş temposunu artırır. Yerinde durmak yerine kontrollü tur atarak baskını azalt.</p>
+                          <p class="text-[11px] text-sky-200/80 mt-auto border-t border-gray-700/50 pt-2">Hayalet ile kaçınma ve saldırı ritmini birlikte güçlendir.</p>
+                      </div>
+<div class="menu-protocol-v2 rounded-xl p-3.5">
+                          <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-pink-300 text-xs"><i class="fa-solid fa-fire mr-2" aria-hidden="true"></i>SİBER CİNNET</h3></div>
+                          <div class="key text-pink-200">BAR DOLUNCA</div>
+                          <p class="text-xs text-gray-200">Dolduğunda kısa süreli güçlü savaş moduna geçersin. Atış ve kritik gücünü artırır; modül evrimleriyle birleşir.</p>
+                          <p class="text-[11px] text-pink-200/80 mt-auto border-t border-gray-700/50 pt-2">Kritik boss anları için gücü zamanlamak önemli.</p>
+                      </div>
+<div class="menu-protocol-v2 rounded-xl p-3.5">
+                          <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-emerald-300 text-xs"><i class="fa-solid fa-heart-circle-bolt mr-2" aria-hidden="true"></i>DEFİBRİLATÖR</h3></div>
+                          <div class="key text-emerald-200">CAN 0 OLUNCA</div>
+                          <p class="text-xs text-gray-200">Diriliş hakkın varsa koşuya geri dönersin. Yakın tehditleri uzaklaştıran güçlü bir patlama da yaşanır.</p>
+                          <p class="text-[11px] text-emerald-200/80 mt-auto border-t border-gray-700/50 pt-2">Öncü, başlangıçta bir fazladan ücretsiz hakla gelir.</p>
+                      </div>
+                      <div class="sm:col-span-2 xl:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
+                       <div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">1</div><div><div class="text-[11px] font-cyber font-bold text-white">İLK DALGALAR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">XP kürelerini topla; hasar ve güvenlik temelini kur.</p></div></div>
+<div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">2</div><div><div class="text-[11px] font-cyber font-bold text-white">BUILD KUR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">Aynı modülü üçüncü kademeye çıkar, sinerji hedeflerini takip et.</p></div></div>
+<div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">3</div><div><div class="text-[11px] font-cyber font-bold text-white">BOSS GELİYOR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">Uyarı çizgisinden çık; Atılım, EMP ve Cinnet zamanlamanı koru.</p></div></div>
+                      </div>
                     </div>
-
-                                        <!-- TAB 2: Enemy Threat Codex (Expands to fill available vertical space) -->
+                    <!-- TAB 2: Enemy Threat Codex (Expands to fill available vertical space) -->
                     <div id="tabCodexContent" class="hidden flex-1 min-h-0 grid-cols-1 sm:grid-cols-2 gap-3 xl:gap-4 text-left items-stretch overflow-y-auto pr-1">
                         <div class="bg-gray-900/80 border-l-4 border-red-500 p-3.5 xl:p-4 rounded-r-xl flex flex-col justify-center">
                             <div class="font-cyber text-xs sm:text-sm font-bold text-red-400 mb-1">KAMİKAZE & HAYALET SUİKASTÇI</div>
