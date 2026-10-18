@@ -636,3 +636,25 @@ test('boss warning render and directional warning render are safe with canvas mo
   assert.equal(x.bossWarning,true);
   assert.equal(x.phase,2);
 });
+
+
+test('boss phase telegraph suppresses simultaneous regular attack', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave=7;
+    const boss = new Enemy(player.x+220,player.y,'BOSS_DESTROYER');
+    boss.hp=boss.maxHp*.68;
+    boss.actionTimer=0;
+    for(let i=0;i<14;i++) boss.update(.05);
+    const before=enemyProjectiles.length;
+    for(let i=0;i<12;i++) boss.update(.05);
+    return JSON.stringify({ before,after:enemyProjectiles.length,
+      phase:boss.bossPhase, specials:boss.bossSpecialCount,
+      normalTimer:boss.actionTimer });
+  })()`));
+  assert.equal(x.before,0);
+  assert.equal(x.phase,2);
+  assert.equal(x.after,5);
+  assert.equal(x.specials,1);
+  assert.ok(x.normalTimer > 0);
+});
