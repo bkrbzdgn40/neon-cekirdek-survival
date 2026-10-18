@@ -4156,8 +4156,12 @@
 
             for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
                 const ep = enemyProjectiles[i];
+                if (ep.dead) {
+                    enemyProjectiles.splice(i, 1);
+                    continue;
+                }
                 ep.update(dt * enemyTimeScale);
-                if (Math.hypot(ep.x - player.x, ep.y - player.y) < ep.radius + player.radius) {
+                if (!ep.dead && Math.hypot(ep.x - player.x, ep.y - player.y) < ep.radius + player.radius) {
                     player.takeDamage(ep.damage);
                     ep.dead = true;
                 }
