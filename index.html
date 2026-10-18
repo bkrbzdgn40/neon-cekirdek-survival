@@ -1393,7 +1393,12 @@
                 this.synergies = new Set();
                 this.evolutionPulseTimer = 5.5;
                 this.buildStats = { railShots: 0, clusterBursts: 0, arcSurges: 0,
-                    orbitalPulses: 0, aegisPulses: 0, prismBounces: 0 };
+                    orbitalPulses: 0, aegisPulses: 0, prismBounces: 0,
+                    reactorBursts: 0, overdriveDischarges: 0, weakpointMarks: 0,
+                    bloodReactorHeals: 0, aegisDeflections: 0, kineticVortices: 0 };
+                this.bloodReactorKills = 0;
+                this.bloodReactorReadyAt = 0;
+                this.kineticVortexReadyAt = 0;
             }
 
             refreshBuildTraits() {
@@ -1414,6 +1419,19 @@
                     shockwaves.push(new Shockwave(this.x, this.y, 220, '#ff007f', 0.4));
                     showDopamineBanner('🔥 SİBER CİNNET AKTİF! (HIZ & KRİTİK ARTIŞI) 🔥', '#ff007f');
                     document.getElementById('overdriveOverlay').classList.remove('hidden');
+                    if (this.evolutions.has('overdrive_boost')) {
+                        // Once per Overdrive activation, never once per frame.
+                        let cleared = 0;
+                        for (const projectile of enemyProjectiles) {
+                            if (cleared >= 12) break;
+                            if (!projectile.dead && Math.hypot(projectile.x - this.x, projectile.y - this.y) < 185) {
+                                projectile.dead = true;
+                                cleared++;
+                            }
+                        }
+                        this.buildStats.overdriveDischarges++;
+                        shockwaves.push(new Shockwave(this.x, this.y, 185, '#ff007f', 0.45));
+                    }
                 }
             }
 
@@ -1472,6 +1490,24 @@
 
                     if (this.dashTimer <= 0) {
                         this.isDashing = false;
+                        if (this.evolutions.has('kinetic_magnet') && totalTime >= this.kineticVortexReadyAt) {
+                            this.kineticVortexReadyAt = totalTime + 4;
+                            this.buildStats.kineticVortices++;
+                            shockwaves.push(new Shockwave(this.x, this.y, 160, '#38bdf8', 0.35));
+                            let disrupted = 0;
+                            for (const target of enemies) {
+                                if (target.dead || disrupted >= 8) continue;
+                                const dx = target.x - this.x, dy = target.y - this.y;
+                                const dist = Math.hypot(dx, dy);
+                                if (dist > 160) continue;
+                                target.takeDamage(this.damage * 0.45,
+                                    dx / (dist || 1) * 220, dy / (dist || 1) * 220, false, false);
+                                disrupted++;
+                            }
+                            for (const orb of orbs) {
+                                if (Math.hypot(orb.x - this.x, orb.y - this.y) <= 240) orb.magnetized = true;
+                            }
+                        }
                     }
                 } else {
                     let kx = 0, ky = 0;
@@ -1596,7 +1632,8 @@
 
                 const spread = 0.16;
                 const startAngle = baseAngle - ((this.multishot - 1) * spread) / 2;
-                const effectiveCrit = this.critChance + (this.overdriveActive ? this.overdriveCritBonus : 0) + (this.momentum / 100) * 0.1;
+                const effectiveCrit = Math.min(0.78, this.critChance +
+                    (this.overdriveActive ? this.overdriveCritBonus : 0) + (this.momentum / 100) * 0.1);
                 const isCrit = Math.random() < effectiveCrit;
                 const finalDamage = isCrit ? this.damage * 2.0 : this.damage;
 
@@ -1616,6 +1653,20 @@
                     );
                     if (this.evolutions.has('pierce_ricochet')) shell.prismEvolved = true;
                     bullets.push(shell);
+                }
+
+                if (this.evolutions.has('firerate') && this.shotCounter % 5 === 0 &&
+                    bullets.length <= 245) {
+                    for (const deviation of [-0.27, 0.27]) {
+                        const a = baseAngle + deviation;
+                        const pulse = new Bullet(this.x, this.y,
+                            Math.cos(a) * this.bulletSpeed * 1.1,
+                            Math.sin(a) * this.bulletSpeed * 1.1,
+                            this.damage * 0.50, 4, 1, 0, false, false);
+                        pulse.reactorPulse = true;
+                        bullets.push(pulse);
+                    }
+                    this.buildStats.reactorBursts++;
                 }
 
                 if (this.evolutions.has('multishot') && this.shotCounter % 4 === 0) {
@@ -1701,6 +1752,21 @@
                     audio.playExplosion(false);
                     screenShake = 10;
                     shockwaves.push(new Shockwave(this.x, this.y, 130, '#00f3ff', 0.3));
+                    if (this.evolutions.has('aegis_shield')) {
+                        // Reflect the opening blow into up to three guarded bolts.
+                        let sent = 0;
+                        for (const target of enemies) {
+                            if (target.dead || sent >= 3 || bullets.length >= 250) continue;
+                            if (Math.hypot(target.x - this.x, target.y - this.y) > 260) continue;
+                            const angle = Math.atan2(target.y - this.y, target.x - this.x);
+                            const counter = new Bullet(this.x, this.y,
+                                Math.cos(angle) * 450, Math.sin(angle) * 450,
+                                this.damage * 0.65, 5, 1, 0, false, true);
+                            bullets.push(counter);
+                            sent++;
+                        }
+                        this.buildStats.aegisDeflections += sent;
+                    }
                     if (this.synergies.has('orbital_aegis')) {
                         this.buildStats.aegisPulses++;
                         for (const target of enemies) {
@@ -2591,6 +2657,15 @@
                 );
 
                 const evolvedArc = player.evolutions.has('lightning');
+                if (isCrit && player.evolutions.has('crit_mastery') &&
+                    totalTime >= (this.weakpointReadyAt || 0)) {
+                    this.weakpointUntil = totalTime + 3;
+                    this.weakpointReadyAt = totalTime + 8;
+                    player.buildStats.weakpointMarks++;
+                } else if (!isCrit && (this.weakpointUntil || 0) > totalTime) {
+                    finalDmg *= 1.12;
+                }
+
                 if (triggerChain && player.chainLightning > 0 &&
                     (forceChain || (evolvedArc && isCrit) || Math.random() < 0.35)) {
                     if (evolvedArc) player.buildStats.arcSurges++;
@@ -2648,9 +2723,27 @@
                 score += Math.round(this.scoreValue * (1 + combo * 0.12));
                 player.addOverdrive(this.isBoss ? 45 : (this.isElite ? 16 : 2.8));
 
-                if (player.vampiricHeal > 0 && Math.random() < 0.14) {
-                    player.hp = Math.min(player.maxHp, player.hp + player.vampiricHeal);
-                    createFloatingText(player.x, player.y - 24, `+${player.vampiricHeal} HP`, '#00ff66', 13);
+                if (player.vampiricHeal > 0 && Math.random() < 0.14 &&
+                    totalTime >= (player.lastVampiricHealAt || 0)) {
+                    const healed = Math.min(12, player.vampiricHeal, player.maxHp - player.hp);
+                    if (healed > 0) {
+                        player.hp += healed;
+                        player.lastVampiricHealAt = totalTime + 0.65;
+                        createFloatingText(player.x, player.y - 24, `+${Math.round(healed)} HP`, '#00ff66', 13);
+                    }
+                }
+                if (player.evolutions.has('vampiric') && !this.isBoss) {
+                    player.bloodReactorKills++;
+                    if (player.bloodReactorKills >= 5 && totalTime >= player.bloodReactorReadyAt) {
+                        player.bloodReactorKills = 0;
+                        player.bloodReactorReadyAt = totalTime + 4;
+                        const healed = Math.min(8, player.maxHp - player.hp);
+                        if (healed > 0) {
+                            player.hp += healed;
+                            player.buildStats.bloodReactorHeals++;
+                            createFloatingText(player.x, player.y - 25, `KAN REAKTÖRÜ +${Math.round(healed)}`, '#00ff88', 14);
+                        }
+                    }
                 }
 
                 for (let i = 0; i < (this.isBoss ? 48 : 12); i++) {
