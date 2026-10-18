@@ -38,7 +38,7 @@ function setup(stored = {}) {
   };
   const sandbox = {
     window, document, localStorage: storage, console: { warn: noop, log: console.log },
-    Math, Set, Date, performance: { now: () => 0 },
+    Math: Object.create(Math), Set, Date, performance: { now: () => 0 },
     requestAnimationFrame: noop, setTimeout: noop,
   };
   vm.createContext(sandbox);
@@ -1052,7 +1052,9 @@ test('M3.1 crit plus prism synergy adds precisely one pierce and ricochet', () =
     player.refreshBuildTraits();
     player.pierce=2;player.ricochet=1;
     enemies.push(new Enemy(player.x+90,player.y,'TANK'));
-    player.autoShoot();
+    const originalRandom=Math.random;
+    Math.random=()=>0;
+    try { player.autoShoot(); } finally { Math.random=originalRandom; }
     const b=bullets[0];
     return JSON.stringify({synergy:player.synergies.has('prism_optics'),
       crit:b.isCrit,pierce:b.pierce,ricochet:b.ricochet});
@@ -1611,10 +1613,10 @@ test('M4.2.1 menu dashboard uses natural-height balanced columns', () => {
 });
 
 test('M4.2.1 readiness metrics appear once in the right-side preflight above Start', () => {
-  const a=html.indexOf('<!-- Right Column:');
+  const a=html.indexOf('class="lg:col-span-7 flex flex-col');
   const metrics=html.indexOf('id="preflightReadiness"');
   const start=html.indexOf('id="startBtn"');
-  const left=html.indexOf('<!-- Left Column:');
+  const left=html.indexOf('class="lg:col-span-5 flex flex-col');
   assert.ok(left>0 && a>left);
   assert.ok(metrics>a && start>metrics);
   assert.equal((html.match(/id="menuLoadoutSummary"/g)||[]).length,1);
