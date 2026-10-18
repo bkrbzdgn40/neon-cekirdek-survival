@@ -209,7 +209,7 @@ test('stacked XP pickup credits every original orb and maintains quest progress'
   const { run } = setup();
   const info = JSON.parse(run(`(() => {
     startNewGame();
-    for (let i = 0; i < 250; i++) emitEnergyOrb(300, 300, 8, false);
+    for (let i = 0; i < 400; i++) emitEnergyOrb(300, 300, 8, false);
     const stack = orbs.find(o => o.count > 1);
     activeQuest = { type:'ORBS', target:1000, progress:0, rewardGold:1, desc:'collect' };
     const sum = stack.value, count = stack.count;
