@@ -2012,6 +2012,8 @@
                 this.clusterUsed = false;
                 this.forceChain = false;
                 this.baseDamage = damage;
+                this.previousX = x;
+                this.previousY = y;
             }
 
             update(dt) {
@@ -2045,6 +2047,8 @@
                     }
                 }
 
+                this.previousX = this.x;
+                this.previousY = this.y;
                 this.x += this.vx * dt;
                 this.y += this.vy * dt;
 
@@ -2074,16 +2078,48 @@
             }
 
             draw(ctx) {
+                const visual = getProjectileVisualStyle(this);
+                const speed = Math.hypot(this.vx, this.vy) || 1;
+                const dx = this.vx / speed, dy = this.vy / speed;
+                const trailLength = visual.trail;
                 ctx.save();
-                const col = this.evoRail ? '#ffffff' : this.prismEvolved ? '#b36bff' :
-                    this.isHoming ? (this.clusterPayload ? '#7dffba' : '#00ff66') :
-                    (this.isCrit ? '#ffe600' : '#00f3ff');
-                ctx.shadowBlur = 12;
-                ctx.shadowColor = col;
-                ctx.fillStyle = col;
+                // A dim body plus narrow bright core reads better than pure glow.
+                if (trailLength > 0) {
+                    ctx.strokeStyle = visual.color;
+                    ctx.globalAlpha = 0.45;
+                    ctx.lineWidth = visual.width + 2;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x - dx * trailLength, this.y - dy * trailLength);
+                    ctx.lineTo(this.x, this.y);
+                    ctx.stroke();
+                    ctx.globalAlpha = 0.95;
+                    ctx.lineWidth = Math.max(1.4, visual.width - 1);
+                    ctx.strokeStyle = visual.core;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x - dx * trailLength * 0.58, this.y - dy * trailLength * 0.58);
+                    ctx.lineTo(this.x, this.y);
+                    ctx.stroke();
+                }
+                ctx.fillStyle = visual.color;
+                ctx.shadowColor = visual.color;
+                ctx.shadowBlur = visual.glow;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = visual.core;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, Math.max(1.1, this.radius * 0.43), 0, Math.PI * 2);
+                ctx.fill();
+                if (this.evoRail) {
+                    const px = -dy * (this.radius + 3), py = dx * (this.radius + 3);
+                    ctx.strokeStyle = visual.color;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x + px, this.y + py);
+                    ctx.lineTo(this.x - px, this.y - py);
+                    ctx.stroke();
+                }
                 ctx.restore();
             }
         }
@@ -2128,6 +2164,17 @@
             }
             if (player) player.buildStats.clusterBursts++;
             return 2;
+        }
+
+        // Weapon visuals are cosmetic: no projectile damage, speed or collision rules.
+        function getProjectileVisualStyle(b) {
+            if (b.evoRail) return { type:'rail', color:'#f7fbff', core:'#ffffff', trail:43, width:5, glow:14 };
+            if (b.reactorPulse) return { type:'reactor', color:'#2bdfff', core:'#f0ffff', trail:24, width:3, glow:8 };
+            if (b.prismEvolved) return { type:'prism', color:'#b68aff', core:'#ffffff', trail:28, width:4, glow:9 };
+            if (b.isHoming) return { type:'missile', color:b.clusterPayload ? '#7dffba' : '#30ec83',
+                core:'#e2ffec', trail:32, width:4, glow:9 };
+            if (b.isCrit) return { type:'critical', color:'#ffe070', core:'#ffffff', trail:26, width:4, glow:12 };
+            return { type:'plasma', color:'#15d7ed', core:'#e3ffff', trail:18, width:3, glow:7 };
         }
 
         class EnemyProjectile {
@@ -3519,6 +3566,10 @@
         let floatingTexts = [];
         let shockwaves = [];
         let lightningBolts = [];
+        let weaponImpacts = [];
+        let weaponImpactFrameCount = 0;
+        const MAX_WEAPON_IMPACTS = 80;
+        const MAX_IMPACTS_PER_FRAME = 10;
         const MAX_ACTIVE_ORBS = 240;
         const MAX_PLAYER_PROJECTILES = 260;
         let pendingMetaSave = false;
@@ -3583,6 +3634,52 @@
         function emitParticle(particle) {
             // Preserve combat feedback without accumulating unbounded particle work.
             if (particles.length < MAX_VISIBLE_PARTICLES) particles.push(particle);
+        }
+
+        function emitWeaponImpact(bullet, target) {
+            // Impact effects have separate caps and do not affect real damage or hit-stop.
+            if (gameState !== 'PLAYING' || weaponImpactFrameCount >= MAX_IMPACTS_PER_FRAME ||
+                weaponImpacts.length >= MAX_WEAPON_IMPACTS) return false;
+            const style = getProjectileVisualStyle(bullet);
+            const type = style.type;
+            weaponImpacts.push({
+                x: bullet.x, y: bullet.y,
+                type, color: style.color, core: style.core,
+                duration: type === 'rail' ? 0.26 : type === 'critical' ? 0.23 : 0.17,
+                life: type === 'rail' ? 0.26 : type === 'critical' ? 0.23 : 0.17,
+                radius: Math.min(31, Math.max(10, target.radius * 0.52)),
+                angle: Math.atan2(bullet.vy, bullet.vx)
+            });
+            weaponImpactFrameCount++;
+            return true;
+        }
+
+        function drawWeaponImpacts() {
+            for (const impact of weaponImpacts) {
+                const p = Math.max(0, Math.min(1, 1 - impact.life / impact.duration));
+                const size = impact.radius * (0.65 + p * 1.4);
+                ctx.save();
+                ctx.globalAlpha = 0.74 * (1 - p);
+                ctx.strokeStyle = impact.color;
+                ctx.lineWidth = impact.type === 'rail' ? 3.4 : 2;
+                ctx.beginPath();
+                ctx.arc(impact.x, impact.y, size, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalAlpha = (1 - p) * 0.75;
+                ctx.strokeStyle = impact.core;
+                ctx.lineWidth = 1.6;
+                const spokes = impact.type === 'missile' ? 4 : impact.type === 'rail' ? 6 : 3;
+                for (let i = 0; i < spokes; i++) {
+                    const a = impact.angle + i * Math.PI * 2 / spokes;
+                    ctx.beginPath();
+                    ctx.moveTo(impact.x + Math.cos(a) * size * .42,
+                               impact.y + Math.sin(a) * size * .42);
+                    ctx.lineTo(impact.x + Math.cos(a) * size * 1.25,
+                               impact.y + Math.sin(a) * size * 1.25);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
         }
 
         function buildBulletCollisionGrid() {
@@ -4158,6 +4255,7 @@
                 return;
             }
 
+            weaponImpactFrameCount = 0;
             totalTime += dt;
             waveTimer += dt;
             if (slowMoTimer > 0) slowMoTimer = Math.max(0, slowMoTimer - dt);
@@ -4285,6 +4383,7 @@
                         const kAngle = Math.atan2(b.vy, b.vx);
                         e.takeDamage(b.damage, Math.cos(kAngle) * 140, Math.sin(kAngle) * 140,
                             b.isCrit, true, b.forceChain);
+                        emitWeaponImpact(b, e);
                         spawnClusterFragments(b, e);
                         if (b.pierce <= 0) {
                             b.dead = true;
@@ -4359,6 +4458,10 @@
             for (let i = lightningBolts.length - 1; i >= 0; i--) {
                 lightningBolts[i].life -= dt;
                 if (lightningBolts[i].life <= 0) lightningBolts.splice(i, 1);
+            }
+            for (let i = weaponImpacts.length - 1; i >= 0; i--) {
+                weaponImpacts[i].life -= dt;
+                if (weaponImpacts[i].life <= 0) weaponImpacts.splice(i, 1);
             }
 
             for (let i = floatingTexts.length - 1; i >= 0; i--) {
@@ -4546,6 +4649,7 @@
             }
 
             drawBackgroundGrid();
+            drawArenaAtmosphere();
             drawSpecialEncounterWarning();
 
             if (gameState === 'MENU') {
@@ -4578,6 +4682,7 @@
             for (const p of particles) p.draw(ctx);
             for (const ep of enemyProjectiles) ep.draw(ctx);
             for (const b of bullets) b.draw(ctx);
+            drawWeaponImpacts();
 
             for (const lb of lightningBolts) {
                 ctx.save();
@@ -4886,6 +4991,8 @@
             floatingTexts = [];
             shockwaves = [];
             lightningBolts = [];
+            weaponImpacts = [];
+            weaponImpactFrameCount = 0;
 
             score = 0;
             sessionGold = 0;
