@@ -1598,3 +1598,57 @@ test('M4.2 restores scrolling and removes redundant footer status', () => {
   assert.equal(html.includes('100% DİNAMİK TAM EKRAN ARAYÜZ AKTİF'),false);
   assert.ok(html.includes('xl:grid-cols-3 gap-2.5 items-stretch'));
 });
+
+
+test('M4.2.1 menu dashboard uses natural-height balanced columns', () => {
+  const dashboard=html.match(/<main id="preflightDashboard"[^>]*>/)?.[0]||'';
+  assert.ok(dashboard.includes('items-start'));
+  assert.equal(dashboard.includes('flex-1'),false);
+  assert.equal(dashboard.includes('items-stretch'),false);
+  const mainHeader=html.match(/<div id="startModal"[^>]*>[\s\S]{0,250}/)?.[0]||'';
+  assert.ok(mainHeader.includes('justify-center'));
+  assert.ok(html.includes('#preflightDashboard > section {height:auto;min-height:0;}'));
+});
+
+test('M4.2.1 readiness metrics appear once in the right-side preflight above Start', () => {
+  const a=html.indexOf('<!-- Right Column:');
+  const metrics=html.indexOf('id="preflightReadiness"');
+  const start=html.indexOf('id="startBtn"');
+  const left=html.indexOf('<!-- Left Column:');
+  assert.ok(left>0 && a>left);
+  assert.ok(metrics>a && start>metrics);
+  assert.equal((html.match(/id="menuLoadoutSummary"/g)||[]).length,1);
+  for(const id of ['menuHighScore','menuMaxWave','selectedChassisBadge',
+    'menuChassisDetail','tabProtocolContent','tabCodexContent','openShopFromMenuBtn'])
+    assert.equal((html.match(new RegExp('id="' + id + '"','g'))||[]).length,1,id);
+});
+
+test('M4.2.1 stat calculations still update after relocating readiness panel', () => {
+  const {run}=setup();
+  const values=JSON.parse(run(`(() => {
+    const info={};
+    metaUpgrades.baseDamage=2;metaUpgrades.maxHp=1;metaUpgrades.defibrillator=1;
+    for(const chassis of ['VANGUARD','PHANTOM','TITAN']){
+      selectedChassis=chassis;updateMenuCounters();startNewGame();
+      info[chassis]={hp:player.maxHp,revives:player.freeRevives,
+        summary:document.getElementById('menuLoadoutSummary').innerHTML};
+    }
+    return JSON.stringify(info);
+  })()`));
+  for(const state of Object.values(values)) {
+    assert.ok(state.summary.includes(state.hp+' toplam can'));
+    assert.ok(state.summary.includes(state.revives+' diriliş hakkı'));
+  }
+  assert.ok(values.TITAN.hp>values.VANGUARD.hp);
+  assert.ok(values.VANGUARD.revives>values.PHANTOM.revives);
+});
+
+test('M4.2.1 both dashboard tabs and all game entry points are still wired', () => {
+  for(const name of ['tabProtocolBtn','tabCodexBtn','tabProtocolContent',
+    'tabCodexContent','startBtn','openShopFromMenuBtn'])
+    assert.equal((html.match(new RegExp('id="' + name + '"','g'))||[]).length,1,name);
+  assert.ok(html.includes("tabProtocolContent.classList.remove('hidden')"));
+  assert.ok(html.includes("tabCodexContent.classList.remove('hidden')"));
+  assert.ok(html.includes('overflow-y-auto'));
+  assert.equal(html.includes('lg:h-[100dvh]'),false);
+});
