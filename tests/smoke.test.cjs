@@ -1079,3 +1079,47 @@ test('M3.1 upgrade offers one level-two evolution when available and resets next
   assert.deepEqual(x.after.synergies,[]);
   assert.deepEqual(x.after.modules,{});
 });
+
+
+test('M3.1 ionic guidance guarantees chain on main missile impact', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();player.fireTimer=100;
+    const a=new Enemy(player.x+110,player.y,'TANK');
+    const b=new Enemy(player.x+185,player.y,'TANK');
+    a.speed=0;b.speed=0;enemies.push(a,b);
+    player.upgradeCounts.homing=2;player.upgradeCounts.lightning=2;
+    player.refreshBuildTraits();player.chainLightning=1;
+    const missile=new Bullet(a.x,a.y,0,0,12,6,1,0,true,true);
+    missile.forceChain=player.synergies.has('ionic_guidance');
+    bullets.push(missile);
+    const before=b.hp;
+    updateGame(.016);
+    return JSON.stringify({enabled:missile.forceChain,arc:lightningBolts.length,
+      before,after:b.hp,dead:missile.dead});
+  })()`));
+  assert.equal(x.enabled,true);
+  assert.equal(x.arc,1);
+  assert.ok(x.after<x.before);
+  assert.equal(x.dead,true);
+});
+
+test('M3.1 cluster fragments respect hard projectile allocation ceiling', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const target=new Enemy(player.x+80,player.y,'TANK');
+    bullets=Array.from({length:249},()=>new Bullet(30,30,0,0,1,3,1,0));
+    const payload=new Bullet(50,50,1,0,10,6,1,0,true,true);
+    payload.clusterPayload=true;
+    const blocked=spawnClusterFragments(payload,target);
+    const underCap=bullets.length;
+    bullets.length=248;
+    const emitted=spawnClusterFragments(payload,target);
+    return JSON.stringify({blocked,underCap,emitted,atCap:bullets.length});
+  })()`));
+  assert.equal(x.blocked,0);
+  assert.equal(x.underCap,249);
+  assert.equal(x.emitted,2);
+  assert.equal(x.atCap,250);
+});
