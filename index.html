@@ -1058,7 +1058,47 @@
             defibrillator: 0
         };
 
+        // A versioned save preserves the original single-file, offline playable build.
+        const META_SAVE_KEY = 'neonCekirdek.meta.v1';
+        const META_SAVE_VERSION = 1;
+        const META_UPGRADE_LIMITS = { baseDamage: 10, maxHp: 10, speedDash: 8, greed: 8, defibrillator: 3 };
+
+        function safeSaveInteger(value, fallback, max = 1000000000) {
+            return Number.isSafeInteger(value) && value >= 0 ? Math.min(value, max) : fallback;
+        }
+
+        function loadMetaProgress() {
+            try {
+                const stored = localStorage.getItem(META_SAVE_KEY);
+                if (!stored) return;
+                const data = JSON.parse(stored);
+                if (!data || typeof data !== 'object' || data.version !== META_SAVE_VERSION) return;
+                savedHighScore = safeSaveInteger(data.highScore, savedHighScore);
+                savedMaxWave = Math.max(1, safeSaveInteger(data.maxWave, savedMaxWave, 100000));
+                totalGold = safeSaveInteger(data.gold, totalGold);
+                if (data.upgrades && typeof data.upgrades === 'object') {
+                    for (const [key, max] of Object.entries(META_UPGRADE_LIMITS)) {
+                        metaUpgrades[key] = safeSaveInteger(data.upgrades[key], metaUpgrades[key], max);
+                    }
+                }
+            } catch (error) {
+                // Corrupt saves, disabled storage and file:// privacy restrictions must not block play.
+                console.warn('Meta kayıt okunamadı, varsayılan değerlerle devam ediliyor.', error);
+            }
+        }
+
         function saveMetaProgress() {
+            try {
+                localStorage.setItem(META_SAVE_KEY, JSON.stringify({
+                    version: META_SAVE_VERSION,
+                    highScore: savedHighScore,
+                    maxWave: savedMaxWave,
+                    gold: totalGold,
+                    upgrades: { ...metaUpgrades }
+                }));
+            } catch (error) {
+                console.warn('Meta kayıt yazılamadı; bu oturum devam edebilir.', error);
+            }
             updateMenuCounters();
         }
 
@@ -1068,7 +1108,7 @@
                 name: 'Başlangıç Hasarı',
                 icon: 'fa-solid fa-crosshairs',
                 color: '#ff007f',
-                desc: 'Her kademe başlangıç plazma hasarını +%10 ve kritik şansını +%2 artırır.',
+                desc: 'Her kademe başlangıç plazma hasarını +%8 ve kritik şansını +%1,2 artırır.',
                 baseCost: 25,
                 costScale: 1.65,
                 maxLevel: 10
@@ -1078,7 +1118,7 @@
                 name: 'Maksimum Zırh',
                 icon: 'fa-solid fa-heart-pulse',
                 color: '#00ff66',
-                desc: 'Her kademe maksimum çekirdek canını +20 artırır.',
+                desc: 'Her kademe maksimum çekirdek canını +18 artırır.',
                 baseCost: 20,
                 costScale: 1.55,
                 maxLevel: 10
@@ -1088,7 +1128,7 @@
                 name: 'Hız & Atılım Motoru',
                 icon: 'fa-solid fa-bolt',
                 color: '#00f3ff',
-                desc: 'Her kademe hareket hızını +%5 artırır ve Dash dolum süresini azaltır.',
+                desc: 'Her kademe hareket hızını +%4 artırır ve Dash dolum süresini %4 azaltır.',
                 baseCost: 30,
                 costScale: 1.65,
                 maxLevel: 8
@@ -1098,7 +1138,7 @@
                 name: 'Altın & XP Çarpanı',
                 icon: 'fa-solid fa-coins',
                 color: '#ffe600',
-                desc: 'Her kademe kazanılan XP ve Altın Çekirdek miktarını +%15 artırır.',
+                desc: 'Her kademe kazanılan XP ve Altın Çekirdek miktarını +%12 artırır.',
                 baseCost: 35,
                 costScale: 1.75,
                 maxLevel: 8
@@ -1146,6 +1186,7 @@
         let rerollCost = 15;
         let dyingSequenceTimer = 0;
         let reviveCountUsed = 0;
+        let paidRevivesUsed = 0;
         let gridOffset = { x: 0, y: 0 };
 
         let menuDemoNodes = [];
@@ -1632,7 +1673,7 @@
                 if (this.xp >= this.xpToNext) {
                     this.xp -= this.xpToNext;
                     this.level++;
-                    this.xpToNext = Math.floor(this.xpToNext * 1.42 + 50);
+                    this.xpToNext = Math.floor(this.xpToNext * 1.21 + 35);
                     this.hp = Math.min(this.maxHp, this.hp + 15);
                     triggerLevelUp();
                 }
@@ -1997,18 +2038,19 @@
                 this.pushVy = 0;
                 this.rotation = 0;
                 this.stunTimer = 0;
+                this.orbitalHitCooldown = 0;
                 this.dead = false;
                 this.actionTimer = 1.4 + Math.random() * 1.2;
                 this.secondaryTimer = 3.0 + Math.random() * 1.5;
                 this.state = 'CHASE';
                 this.enraged = false;
 
-                const linearScale = 1 + (wave - 1) * 0.32;
-                const lateExponent = Math.pow(1.18, Math.max(0, wave - 4)) * Math.pow(1.09, Math.max(0, wave - 9));
-                const waveMult = linearScale * lateExponent;
-                const dmgMult = 1 + (wave - 1) * 0.16 + Math.max(0, wave - 5) * 0.15;
-                const spdWaveMult = Math.min(2.25, 1 + (wave - 1) * 0.05);
-                const eliteHpMult = this.isElite ? (2.9 + Math.max(0, wave - 4) * 0.28) : 1.0;
+                // Predictable, sub-exponential late-game scaling; wave 30 stays playable.
+                const elapsedWaves = Math.max(0, wave - 1);
+                const waveMult = 1 + elapsedWaves * 0.20 + elapsedWaves * elapsedWaves * 0.018;
+                const dmgMult = Math.min(2.8, 1 + elapsedWaves * 0.095);
+                const spdWaveMult = Math.min(1.65, 1 + elapsedWaves * 0.022);
+                const eliteHpMult = this.isElite ? Math.min(4.1, 2.2 + Math.max(0, wave - 4) * 0.12) : 1.0;
 
                 if (type === 'SWARM') {
                     this.radius = 12;
@@ -2117,7 +2159,7 @@
                     this.bossName = arch.name;
                     this.radius = arch.radius;
                     this.speed = arch.speed * Math.min(1.7, 1 + (wave - 1) * 0.038);
-                    this.maxHp = 2100 * waveMult * arch.hpMult * (1 + bossEncounterCount * 0.38);
+                    this.maxHp = 2100 * waveMult * arch.hpMult * (1 + Math.min(2, bossEncounterCount) * 0.25);
                     this.damage = Math.round(32 * dmgMult);
                     this.color = arch.color;
                     this.xpValue = 420;
@@ -2139,6 +2181,7 @@
             }
 
             update(dt) {
+                this.orbitalHitCooldown = Math.max(0, this.orbitalHitCooldown - dt);
                 if (this.stunTimer > 0) {
                     this.stunTimer -= dt;
                 } else {
@@ -2146,7 +2189,7 @@
                     const dy = player.y - this.y;
                     const dist = Math.hypot(dx, dy) || 1;
                     const projSpeedScale = Math.min(1.7, 1 + (wave - 1) * 0.042);
-                    const enemyDmgScale = 1 + (wave - 1) * 0.15;
+                    const enemyDmgScale = Math.min(2.7, 1 + (wave - 1) * 0.08);
 
                     if (this.isBoss && !this.enraged && this.hp < this.maxHp * 0.45) {
                         this.enraged = true;
@@ -2478,6 +2521,8 @@
                     screenShake = 25;
                     activeBosses = activeBosses.filter(b => b.id !== this.id && !b.dead);
                     if (activeBosses.length === 0) {
+                        // The recovery window begins AFTER the final boss dies.
+                        nextBossTime = totalTime + Math.max(42, 58 - bossEncounterCount * 3);
                         document.getElementById('bossHudContainer').classList.add('hidden');
                         document.getElementById('bossHudContainer').classList.remove('flex');
                     }
@@ -2506,7 +2551,9 @@
                     const splitCount = wave >= 7 ? 3 : 2;
                     for (let i = 0; i < splitCount; i++) {
                         const offset = (i - 1) * 16;
-                        enemies.push(new Enemy(this.x + offset, this.y + offset, 'MINI'));
+                        if (enemies.length < MAX_ACTIVE_ENEMIES) {
+                            enemies.push(new Enemy(this.x + offset, this.y + offset, 'MINI'));
+                        }
                     }
                 }
 
@@ -3010,8 +3057,34 @@
             return { x: -margin, y: Math.random() * worldHeight };
         }
 
+        const MAX_ACTIVE_ENEMIES = 160;
+        const ENEMY_SPAWN_WEIGHTS = [
+            { type: 'SWARM', from: 1, weight: 50 },
+            { type: 'SPLITTER', from: 1, weight: 18 },
+            { type: 'KAMIKAZE', from: 2, weight: 12 },
+            { type: 'DASHER', from: 2, weight: 10 },
+            { type: 'SHOOTER', from: 3, weight: 10 },
+            { type: 'TANK', from: 3, weight: 8 },
+            { type: 'SHIELD_BEARER', from: 4, weight: 7 },
+            { type: 'SNIPER', from: 5, weight: 6 },
+            { type: 'ASSASSIN', from: 5, weight: 8 },
+            { type: 'GRAV_WELL', from: 6, weight: 5 }
+        ];
+
+        function pickEnemyTypeForWave(currentWave, roll) {
+            const available = ENEMY_SPAWN_WEIGHTS.filter(entry => currentWave >= entry.from);
+            const totalWeight = available.reduce((sum, entry) => sum + entry.weight, 0);
+            let ticket = Math.max(0, Math.min(0.999999999, roll)) * totalWeight;
+            for (const entry of available) {
+                ticket -= entry.weight;
+                if (ticket < 0) return entry.type;
+            }
+            return 'SWARM';
+        }
+
         function spawnBossEncounter() {
             bossEncounterCount++;
+            nextBossTime = Number.POSITIVE_INFINITY;
             let bossCount = 1;
             if (bossEncounterCount === 2) bossCount = 2;
             else if (bossEncounterCount >= 3) bossCount = (bossEncounterCount % 2 === 1 && bossEncounterCount >= 3) ? 3 : 2;
@@ -3045,20 +3118,10 @@
                 return;
             }
 
+            if (enemies.length >= MAX_ACTIVE_ENEMIES) return;
             const pos = getRandomEdgePosition(45);
-            const r = Math.random();
-            let type = 'SWARM';
-            if (wave >= 6 && r < 0.11) type = 'GRAV_WELL';
-            else if (wave >= 5 && r < 0.23) type = 'ASSASSIN';
-            else if (wave >= 5 && r < 0.35) type = 'SNIPER';
-            else if (wave >= 4 && r < 0.48) type = 'SHIELD_BEARER';
-            else if (wave >= 3 && r < 0.60) type = 'TANK';
-            else if (wave >= 3 && r < 0.72) type = 'SHOOTER';
-            else if (wave >= 2 && r < 0.82) type = 'DASHER';
-            else if (wave >= 2 && r < 0.91) type = 'KAMIKAZE';
-            else if (wave >= 1 && r < 0.96) type = 'SPLITTER';
-
-            const eliteChance = wave >= 2 ? Math.min(0.32, 0.03 + wave * 0.022) : 0;
+            const type = pickEnemyTypeForWave(wave, Math.random());
+            const eliteChance = wave >= 2 ? Math.min(0.24, 0.03 + wave * 0.013) : 0;
             const isElite = Math.random() < eliteChance;
             enemies.push(new Enemy(pos.x, pos.y, type, isElite));
         }
@@ -3107,7 +3170,6 @@
             }
 
             if (totalTime >= nextBossTime && activeBosses.length === 0) {
-                nextBossTime = totalTime + Math.max(38, 55 - bossEncounterCount * 4);
                 document.getElementById('bossWarningBanner').classList.add('hidden');
                 audio.playExplosion(true);
                 screenShake = 20;
@@ -3142,10 +3204,10 @@
 
             spawnTimer -= dt;
             if (spawnTimer <= 0) {
-                const baseInterval = Math.max(0.14, 1.12 - wave * 0.075);
-                spawnTimer = baseInterval;
-                const count = wave >= 10 ? 5 : (wave >= 7 ? 4 : (wave >= 5 ? 3 : (wave >= 3 ? 2 : 1)));
-                for (let i = 0; i < count; i++) spawnEnemy(false);
+                const baseInterval = Math.max(0.35, 1.12 - wave * 0.042);
+                spawnTimer += baseInterval;
+                const count = wave >= 10 ? 3 : (wave >= 6 ? 2 : 1);
+                for (let i = 0; i < count && enemies.length < MAX_ACTIVE_ENEMIES; i++) spawnEnemy(false);
             }
 
             for (let i = conduitZones.length - 1; i >= 0; i--) {
@@ -3178,7 +3240,7 @@
 
                 for (let j = bullets.length - 1; j >= 0; j--) {
                     const b = bullets[j];
-                    if (b.hitIds.has(e.id)) continue;
+                    if (b.dead || b.hitIds.has(e.id)) continue;
                     const dist = Math.hypot(e.x - b.x, e.y - b.y);
                     if (dist < e.radius + b.radius) {
                         b.hitIds.add(e.id);
@@ -3194,9 +3256,11 @@
 
                 if (!e.dead) {
                     for (const op of orbPositions) {
-                        if (Math.hypot(e.x - op.x, e.y - op.y) < e.radius + op.r) {
+                        if (e.orbitalHitCooldown <= 0 && Math.hypot(e.x - op.x, e.y - op.y) < e.radius + op.r) {
+                            // Shared contact cooldown limits both DPS and damage-number spam.
+                            e.orbitalHitCooldown = 0.12;
                             const angle = Math.atan2(e.y - player.y, e.x - player.x);
-                            e.takeDamage(player.damage * 0.55, Math.cos(angle) * 210, Math.sin(angle) * 210, false, false);
+                            e.takeDamage(player.damage * 8 * 0.12, Math.cos(angle) * 13.2, Math.sin(angle) * 13.2, false, false);
                         }
                     }
                 }
@@ -3667,6 +3731,7 @@
             rerollCost = 15;
             dyingSequenceTimer = 0;
             reviveCountUsed = 0;
+            paidRevivesUsed = 0;
             generateNextQuest();
 
             document.getElementById('overdriveOverlay').classList.add('hidden');
@@ -3829,11 +3894,11 @@
         }
 
         function showRevivePromptOrGameOver() {
-            const goldReviveCost = 30 + reviveCountUsed * 35;
+            const goldReviveCost = 30 + paidRevivesUsed * 35;
             const canUseFree = player.freeRevives > 0;
-            const canAffordGold = totalGold >= goldReviveCost;
+            const canAffordGold = paidRevivesUsed < 2 && totalGold >= goldReviveCost;
 
-            if (reviveCountUsed < 2 && (canUseFree || canAffordGold)) {
+            if (canUseFree || canAffordGold) {
                 gameState = 'REVIVE_PROMPT';
                 document.getElementById('reviveScoreText').textContent = score.toLocaleString('tr-TR');
                 document.getElementById('reviveGoldText').textContent = totalGold.toLocaleString('tr-TR');
@@ -3856,11 +3921,12 @@
 
         function executePlayerRevive() {
             if (gameState !== 'REVIVE_PROMPT') return;
-            const goldReviveCost = 30 + reviveCountUsed * 35;
+            const goldReviveCost = 30 + paidRevivesUsed * 35;
             if (player.freeRevives > 0) {
                 player.freeRevives--;
-            } else if (totalGold >= goldReviveCost) {
+            } else if (paidRevivesUsed < 2 && totalGold >= goldReviveCost) {
                 totalGold -= goldReviveCost;
+                paidRevivesUsed++;
                 saveMetaProgress();
             } else {
                 triggerGameOver();
@@ -3911,7 +3977,7 @@
             if (wave > savedMaxWave) {
                 savedMaxWave = wave;
             }
-            updateMenuCounters();
+            saveMetaProgress();
 
             document.getElementById('newRecordBadge').classList.toggle('hidden', !isNewRecord);
             document.getElementById('finalScoreText').textContent = score.toLocaleString('tr-TR');
@@ -4241,6 +4307,7 @@
         }
 
         window.onload = function () {
+            loadMetaProgress();
             resizeCanvas();
             initMenuDemoNodes();
             updateMenuCounters();
