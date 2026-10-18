@@ -3514,6 +3514,9 @@
             }
 
             reserveBossPhase(phase) {
+                // Existing single-boss timing stays unchanged. Only a simultaneous
+                // multi-boss encounter needs serialized, pre-reserved telegraph slots.
+                if (activeBosses.filter(b => !b.dead).length <= 1) return 0;
                 const warning = phase === 3 ? 1.35 : 1.15;
                 const start = Math.max(totalTime, this.nextBossPhaseWindowAt);
                 this.nextBossPhaseWindowAt = start + warning + (activeBosses.length > 1 ? 1.1 : 0.35);
