@@ -1421,6 +1421,7 @@
                 this.chainLightning = 0;
                 this.vampiricHeal = 0;
                 this.muzzleFlash = 0;
+                this.missileLaunchFlash = 0;
                 this.aimAngle = 0;
                 this.lockedTarget = null;
 
@@ -1525,6 +1526,8 @@
                 if (this.dashCooldown > 0) this.dashCooldown = Math.max(0, this.dashCooldown - dt);
                 if (this.novaCooldown > 0) this.novaCooldown = Math.max(0, this.novaCooldown - dt);
                 if (this.muzzleFlash > 0) this.muzzleFlash = Math.max(0, this.muzzleFlash - dt * 10);
+                if (this.missileLaunchFlash > 0)
+                    this.missileLaunchFlash = Math.max(0, this.missileLaunchFlash - dt * 6);
                 if (this.hasteTimer > 0) this.hasteTimer = Math.max(0, this.hasteTimer - dt);
 
                 if (this.overdriveActive) {
@@ -1768,6 +1771,7 @@
 
                 const missileInterval = this.synergies.has('swarm_guidance') ? 2 : 3;
                 if (this.homingMissiles > 0 && this.shotCounter % missileInterval === 0) {
+                    if (bullets.length < MAX_PLAYER_PROJECTILES) this.missileLaunchFlash = 1;
                     for (let m = 0; m < Math.min(this.homingMissiles, 5) &&
                         bullets.length < MAX_PLAYER_PROJECTILES; m++) {
                         const mAngle = baseAngle + (m - (this.homingMissiles - 1) / 2) * 0.5;
@@ -1989,6 +1993,25 @@
                     ctx.restore();
                 }
 
+                if (this.missileLaunchFlash > 0) {
+                    const ca = Math.cos(this.aimAngle), sa = Math.sin(this.aimAngle);
+                    const range = this.radius + 10 + 16 * (1 - this.missileLaunchFlash);
+                    ctx.save();
+                    ctx.globalAlpha = .55 * this.missileLaunchFlash;
+                    ctx.strokeStyle = '#7dffba';
+                    ctx.lineWidth = 2.4;
+                    for (const side of [-1, 1]) {
+                        const ox = -sa * side * this.radius * .65;
+                        const oy = ca * side * this.radius * .65;
+                        ctx.beginPath();
+                        ctx.moveTo(this.x + ox + ca * (range - 13),
+                                   this.y + oy + sa * (range - 13));
+                        ctx.lineTo(this.x + ox + ca * range,
+                                   this.y + oy + sa * range);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                }
                 ctx.shadowBlur = 22;
                 ctx.shadowColor = this.overdriveActive ? '#ff007f' : (this.isDashing ? '#ffe600' : this.color);
                 ctx.beginPath();
@@ -2227,7 +2250,8 @@
             const x = b.x, y = b.y;
             const fragment = b.clusterFragment;
             const size = b.radius * (fragment ? 0.8 : 1);
-            const pulse = 0.78 + 0.22 * Math.sin(b.visualAge * 24 + x * .017);
+            const pulse = 0.78 + 0.22 * Math.sin(
+                (PREFERS_REDUCED_VFX_MOTION ? 0 : b.visualAge) * 24 + x * .017);
             ctx.save();
             ctx.lineCap = 'round';
             // Recorded movement points make the exhaust actually curve when homing turns.
@@ -3790,6 +3814,7 @@
                 x: bullet.x, y: bullet.y, type,
                 color: style.color, core: style.core,
                 duration, life: duration, important,
+                cluster: !!bullet.clusterPayload, boss: !!target.isBoss,
                 radius: Math.min(35, Math.max(10, target.radius * 0.52)),
                 angle: Math.atan2(bullet.vy, bullet.vx)
             });
@@ -3816,7 +3841,8 @@
             const dx = arc.x2 - arc.x1, dy = arc.y2 - arc.y1;
             const length = Math.hypot(dx, dy) || 1;
             const nx = -dy / length, ny = dx / length;
-            const phase = (time * 23 + (arc.seed || 1) * 2.17);
+            const phase = ((PREFERS_REDUCED_VFX_MOTION ? 0 : time) * 23 +
+                (arc.seed || 1) * 2.17);
             const sway = Math.min(20, length * 0.13);
             const points = [{ x: arc.x1, y: arc.y1 }];
             for (let i = 1; i < count; i++) {
@@ -3898,7 +3924,8 @@
                 ctx.stroke();
                 if (!dense) {
                     ctx.strokeStyle = '#fff6be';
-                    const spin = totalTime * 9 + (arc.seed || 0);
+                    const spin = (PREFERS_REDUCED_VFX_MOTION ? 0 : totalTime) * 9 +
+                        (arc.seed || 0);
                     for (let i = 0; i < 4; i++) {
                         const angle = spin + i * Math.PI / 2;
                         ctx.beginPath();
@@ -3914,27 +3941,74 @@
         }
 
         function drawWeaponImpacts() {
+            const dense = weaponImpacts.length > 30;
             for (const impact of weaponImpacts) {
-                const p = Math.max(0, Math.min(1, 1 - impact.life / impact.duration));
-                const size = impact.radius * (0.65 + p * 1.4);
+                const life = Math.max(0, Math.min(1, impact.life / impact.duration));
+                const p = 1 - life;
+                const size = impact.radius * (0.65 + p * (impact.boss ? 1.9 : 1.4));
                 ctx.save();
-                ctx.globalAlpha = 0.74 * (1 - p);
+                ctx.globalAlpha = 0.74 * life;
                 ctx.strokeStyle = impact.color;
-                ctx.lineWidth = impact.type === 'rail' ? 3.4 : 2;
+                ctx.lineWidth = impact.type === 'rail' ? 3.4 : impact.type === 'missile' ? 2.8 : 2;
                 ctx.beginPath();
                 ctx.arc(impact.x, impact.y, size, 0, Math.PI * 2);
                 ctx.stroke();
-                ctx.globalAlpha = (1 - p) * 0.75;
+                ctx.globalAlpha = life * 0.78;
                 ctx.strokeStyle = impact.core;
                 ctx.lineWidth = 1.6;
-                const spokes = impact.type === 'missile' ? 4 : impact.type === 'rail' ? 6 : 3;
+                // Rocket: concentric pressure wave, directed debris, bright central bloom.
+                if (impact.type === 'missile') {
+                    ctx.globalAlpha = life * 0.48;
+                    ctx.strokeStyle = impact.cluster ? '#cefff5' : '#82ffb3';
+                    ctx.lineWidth = 3.2;
+                    ctx.beginPath();
+                    ctx.arc(impact.x, impact.y, size * .6, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = life;
+                    ctx.fillStyle = '#f1fff4';
+                    ctx.beginPath();
+                    ctx.arc(impact.x, impact.y, Math.max(1, (1 - p) * 5), 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                const spokes = impact.type === 'missile' ? (impact.cluster ? 6 : 5) :
+                    impact.type === 'rail' ? 6 : impact.type === 'critical' ? 8 : 3;
                 for (let i = 0; i < spokes; i++) {
                     const a = impact.angle + i * Math.PI * 2 / spokes;
+                    const inner = impact.type === 'missile' ? 0.28 : .42;
+                    const outer = impact.type === 'missile' ? 1.55 : 1.25;
                     ctx.beginPath();
-                    ctx.moveTo(impact.x + Math.cos(a) * size * .42,
-                               impact.y + Math.sin(a) * size * .42);
-                    ctx.lineTo(impact.x + Math.cos(a) * size * 1.25,
-                               impact.y + Math.sin(a) * size * 1.25);
+                    ctx.moveTo(impact.x + Math.cos(a) * size * inner,
+                               impact.y + Math.sin(a) * size * inner);
+                    ctx.lineTo(impact.x + Math.cos(a) * size * outer,
+                               impact.y + Math.sin(a) * size * outer);
+                    ctx.stroke();
+                }
+                // Critical: a sharp four-corner hit confirmation instead of text spam.
+                if (impact.type === 'critical' && !dense) {
+                    ctx.strokeStyle = '#fff3ab';
+                    ctx.lineWidth = 2.1;
+                    ctx.globalAlpha = 0.88 * life;
+                    ctx.save();
+                    ctx.translate(impact.x, impact.y);
+                    ctx.rotate(p * 0.55);
+                    ctx.beginPath();
+                    const r = size * 1.35;
+                    ctx.moveTo(0,-r);ctx.lineTo(r*.46,0);
+                    ctx.lineTo(0,r);ctx.lineTo(-r*.46,0);
+                    ctx.closePath();
+                    ctx.stroke();
+                    ctx.restore();
+                }
+                // Rail burns forward into the target; deliberately short-lived.
+                if (impact.type === 'rail' && !dense) {
+                    ctx.globalAlpha = life * 0.8;
+                    ctx.strokeStyle = '#b8f5ff';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(impact.x - Math.cos(impact.angle) * size * 1.8,
+                               impact.y - Math.sin(impact.angle) * size * 1.8);
+                    ctx.lineTo(impact.x + Math.cos(impact.angle) * size,
+                               impact.y + Math.sin(impact.angle) * size);
                     ctx.stroke();
                 }
                 ctx.restore();
