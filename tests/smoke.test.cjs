@@ -1388,3 +1388,129 @@ test('M3.2 full auto fire never pushes player projectiles past shared cap', () =
   assert.ok(x.shots<=x.cap);
   assert.equal(x.shots,260);
 });
+
+
+test('M4.1 primary UI uses compact control cards and has no redundant parenthetical labels', () => {
+  const oldLabels = [
+    'Mod: Hibrit (Fare + WASD)', 'KESKİN NİŞANCI (SNIPER)',
+    'SİBER LABORATUVAR (KALICI GÜÇLENDİRME)', '(EVRİM!)',
+    'CANLI ARENA SİMÜLASYONU: AKTİF', 'SİBER CİNNET! ('
+  ];
+  for(const label of oldLabels) assert.equal(html.includes(label),false,label);
+  for(const label of ['id="tabProtocolContent"','WASD · OK TUŞLARI','BOŞLUK · SOL TIK',
+    'E · SAĞ TIK','M · KONTROL MODU','id="buildGuidePanel"']) {
+    assert.ok(html.includes(label),label);
+  }
+});
+
+test('M4.1 all basic HUD values and quest progress remain available with short copy', () => {
+  const { run }=setup();
+  const a=JSON.parse(run(`(() => {
+    startNewGame();updateHUD();
+    const dom=(id)=>document.getElementById(id).textContent;
+    return JSON.stringify({quest:dom('questHudText'),mom:dom('momentumText'),
+      overdrive:dom('overdriveText'),level:dom('levelText'),
+      hp:dom('hpText'),mode:dom('ctrlModeText'),score:dom('scoreText')});
+  })()`));
+  assert.match(a.quest,/^(AV|KÜRE|KOMBO) · \d+\/\d+ · \+\d+$/);
+  assert.match(a.mom,/^MOMENTUM · %\d+$/);
+  assert.match(a.overdrive,/^CİNNET · %\d+$/);
+  assert.equal(a.level,1);
+  assert.match(a.hp,/\d+\/\d+/);
+  assert.notMatch(a.mode,/\(/);
+  assert.equal(a.score,'0');
+});
+
+test('M4.1 quiet warning sound has a per-category cooldown and respects mute', () => {
+  const { run }=setup();
+  const a=JSON.parse(run(`(() => {
+    const sound=new SoundEngine();let clock=10,voices=0;
+    const param={setValueAtTime(){},exponentialRampToValueAtTime(){}};
+    const osc=()=>({frequency:param,connect(){},start(){voices++;},stop(){}});
+    const gain=()=>({gain:param,connect(){}});
+    sound.ctx={get currentTime(){return clock;},createOscillator:osc,
+      createGain:gain,destination:{}};
+    sound.playThreatCue('boss');
+    sound.playThreatCue('boss');
+    const throttled=voices;
+    sound.playThreatCue('raid');
+    const independent=voices;
+    clock+=1.51;
+    sound.playThreatCue('boss');
+    const later=voices;
+    sound.enabled=false;sound.playThreatCue('event');
+    return JSON.stringify({throttled,independent,later,muted:voices});
+  })()`));
+  assert.equal(a.throttled,2);
+  assert.equal(a.independent,4);
+  assert.equal(a.later,6);
+  assert.equal(a.muted,6);
+});
+
+test('M4.1 boss pre-warning audio is dispatched once per encounter, not every frame', () => {
+  const { run }=setup();
+  const a=JSON.parse(run(`(() => {
+    startNewGame();let count=0;
+    audio.playThreatCue=()=>{count++;};
+    totalTime=52;nextBossTime=55;
+    updateGame(.016);updateGame(.016);updateGame(.016);
+    return JSON.stringify({count,last:combatDirector.lastBossCueEncounter,
+      encounter:bossEncounterCount,warning:document.getElementById('bossWarningText').textContent});
+  })()`));
+  assert.equal(a.count,1);
+  assert.equal(a.last,1);
+  assert.equal(a.encounter,0);
+  assert.equal(a.warning,'BOSS YAKLAŞIYOR');
+});
+
+test('M4.1 raid and optional event sound cues are tied to actual starts', () => {
+  const { run }=setup();
+  const a=JSON.parse(run(`(() => {
+    startNewGame();const cues=[];
+    audio.playThreatCue=(x)=>cues.push(x);
+    wave=7;totalTime=29;nextBossTime=150;combatDirector.tokens=12;
+    combatDirector.update(.016);
+    const pending=!!combatDirector.pendingEncounter;
+    combatDirector.update(.016);
+    const raidCount=cues.filter(x=>x==='raid').length;
+    combatDirector.pendingEncounter=null;
+    combatDirector.nextEncounterAt=500;
+    combatDirector.nextArenaAt=0;
+    totalTime=150;nextBossTime=500;
+    combatDirector.update(.016);
+    return JSON.stringify({pending,raidCount,event:combatDirector.activeArenaEvent?.kind,
+      eventCues:cues.filter(x=>x==='event').length});
+  })()`));
+  assert.equal(a.pending,true);
+  assert.equal(a.raidCount,1);
+  assert.equal(a.event,'RELAY');
+  assert.equal(a.eventCues,1);
+});
+
+test('M4.1 threat and background art render safely and do not affect combat states', () => {
+  const { run }=setup();
+  const a=JSON.parse(run(`(() => {
+    startNewGame();const before=player.hp;
+    const shot=new EnemyProjectile(player.x+50,player.y,0,0,7,10,'#00f3ff');
+    shot.draw(ctx);
+    drawBackgroundGrid();
+    wave=7;totalTime=29;nextBossTime=150;combatDirector.tokens=12;
+    combatDirector.update(.016);
+    drawSpecialEncounterWarning();
+    drawOffscreenIndicators();
+    return JSON.stringify({before,after:player.hp,warning:!!combatDirector.pendingEncounter});
+  })()`));
+  assert.equal(a.before,a.after);
+  assert.equal(a.warning,true);
+});
+
+test('M4.1 selected chassis badges and mode labels stay short', () => {
+  const { run }=setup();
+  const a=JSON.parse(run(`(() => {
+    toggleControlMode();const keyboard=document.getElementById('ctrlModeText').textContent;
+    toggleControlMode();const hybrid=document.getElementById('ctrlModeText').textContent;
+    return JSON.stringify({keyboard,hybrid});
+  })()`));
+  assert.equal(a.keyboard,'KLAVYE · M');
+  assert.equal(a.hybrid,'HİBRİT · M');
+});
