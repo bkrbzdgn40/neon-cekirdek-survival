@@ -186,8 +186,10 @@
         }
 
         .terminal-shell {
-            background: linear-gradient(135deg, rgba(5, 8, 18, 0.92) 0%, rgba(10, 14, 28, 0.88) 100%);
-            border: 1px solid rgba(0, 243, 255, 0.3);
+            background: radial-gradient(ellipse at 15% 4%, rgba(0, 200, 245, .10), transparent 40%),
+                        radial-gradient(ellipse at 87% 90%, rgba(210, 44, 130, .10), transparent 46%),
+                        linear-gradient(145deg, #070d1c, #040610);
+            border: 1px solid rgba(0, 243, 255, 0.22);
             box-shadow: inset 0 0 50px rgba(0, 243, 255, 0.07);
             position: relative;
         }
@@ -417,7 +419,7 @@
                 </div>
 
                 <!-- Live Active Upgrades Dock -->
-                <div id="hudModulesDock" class="hidden sm:flex items-center gap-1.5 bg-gray-950/80 border border-gray-800/90 px-2.5 py-1.5 rounded-xl backdrop-blur-md flex-wrap max-w-[48vw]">
+                <div id="hudModulesDock" class="hidden lg:flex items-center gap-1.5 bg-gray-950/80 border border-gray-800/90 px-2.5 py-1.5 rounded-xl backdrop-blur-md flex-wrap max-w-[38vw] max-h-16 overflow-hidden">
                     <!-- Populated dynamically -->
                 </div>
                 <details id="buildGuidePanel" class="pointer-events-auto relative text-xs font-cyber text-cyan-300">
@@ -614,81 +616,34 @@
                     </div>
 
                     <!-- TAB 1: Combat Protocol & Controls (Expands to fill available vertical space) -->
-                    <div id="tabProtocolContent" class="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-3.5 xl:gap-4 text-left items-stretch">
-                        <div class="bg-gray-900/80 border border-gray-800/90 hover:border-cyan-500/40 p-4 xl:p-5 rounded-xl flex flex-col justify-between transition">
-                            <div>
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="font-cyber text-xs sm:text-sm font-bold text-cyan-300 flex items-center gap-2">
-                                        <i class="fa-solid fa-crosshairs text-cyan-400"></i> OTOMATİK KİLİT & HAREKET
-                                    </span>
-                                    <span class="text-[10px] font-cyber bg-cyan-950 border border-cyan-500/40 text-cyan-300 px-2.5 py-0.5 rounded font-bold">FARE / WASD</span>
-                                </div>
-                                <p class="text-xs sm:text-sm text-gray-300 leading-relaxed">
-                                    Çekirdek imleci veya yön tuşlarını pürüzsüzce izler; menzile giren en yakın tehdidi lazer nişangahıyla işaretleyip otomatik ateş açar.
-                                </p>
-                            </div>
-                            <div class="mt-3 pt-2.5 border-t border-gray-800/80 flex items-center justify-between text-[11px] font-cyber text-cyan-400/90">
-                                <span>HAREKET BONUSU</span>
-                                <span>⚡ MOMENTUM: +%35 ATIŞ HIZI</span>
-                            </div>
+                    <div id="tabProtocolContent" class="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left items-stretch">
+                        <div class="brief-control rounded-xl border border-cyan-500/30 bg-gray-900/70 px-5 py-5 flex flex-col justify-center gap-3">
+                            <i class="fa-solid fa-arrows-up-down-left-right text-cyan-300 text-xl" aria-hidden="true"></i>
+                            <h3 class="font-cyber text-cyan-200 font-bold text-sm">HAREKET</h3>
+                            <p class="text-white font-cyber text-sm">WASD · OK TUŞLARI</p>
+                            <p class="text-gray-400 text-xs">Otomatik nişan ve ateş</p>
                         </div>
-
-                        <div class="bg-gray-900/80 border border-gray-800/90 hover:border-emerald-500/40 p-4 xl:p-5 rounded-xl flex flex-col justify-between transition">
-                            <div>
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="font-cyber text-xs sm:text-sm font-bold text-emerald-400 flex items-center gap-2">
-                                        <i class="fa-solid fa-heart-circle-bolt text-emerald-400"></i> ACİL DEFİBRİLATÖR
-                                    </span>
-                                    <span class="text-[10px] font-cyber bg-emerald-950 border border-emerald-500/40 text-emerald-300 px-2.5 py-0.5 rounded font-bold">İKİNCİ ŞANS</span>
-                                </div>
-                                <p class="text-xs sm:text-sm text-gray-300 leading-relaxed">
-                                    Canın sıfırlandığında aniden kaybetmezsin! <b>Acil Durum Defibrilatörü</b> devreye girer; %65 Can ve 3.5sn dokunulmazlıkla savaşa dönersin.
-                                </p>
-                            </div>
-                            <div class="mt-3 pt-2.5 border-t border-gray-800/80 flex items-center justify-between text-[11px] font-cyber text-emerald-400/90">
-                                <span>DİRİLİŞ ETKİSİ</span>
-                                <span>💥 360° SÜPER EMP PATLAMASI</span>
-                            </div>
+                        <div class="brief-control rounded-xl border border-yellow-500/30 bg-gray-900/70 px-5 py-5 flex flex-col justify-center gap-3">
+                            <i class="fa-solid fa-bolt text-yellow-300 text-xl" aria-hidden="true"></i>
+                            <h3 class="font-cyber text-yellow-200 font-bold text-sm">ATILIM</h3>
+                            <p class="text-white font-cyber text-sm">BOŞLUK · SOL TIK</p>
+                            <p class="text-gray-400 text-xs">Kısa dokunulmazlık</p>
                         </div>
-
-                        <div class="bg-gray-900/80 border border-gray-800/90 hover:border-yellow-500/40 p-4 xl:p-5 rounded-xl flex flex-col justify-between transition">
-                            <div>
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="font-cyber text-xs sm:text-sm font-bold text-yellow-300 flex items-center gap-2">
-                                        <i class="fa-solid fa-bolt text-yellow-400"></i> SİBER ATILIM & EMP NOVA
-                                    </span>
-                                    <span class="text-[10px] font-cyber bg-yellow-950/60 border border-yellow-500/40 text-yellow-300 px-2.5 py-0.5 rounded font-bold">SOL / SAĞ TIK</span>
-                                </div>
-                                <p class="text-xs sm:text-sm text-gray-300 leading-relaxed">
-                                    <b>Sol Tık / Boşluk:</b> Dokunulmaz atılım yaparak içinden geçtiğin düşmanları biçer. <b>Sağ Tık / E:</b> Mermileri silen EMP dalgası yayar.
-                                </p>
-                            </div>
-                            <div class="mt-3 pt-2.5 border-t border-gray-800/80 flex items-center justify-between text-[11px] font-cyber text-yellow-300/90">
-                                <span>AKTİF YETENEKLER</span>
-                                <span>🔥 SİBER CİNNET: KARTLARLA GÜÇLENİR</span>
-                            </div>
+                        <div class="brief-control rounded-xl border border-purple-500/30 bg-gray-900/70 px-5 py-5 flex flex-col justify-center gap-3">
+                            <i class="fa-solid fa-burst text-purple-300 text-xl" aria-hidden="true"></i>
+                            <h3 class="font-cyber text-purple-200 font-bold text-sm">EMP NOVA</h3>
+                            <p class="text-white font-cyber text-sm">E · SAĞ TIK</p>
+                            <p class="text-gray-400 text-xs">Mermi temizleme</p>
                         </div>
-
-                        <div class="bg-gray-900/80 border border-gray-800/90 hover:border-green-500/40 p-4 xl:p-5 rounded-xl flex flex-col justify-between transition">
-                            <div>
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="font-cyber text-xs sm:text-sm font-bold text-green-400 flex items-center gap-2">
-                                        <i class="fa-solid fa-compass text-green-400"></i> RADAR & İKMAL HALKALARI
-                                    </span>
-                                    <span class="text-[10px] font-cyber bg-green-950 border border-green-500/40 text-green-300 px-2.5 py-0.5 rounded font-bold">CANLI RADAR</span>
-                                </div>
-                                <p class="text-xs sm:text-sm text-gray-300 leading-relaxed">
-                                    Ekran kenarındaki <b>Taktiksel Radar Okları</b> uzaktaki İkmal Halkalarını, Elit Ganimet Sandıklarını ve yaklaşan Boss'ları gösterir.
-                                </p>
-                            </div>
-                            <div class="mt-3 pt-2.5 border-t border-gray-800/80 flex items-center justify-between text-[11px] font-cyber text-green-400/90">
-                                <span>MODÜL EVRİMİ</span>
-                                <span>★ 3. KADEMEDE SÜPER SİNERJİ</span>
-                            </div>
+                        <div class="brief-control rounded-xl border border-pink-500/30 bg-gray-900/70 px-5 py-5 flex flex-col justify-center gap-3">
+                            <i class="fa-solid fa-gamepad text-pink-300 text-xl" aria-hidden="true"></i>
+                            <h3 class="font-cyber text-pink-200 font-bold text-sm">DİĞER</h3>
+                            <p class="text-white font-cyber text-sm">M · KONTROL MODU</p>
+                            <p class="text-white font-cyber text-sm">P · ESC · DURAKLAT</p>
                         </div>
                     </div>
 
-                    <!-- TAB 2: Enemy Threat Codex (Expands to fill available vertical space) -->
+                                        <!-- TAB 2: Enemy Threat Codex (Expands to fill available vertical space) -->
                     <div id="tabCodexContent" class="hidden flex-1 min-h-0 grid-cols-1 sm:grid-cols-2 gap-3 xl:gap-4 text-left items-stretch overflow-y-auto pr-1">
                         <div class="bg-gray-900/80 border-l-4 border-red-500 p-3.5 xl:p-4 rounded-r-xl flex flex-col justify-center">
                             <div class="font-cyber text-xs sm:text-sm font-bold text-red-400 mb-1">KAMİKAZE & HAYALET SUİKASTÇI</div>
@@ -4470,23 +4425,21 @@
             const pad = 34;
             const targets = [];
 
-            for (const cz of conduitZones) {
-                targets.push({ x: cz.x, y: cz.y, col: '#00ff66', label: '⚡ İKMAL' });
+            for (const b of activeBosses) {
+                if (!b.dead) targets.push({ x: b.x, y: b.y, col: '#ff5268', label: 'BOSS' });
             }
             if (combatDirector?.activeArenaEvent) {
                 const event = combatDirector.activeArenaEvent;
                 targets.push({ x: event.x, y: event.y, col: event.color, label: event.kind === 'VAULT' ? '◆ KASA' : '◎ VERİ' });
             }
-            for (const lc of lootChests) {
-                targets.push({ x: lc.x, y: lc.y, col: '#ffe600', label: '★ SANDIK' });
+            for (const lc of lootChests.slice(0, 2)) {
+                targets.push({ x: lc.x, y: lc.y, col: '#ffe600', label: '' });
             }
-            for (const b of activeBosses) {
-                if (!b.dead) {
-                    targets.push({ x: b.x, y: b.y, col: b.color || '#ff0055', label: `⚠ ${b.bossName.split(' ')[0]}` });
-                }
+            for (const cz of conduitZones.slice(0, 2)) {
+                targets.push({ x: cz.x, y: cz.y, col: '#00ff66', label: '' });
             }
 
-            for (const t of targets) {
+            for (const t of targets.slice(0, 6)) {
                 const dx = t.x - player.x;
                 const dy = t.y - player.y;
                 const dist = Math.hypot(dx, dy);
@@ -4512,12 +4465,14 @@
                 ctx.fill();
                 ctx.restore();
 
-                ctx.save();
-                ctx.fillStyle = t.col;
-                ctx.font = "700 9px 'Orbitron', sans-serif";
-                ctx.textAlign = 'center';
-                ctx.fillText(t.label, ix, iy - 10);
-                ctx.restore();
+                if (t.label) {
+                    ctx.save();
+                    ctx.fillStyle = t.col;
+                    ctx.font = "700 9px 'Orbitron', sans-serif";
+                    ctx.textAlign = 'center';
+                    ctx.fillText(t.label, ix, iy - 10);
+                    ctx.restore();
+                }
             }
         }
 
