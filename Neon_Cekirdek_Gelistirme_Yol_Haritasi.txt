@@ -1,0 +1,412 @@
+NEON ÇEKİRDEK: HAYATTA KAL
+KAPSAMLI GELİŞTİRME YOL HARİTASI
+Sürüm: 1.0 | Tarih: 18.10.2026
+
+GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
+Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
+Durum: PLANLAMA / HENÜZ OYUN KODUNDA DEĞİŞİKLİK YAPILMADI.
+
+======================================================================
+1. VİZYON VE TASARIM İLKELERİ
+======================================================================
+
+Ana hedef: İlk dakikalarda kolay öğrenilen, ilerleyen dakikalarda kendi
+savaş stilini kurdurabilen, 20-30 dakika ve sonrasında da ilginç kararlar
+sunabilen, görsel ve işitsel olarak kuvvetli bir arena-survival oyunu.
+
+Temel ilkeler:
+- Oyuncu güçlü hissetsin, fakat zafer tamamen otomatikleşmesin.
+- Zorluk yalnızca düşman canı ve sayısının büyümesiyle artmasın.
+- Yeni silah ve evrimler oynanış davranışını değiştirsin.
+- Kriz, zafer, ödül ve kısa toparlanma anları ritmik biçimde yer alsın.
+- Ödüller öğrenme, ustalık ve anlamlı seçimlerle ilişkili olsun.
+- Ekranın okunabilirliği ve oyuncunun kontrol duygusu korunmalı.
+- Mevcut çalışan oyun kaybolmamalı; her yeni sürüm geriye alınabilir olmalı.
+- İnternete yayımlama, sunucu altyapısı ve saldırı dayanıklılığı bu dönemin
+  önceliği DEĞİLDİR. Önce tek oyunculu deneyimi iyileştireceğiz.
+
+======================================================================
+2. DOĞRULANMIŞ BAŞLANGIÇ BULGULARI
+======================================================================
+
+Aşağıdaki maddeler mevcut HTML kodundan belirlenmiştir. Gerçek oyuncu
+cihazlarındaki yaygınlık ve performans etkileri ayrıca test edilecektir.
+
+A. Düşman canı fazla hızlı büyüyor.
+   linearScale = 1 + (wave - 1) * 0.32
+   lateExponent = 1.18^(max(0,wave-4)) * 1.09^(max(0,wave-9))
+   waveMult = linearScale * lateExponent
+   Böylece artış ilerleyen dalgalarda çarpanlarla hızlanıyor.
+
+B. Düşman üretimi yükselen dalgalarla çok sıklaşıyor.
+   baseInterval = max(0.14, 1.12 - wave * 0.075)
+   10. dalga sonrası üretim döngüsü başına 5 düşman.
+   Aktif düşman sayısına göre çalışan küresel bir bütçe bulunmuyor.
+
+C. Düşman türü seçimi, aynı rastgele sayıyı art arda eşiklerde
+   değerlendirdiğinden bazı erken dalgalarda tek tür baskınlaşıyor.
+
+D. Seviye atlamak için gereken XP:
+   xpToNext = floor(xpToNext * 1.42 + 50)
+   Düşman başına temel XP sabit kalırken gereken XP çok hızlı büyüyor.
+
+E. saveMetaProgress() yerel depoya yazmıyor; sadece menü sayaçlarını
+   güncelliyor. Kalıcı altın, yükseltme, rekor ve ilgili bilgiler sayfa
+   yenilemesinde korunmuyor.
+
+F. Üçüncü yükseltme kademesinin ortak ödülü çoğunlukla hasar * 1.15
+   ve +35 overdrive. Kartın kendine özgü evrimi değil.
+
+G. Diriliş ekranındaki reviveCountUsed < 2 sınırı, edinilen ilave
+   diriliş haklarıyla çelişebiliyor.
+
+H. Plazma uydularının temas hasarı her güncellemede uygulanıyor;
+   hasar beklenen saniyelik oran üzerinden hesaplanmalı.
+
+I. Düşman-mermi çarpışmaları iç içe döngülerle kontrol ediliyor.
+   Nesne sayısı yükseldikçe işlem maliyeti önemli ölçüde artabilir.
+
+J. Ses, görsel efektler ve HUD yönetimi tek HTML/JavaScript bloğunda
+   birikmiş durumda. Yeni özellik eklemek giderek zorlaşacaktır.
+
+K. Harici Tailwind, Font Awesome ve Google Fonts kullanılıyor.
+   Tek HTML dosyası dış bağlantılardan tamamen bağımsız değil.
+
+L. Mevcut güçlü temel korunmalı: otomatik ateş, WASD/fare, dash, EMP,
+   üç şasi, momentum, overdrive, 9 ana düşman sınıfı, 4 boss sınıfı,
+   ganimet sandıkları, yükseltme kartları, mağaza ve görev sistemi.
+
+======================================================================
+3. GITHUB GELİŞTİRME DÜZENİ
+======================================================================
+
+- Repo: bkrbzdgn40/neon-cekirdek-survival (private).
+- main: son doğrulanmış çalışır sürüm.
+- Başlangıç sürümü: varsa v3.6-baseline etiketini koru; yoksa mevcut
+  dosyaya karşılık gelen commit üzerine etiket oluştur.
+- Her kilometre taşı için ayrı feature/m... dalı.
+- Aynı anda yalnızca bir açık geliştirme PR'ı.
+- Mümkün olduğunda tek anlamlı commit veya squash merge.
+- Kod değişmeden önce mevcut HEAD ve dosyalar incelenecek.
+- Merge öncesi otomatik test, statik kontrol ve temel tarayıcı smoke
+  testleri yapılacak. Gerektiğinde manuel oynanış testi istenecek.
+- Kullanıcının önceden yaptığı değişiklikler silinmeyecek; force push yok.
+- Planlanan büyük mimari değişikliklerde önce çalışan referans korunacak.
+- Kullanıcı yalnızca gerçek karar ayrımı veya manuel oyun hissi testi
+  gerektiğinde sürece dahil edilecek.
+- Codex kullanılmayacak; geliştirme doğrudan GitHub bağlantısı üzerinden
+  yönetilecek.
+
+Önerilen gelecek dosya yapısı (hemen ve tek adımda zorunlu değil):
+  index.html
+  src/core/       -> oyun saati, sahne durumu, sabitler
+  src/gameplay/   -> player, enemy, projectile, collision, waves
+  src/systems/    -> upgrades, progression, director, saves
+  src/render/     -> arena, sprites, particles, camera
+  src/ui/         -> HUD, menü, mağaza, seçim ekranları
+  src/audio/      -> müzik ve ses yöneticisi
+  assets/         -> ikon, animasyon, müzik, efekt
+  tests/          -> birim, denge simülasyonu, smoke testleri
+  docs/           -> yol haritası, değişiklik günlüğü, test notları
+
+NOT: HTML'den modüllere ayrıldıktan sonra tarayıcıda doğrudan file://
+yolu yerine basit bir yerel geliştirme sunucusu gerekebilir.
+Bu değişim kullanıcıya açık çalıştırma talimatıyla sunulacak.
+
+======================================================================
+4. M0 — TEMEL SÜRÜMÜ KORUMA VE ÖLÇÜM ALTYAPISI
+======================================================================
+
+Amaç: Geliştirmeye başlamadan önce neyi koruduğumuzu ve neyi
+iyileştirdiğimizi ölçebilmek.
+
+Yapılacaklar:
+[ ] Repo ve main üzerindeki oyun sürümünü doğrula.
+[ ] Başlangıç sürümünü etiketle; yedek/geri dönüş prosedürü hazırla.
+[ ] Menü, başlat, hareket, otomatik ateş, dash, EMP, seviye atlama,
+    kart seçme, boss, dirilme, ölüm, mağaza akışlarını belgele.
+[ ] Deterministik rastgele sayı / seed tabanlı test seçeneği ekle.
+[ ] Debug modunda oyun süresi, dalga, aktif düşman/mermi/XP küresi,
+    parçacık sayısı, ortalama/P95 kare süresi, oyuncu hasarı, alınan
+    hasar, XP ve öldürme oranı gibi bilgileri topla.
+[ ] 5/10/20/30 dakikalık karşılaştırılabilir simülasyon senaryolarını
+    oluştur; manuel his testini otomatik doğrulamadan ayır.
+[ ] Temel kontrolleri bozmayacak minimum test/CI altyapısı kur.
+
+Kabul kriterleri:
+- Başlangıç sürümü geri yüklenebilir.
+- Oyun yeni test düzeninde açılıp oynanabilir.
+- Performans ve dengeye ilişkin karşılaştırılabilir rapor üretilir.
+
+======================================================================
+5. M1 — TEMEL STABİLİZASYON VE DENGE
+======================================================================
+
+ÖNCELİK: KRİTİK. İLK OYNANIŞ GELİŞTİRME AŞAMASI.
+
+M1.1 — Hata düzeltmeleri ve kayıt:
+[ ] Meta progression için sürümlü localStorage şeması.
+[ ] Altın, mağaza kademeleri, en yüksek skor, en yüksek dalga kaydı.
+[ ] Bozuk veri, eski sürüm ve kısmi kayıt durumlarında güvenli yükleme.
+[ ] Mağaza açıklamalarını gerçek hasar/can/kritik bonuslarıyla eşleştir.
+[ ] Defibrilatör ücretli/ücretsiz hakkı, 2 diriliş sınırlaması ve satın
+    alınan kademe semantiğini tutarlı hale getir.
+[ ] Menüye dönüş, oyun sıfırlama, art arda run akışlarını doğrula.
+[ ] Ölü mermi/nesnelerin aynı karede tekrar işlem görmesini engelle.
+
+M1.2 — Denge:
+[ ] Düşman canındaki kontrolsüz üstel çarpanları kaldır veya sınırlı,
+    öngörülebilir büyüme eğrisine dönüştür.
+[ ] Dalga zorluğunu HP, hız, saldırı düzeni, sayısal yoğunluk ve
+    özel yetenekler arasında bölüştür.
+[ ] Aşırı erken dalga tek-tür doğumunu düzelt; ağırlıklı tür havuzu kur.
+[ ] Oyuncu hasarı ve düşman dayanıklılığı arasındaki Time-to-Kill
+    eğrisini şasi ve silah yapısına göre doğrula.
+[ ] XP eşiklerinin büyümesini yumuşat; seviye ödülleri oynanışın
+    ilerleyen bölümünde tamamen kaybolmasın.
+[ ] Uydu temas hasarını FPS'den bağımsız hale getir; yeniden vurma
+    aralıklarını ve çoklu hedef durumlarını açıkça tanımla.
+[ ] Boss arası toparlanma süresi ekle; birikmiş boss zamanlayıcısının
+    anında yeni baskın üretmesini önle.
+[ ] Güçlendirme istismarlarını ve sonsuz çarpan kombinasyonlarını
+    belirle; güç fantezisini öldürmeden sınırlı bir denge kur.
+
+M1.3 — Performans:
+[ ] Spatial hash veya yakın bölge sorgularıyla çarpışmaları hızlandır.
+[ ] Nesne havuzu: mermi, patlama, parçacık, geçici yazı.
+[ ] Düşman, mermi, XP küresi ve görsel efektler için bağımsız bütçeler.
+[ ] Düşük kaliteli cihazlarda adaptif efekt azaltma.
+[ ] HUD/DOM güncellemelerini yalnızca gerekli aralıklarda yap.
+[ ] Sabit zaman adımı veya FPS'den bağımsız güncelleme standardı.
+[ ] Görünmeyen ve artık gerekli olmayan nesneleri güvenli temizle.
+[ ] Kritik uyarıları kısmadan screen shake, flash ve hit-stop'u ayarla.
+
+M1 kabul kriterleri:
+- 5/10/20/30 dakikalık testlerde kontrolsüz nesne birikimi görülmez.
+- Tekrar üretilebilir başlangıç koşullarında karşılaştırma yapılır.
+- Üç şasinin de makul başarı şansı vardır; tek zorunlu build yoktur.
+- Kalıcı kayıt sayfa yenilemesi ve yeni oyun sonrası korunur.
+- Orta/uzun testte beklenmedik crash, donma veya softlock görülmez.
+- Performans hedefi cihaz bazında belirlenir (başlangıç hedefi:
+  masaüstünde 1080p'de mümkün olduğunda 60 FPS; gerektiğinde kalite
+  profilleri). Bir sayı uğruna görsel okunabilirlik feda edilmez.
+
+======================================================================
+6. M2 — COMBAT DIRECTOR 1.0 / OYUN RİTMİ
+======================================================================
+
+Amaç: Kontrolsüz dalga artışını anlamlı savaş deneyimine çevirmek.
+
+[ ] Tehdit bütçesi: düşman türü, HP, davranış ve aktif sayı maliyeti.
+[ ] Savaş döngüsü: hazırlık -> baskı -> kriz -> zirve -> ödül/toparlanma.
+[ ] Düşman kompozisyonları: sürü + destek, keskin nişancı koruması,
+    kalkan bölgesi, hareketli suikastçı takımı vb.
+[ ] Tehditlerin oyuncuya okunabilir görsel/sesli ön bildirimi.
+[ ] Boss baskınlarının benzersiz giriş, faz, ölüm ve ödül akışı.
+[ ] Zorlukta anti-frustration: arka arkaya kaçınılmaz hasar,
+    okunaksız mermi duvarları ve imkânsız doğum pozisyonlarını engelle.
+[ ] Oyuncunun performansına duyarlı ama gizlice hile yapmayan sistem.
+[ ] 3-5 dakikalık önemli karşılaşmalar; büyük içerik için daha uzun
+    kadans. Takvim testlerden sonra değişebilir.
+[ ] Birden çok oynanış modu için director yapılandırması hazırlığı.
+
+Kabul kriterleri:
+- Uzun oyunda yalnızca HP/sayı artışı değil yeni kararlar ortaya çıkar.
+- Direktör testleri aynı seed ile tekrarlanabilir.
+- Boss sonrası kısa rahatlama ve ödül akışı anlaşılır.
+- Zorluk giderek yükselse de aksiyon okunabilir kalır.
+
+======================================================================
+7. M3 — MODÜL EVRİMİ VE BUILD SİNERJİSİ 2.0
+======================================================================
+
+Amaç: Kart seçimlerinin sayısal değil mekanik anlam taşıması.
+
+[ ] Mevcut 11 yükseltmeyi veri tanımlı bir sistemde toplama.
+[ ] Tekil kademe bonusları, maksimum kademe, nadirlik, ağırlık,
+    önkoşul ve kombinasyon kurallarını açık hale getir.
+[ ] Üçüncü kademede genel +%15 hasar yerine modüle özgü evrim.
+[ ] Birbiriyle uyumlu kartların birleştiği EVOLUTION/SYNERGY sistemi.
+[ ] Eşsiz görünen kart, silah, görsel efekt ve oynanış davranışı.
+[ ] Reroll, kart seçim havuzu ve tekrar ağırlıklarının dengelenmesi.
+[ ] Şasi odakları: ÖNCÜ=ateş gücü, HAYALET=mobilite/kritik,
+    TİTAN=zırh/alan kontrolü; her biri birden çok geçerli build sunsun.
+[ ] Oyuncunun mevcut build'ini ve bir sonraki evrim hedefini gösteren UI.
+[ ] Build'ler arası hasar/korunma eğrisi testi; tek dominant sinerji yok.
+
+Örnek önerilen evrimler (mevcut özellik değil):
+- Tesla Sürüsü = zincir yıldırım + güdümlü füze.
+- Foton Çemberi = plazma uydusu + seken enerji.
+- Kan Reaktörü = vampirik iyileştirme + Aegis kalkanı.
+- Kinetik Fırtına = momentum + siber atılım.
+
+Kabul kriterleri:
+- Aynı başlangıçtan en az birkaç anlamlı ve farklı savaş stili çıkabilir.
+- Evrimler yalnızca sayı değil oynanış ve görsel kimlik değiştirir.
+- Yükseltme kartındaki açıklama ve gerçekleşen etki bire bir uyar.
+
+======================================================================
+8. M4 — NEON VISUAL OVERHAUL / SES VE ARAYÜZ
+======================================================================
+
+Amaç: Oyunu 'geometrik prototip' görünümünden özgün ve güçlü bir
+neon arena-survival kimliğine taşımak.
+
+M4.1 — Görsel kimlik:
+[ ] Çekirdeğe dönen halka, segmentli zırh, enerji ritmi, vurulma animasyonu.
+[ ] Öncü, Hayalet ve Titan için farklı renk/siluet/hareket karakteri.
+[ ] Düşman ailelerini tek bakışta ayırt ettiren renk/şekil/animasyon.
+[ ] Bossların belirgin silueti, saldırı telegraph'ı ve faz değişimi.
+[ ] Arena katmanları: grid, enerji şeritleri, neon toz, çevre ışıkları.
+[ ] Bölge/olaylara göre değişen çevresel renk paleti.
+
+M4.2 — Tatmin edici ama okunabilir efektler:
+[ ] Silah ailesine özgü mermi izi, muzzle flash ve çarpma hissi.
+[ ] Kritik vuruş, zırh kırılması, elektrik zinciri, enerji patlamaları.
+[ ] Farklı öldürme tiplerine göre parçalanma ve enerji çözülmesi.
+[ ] Önemli zaferlerde kontrollü ekran tepkisi ve kısa zaman etkisi.
+[ ] VFX yoğunluğu için kalite profili ve azaltılmış hareket seçeneği.
+[ ] Parçacık ve glow bütçeleri: güzelleştirirken FPS korunmalı.
+
+M4.3 — HUD ve menü:
+[ ] İlk kullanım rehberi; kontrol şemasını netleştirme.
+[ ] Ana tehdit, oyuncu canı ve özel yetenekler için görsel hiyerarşi.
+[ ] Çok sık banner yerine bağlama duyarlı kısa bildirimler.
+[ ] Upgrade kartlarında etki önizlemesi ve birikim bilgisi.
+[ ] Boss uyarılarında saldırıdan kaçabilmek için yeterli bilgi.
+[ ] Ekran boyutuna uyum; gerekirse dokunmatik joystick ve düğme yerleşimi.
+
+M4.4 — Ses:
+[ ] Daha çeşitli ateş/çarpma/öldürme/dirilme sesleri.
+[ ] Normal savaş, boss yaklaşımı, boss savaşı, overdrive için
+    katmanlı / duruma uyarlanır müzik.
+[ ] Yoğun savaşta seslerin üst üste binmesini engelleyen ses bütçesi.
+[ ] Müzik/ses ayrı kontrolleri; rahatsız edici frekans ve ses tekrarı testi.
+
+Kabul kriterleri:
+- Oyuncu, düşman, boss, mermi ve tehlikeli saldırılar karışmıyor.
+- Görseller düşük/orta kalite modunda da oyun bilgisi taşımaya devam eder.
+- Efektler kapatıldığında oynanış kuralları değişmez.
+
+======================================================================
+9. M5 — İÇERİK, UZUN ÖMÜR VE GERİ DÖNÜŞ DÖNGÜSÜ
+======================================================================
+
+Amaç: 20-30 dakika sonrasında bile yeni hedefler ve stratejik seçimler.
+
+[ ] Arena olayları: enerji fırtınası, hasarlı reaktör, anomaliler,
+    belirli süre güvenli koridorlar, riskli güç alanları.
+[ ] Görev çeşitleri: savun, kurtar, belli tehdidi avla, belirli süre
+    hasar almadan kaç, zincirleme saldırı görevi.
+[ ] Yeni düşman grupları ve mevcut düşmanların gelişmiş davranışları.
+[ ] Boss fazları ve alternatif boss karşılaşmaları.
+[ ] Her birkaç dalgada risk/ödül ve koşullu meydan okuma seçimi.
+[ ] Uzun oyun için çeşitli mutator'lar ve isteğe bağlı sonsuz mod.
+[ ] Başarılar, şasi uzmanlıkları, koşullu kozmetik ödüller.
+[ ] Sürümlü ve testli meta-progression; kilit açmaların net açıklaması.
+[ ] Oyun sonu raporu: build, hasar kaynakları, kritik kararlar,
+    başarılar, hayatta kalma süresi, gelişim önerileri.
+[ ] İleride günlük seed / meydan okuma için altyapı.
+
+Önerilen tempo (tasarım hipotezi; playtest ile revize edilecek):
+  0-2 dk   : hızlı öğrenme, ilk güçlenme, temel düşmanlar.
+  2-5 dk   : yeni tehditler ve ilk önemli boss.
+  5-10 dk  : sinerji adayları, arena olayları, ilk büyük evrim.
+  10-15 dk : riskli yan hedefler, özel boss fazları, tema değişimi.
+  15-25 dk : derinleşen build, yeni kurallar, yüksek riskli ödüller.
+  25+ dk   : isteğe bağlı sonsuz mod ve yükselen taktik baskı.
+
+Kabul kriterleri:
+- Farklı oynanış sürelerinde anlamlı hedef ve ödüller bulunur.
+- İlerleme, yalnızca daha çok altın için tekrar etmeye dayanmaz.
+- Oyuncunun kararı başarının temel faktörlerinden biri olarak kalır.
+
+======================================================================
+10. M6 — TEKNOLOJİ VE PLATFORM KARAR NOKTASI
+======================================================================
+
+Mevcut teknoloji: Canvas 2D + HTML/CSS + JavaScript.
+
+İLK KARAR: Şimdilik mevcut teknoloji üzerinde devam et.
+Sebep: Temel sorunlar denge, mimari ve performans. Motor değiştirmek
+bu sorunları otomatik çözmez.
+
+Karar eşikleri:
+- Profiling sonunda Canvas 2D ihtiyaçları karşılıyorsa üzerinde kal.
+- Çok sayıda sprite/partikül/shader gerektiğinde PixiJS değerlendir.
+- Sahne/animasyon/oyun nesnesi orkestrasyonu baskınsa Phaser değerlendir.
+- Büyük çaplı masaüstü/mobil dağıtım ve editör tabanlı iş akışı
+gerçekten gerekli olursa Godot ayrı bir prototiple araştırılabilir.
+
+Her olası taşıma için kurallar:
+[ ] Eski HTML sürümü ve tüm referans veriler korunacak.
+[ ] Oynanış kuralları renderer'dan ayrı veri ve testlerle tanımlanacak.
+[ ] Görsel port ile oyun tasarım değişiklikleri aynı PR'a karıştırılmayacak.
+[ ] Kontrol, fizik hissi, hasar, XP, boss ve kayıt uyumluluğu korunacak.
+[ ] İlgili özellikler karşılaştırmalı testten geçmeden eski motor atılmayacak.
+
+======================================================================
+11. SÜRÜM KABUL TESTLERİ VE BAŞARI ÖLÇÜTLERİ
+======================================================================
+
+Her geliştirme aşamasında yapılacak minimum kontroller:
+[ ] Oyun açılıyor; menü, mağaza ve şasi seçimi çalışıyor.
+[ ] Klavye/fare hareketi, otomatik nişan, dash ve EMP çalışıyor.
+[ ] Düşmanlar spawn oluyor, hareket ediyor ve hasar veriyor.
+[ ] XP, seviye atlama, upgrade, nadirlik ve reroll çalışıyor.
+[ ] Dört boss türü ve boss sonrası akış çalışıyor.
+[ ] Defibrilatör / game-over / yeniden başlatma doğru çalışıyor.
+[ ] Meta yükseltmeler yeniden yüklemede korunuyor.
+[ ] 5/10/20/30 dakikalık yük simülasyonlarında softlock yok.
+[ ] Ortalama ve P95 kare süresi karşılaştırılıyor.
+[ ] En az üç şasi için hasar, hayatta kalma, XP ve build dağılımı
+    ayrı raporlanıyor.
+[ ] Oyuncunun tehlikeli saldırıları önceden okuyabilmesi test ediliyor.
+
+Ölçümler (hedefler mevcut donanıma göre kalibre edilecek):
+- Oyun süresi, skor, maksimum dalga, ölüme sebep olan kaynak.
+- Ortalama/P95 frame time, FPS, en yüksek aktif nesne sayıları.
+- Saniye başına hasar (DPS), öldürme hızı, Time-to-Kill.
+- Kazanılan XP/altın, level-up aralıkları, kart/seçim dağılımı.
+- Şasi ve build'lere göre oynanabilirlik, başarı ve zorluk sapması.
+- Boss fight süresi, karşılaşma sonrası toparlanma süresi.
+- Manuel test: görsel okunabilirlik, stres/rahatlama döngüsü,
+  güç fantezisi, oynanışı bırakma nedenleri.
+
+ÖNEMLİ: Otomatik simülasyon performans ve mantık hatalarını bulur;
+oyun hissinin iyi olduğunu tek başına kanıtlamaz. Bunun için
+gerçek oynanış geri bildirimi gereklidir.
+
+======================================================================
+12. ÖNCELİK SIRASI VE İLK UYGULAMA PAKETİ
+======================================================================
+
+Tavsiye edilen sıra:
+1) M0 - referans sürümü koruma ve ölçüm araçları.
+2) M1 - kayıt, diriliş, XP, hasar, spawn, boss ve performans.
+3) M2 - Combat Director ve savaş yoğunluğu düzeni.
+4) M3 - gerçek yükseltme evrimleri ve build sinerjileri.
+5) M4 - büyük görsel, ses ve arayüz yenilemesi.
+6) M5 - içerik zenginliği ve uzun oyun döngüsü.
+7) M6 - gerekiyorsa motor/teknoloji değerlendirmesi.
+
+M1'de görsel stil bütünüyle ertelenmeyecek: ciddi okunabilirlik sorunları,
+patlama/hasar geri bildirimi ve performans dostu efekt hazırlığı
+ilk geliştirmelerle birlikte ele alınabilir. Ancak geniş görsel revizyon,
+denge hataları kararlı hale geldikten sonra yapılmalı.
+
+İLK PLANLANAN GITHUB İŞLEMİ (BU TXT'NİN OLUŞTURULMASI DEĞİL):
+- main durumunu doğrula, başlangıç sürümünü koru.
+- feature/m0-baseline-instrumentation dalını aç.
+- Test ve ölçüm altyapısını ekle.
+- Kontrolleri çalıştır, tek PR ile değişiklikleri sun.
+- Başarılı test ve gözden geçirme sonrasında main'e birleştir.
+- Ardından feature/m1-stability-balancing ile M1'e geç.
+
+SONUÇ
+------
+Hedefimiz oyuna rastgele daha fazla düşman, parlama veya içerik eklemek
+değil. Hedefimiz, giderek derinleşen seçimler, gerçek güç evrimleri,
+adil zorluk ve güçlü bir neon görsel/ses kimliği üzerinden uzun süre
+oynanabilen bir deneyim kurmak. Mevcut HTML oyunu projenin korunacak
+temelidir; yeni sürümler bu temel üzerine inşa edilecektir.
