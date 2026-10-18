@@ -370,9 +370,13 @@
                 </div>
 
                 <!-- Live Active Upgrades Dock -->
-                <div id="hudModulesDock" class="hidden sm:flex items-center gap-1.5 bg-gray-950/80 border border-gray-800/90 px-2.5 py-1.5 rounded-xl backdrop-blur-md">
+                <div id="hudModulesDock" class="hidden sm:flex items-center gap-1.5 bg-gray-950/80 border border-gray-800/90 px-2.5 py-1.5 rounded-xl backdrop-blur-md flex-wrap max-w-[48vw]">
                     <!-- Populated dynamically -->
                 </div>
+                <details id="buildGuidePanel" class="pointer-events-auto relative text-xs font-cyber text-cyan-300">
+                    <summary id="buildGuideLabel" class="cursor-pointer bg-gray-950/90 border border-cyan-500/50 px-2.5 py-2 rounded-lg select-none">BUILD · 0 EVRİM / 0 SİNERJİ</summary>
+                    <div id="buildGuideDetails" class="absolute z-40 top-full right-0 mt-2 p-3 w-[min(85vw,340px)] max-h-[55vh] overflow-y-auto rounded-xl bg-gray-950 border border-cyan-500/50 text-[11px] leading-relaxed shadow-2xl"></div>
+                </details>
             </div>
 
             <!-- Dash & EMP Nova Abilities -->
@@ -2637,6 +2641,14 @@
                 if (this.type === 'BOSS_TITAN' && !isCrit) {
                     finalDmg *= 0.78;
                 }
+                if (isCrit && player.evolutions.has('crit_mastery') &&
+                    totalTime >= (this.weakpointReadyAt || 0)) {
+                    this.weakpointUntil = totalTime + 3;
+                    this.weakpointReadyAt = totalTime + 8;
+                    player.buildStats.weakpointMarks++;
+                } else if (!isCrit && (this.weakpointUntil || 0) > totalTime) {
+                    finalDmg *= 1.12;
+                }
                 if (this.isBoss) {
                     const maxSingleHit = this.maxHp * 0.085;
                     if (finalDmg > maxSingleHit) {
@@ -2657,15 +2669,6 @@
                 );
 
                 const evolvedArc = player.evolutions.has('lightning');
-                if (isCrit && player.evolutions.has('crit_mastery') &&
-                    totalTime >= (this.weakpointReadyAt || 0)) {
-                    this.weakpointUntil = totalTime + 3;
-                    this.weakpointReadyAt = totalTime + 8;
-                    player.buildStats.weakpointMarks++;
-                } else if (!isCrit && (this.weakpointUntil || 0) > totalTime) {
-                    finalDmg *= 1.12;
-                }
-
                 if (triggerChain && player.chainLightning > 0 &&
                     (forceChain || (evolvedArc && isCrit) || Math.random() < 0.35)) {
                     if (evolvedArc) player.buildStats.arcSurges++;
@@ -3188,8 +3191,14 @@
 
         const EVOLUTION_DEFS = Object.freeze({
             multishot: { name: 'Odak Rayı', desc: 'Her 4. salvoya güçlü, fazladan iki hedef delen beyaz bir plazma rayı ekler.' },
+            firerate: { name: 'Reaktör Ritmi', desc: 'Her 5. salvoda iki ek düşük hasarlı yan plazma atışı üretir.' },
             homing: { name: 'Küme Roketleri', desc: 'İsabet eden ana güdümlü füze iki küçük takip füzesi bırakır.' },
             lightning: { name: 'İyon Ağı', desc: 'Kritik isabetler zincirleme elektriği garanti eder; menzil 235 olur.' },
+            overdrive_boost: { name: 'Cinnet Rezonansı', desc: 'Cinnet başladığında yakınındaki en fazla 12 düşman mermisini dağıtır.' },
+            crit_mastery: { name: 'Zayıf Nokta', desc: 'Kritik isabet hedefi 3 sn işaretler; normal vuruşlar %12 ek hasar verir (8 sn bekleme).' },
+            vampiric: { name: 'Kan Reaktörü', desc: 'Her 5 düşman imhasında, en sık 4 saniyede bir +8 can geri kazanır.' },
+            aegis_shield: { name: 'Aegis Karşı Ateşi', desc: 'Kalkan kırılınca en fazla 3 kısa menzilli takip mermisi ateşler.' },
+            kinetic_magnet: { name: 'Kinetik Girdap', desc: 'Dash bitince 4 sn aralıkla yakındaki en fazla 8 düşmana darbe uygular ve küreleri çeker.' },
             orbital: { name: 'Darbe Uyduları', desc: '6 saniyede bir çevrendeki düşmanlara alan darbesi uygular.' },
             pierce_ricochet: { name: 'Prizma Rotası', desc: 'Sekmeler güçlenir ve yakın hedefe yön değiştirebilir.' }
         });
@@ -3203,6 +3212,76 @@
             { id: 'prism_optics', name: 'Prizma Optiği', modules: ['pierce_ricochet', 'crit_mastery'],
                 desc: 'Kritik plazma mermisi bir ek hedef deler ve bir kez daha seker.' }
         ]);
+
+        const MAX_MODULE_TIER = 3;
+        function normalizePlayerBuildPower(p) {
+            // Class bonuses survive, while repeated high-rarity cards cannot grow without bound.
+            p.damage = Math.min(p.damage, 240);
+            p.critChance = Math.min(p.critChance, 0.60);
+            p.fireDelay = Math.max(p.fireDelay, 0.12);
+            p.multishot = Math.min(p.multishot, 7);
+            p.orbitals = Math.min(p.orbitals, 7);
+            p.homingMissiles = Math.min(p.homingMissiles, 5);
+            p.chainLightning = Math.min(p.chainLightning, 8);
+            p.pierce = Math.min(p.pierce, 9);
+            p.ricochet = Math.min(p.ricochet, 6);
+            p.overdriveMaxDuration = Math.min(p.overdriveMaxDuration, 12);
+            p.overdriveGainMult = Math.min(p.overdriveGainMult, 1.5);
+            p.overdriveCritBonus = Math.min(p.overdriveCritBonus, 0.25);
+            p.vampiricHeal = Math.min(p.vampiricHeal, 12);
+            p.magnetRadius = Math.min(p.magnetRadius, 280);
+            p.speed = Math.min(p.speed, 470);
+        }
+
+        function getBuildGuideModel(p) {
+            return {
+                totalModules: Object.keys(p.upgradeCounts).length,
+                totalTiers: Object.values(p.upgradeCounts).reduce((sum, tier) => sum + tier, 0),
+                evolutions: Object.entries(EVOLUTION_DEFS).filter(([id]) => p.evolutions.has(id))
+                    .map(([id, evo]) => evo.name),
+                synergies: SYNERGY_DEFS.filter(s => p.synergies.has(s.id)).map(s => s.name),
+                nextEvolutions: UPGRADES_POOL.filter(u => (p.upgradeCounts[u.id] || 0) > 0 &&
+                        (p.upgradeCounts[u.id] || 0) < MAX_MODULE_TIER)
+                    .sort((a,b) => (p.upgradeCounts[b.id] || 0) - (p.upgradeCounts[a.id] || 0))
+                    .slice(0, 4).map(u => ({
+                        name: EVOLUTION_DEFS[u.id].name,
+                        tier: p.upgradeCounts[u.id],
+                        missing: MAX_MODULE_TIER - p.upgradeCounts[u.id]
+                    })),
+                nearSynergies: SYNERGY_DEFS.filter(s => !p.synergies.has(s.id) &&
+                    s.modules.some(id => (p.upgradeCounts[id] || 0) > 0))
+                    .map(s => ({
+                        name: s.name,
+                        missing: s.modules.filter(id => (p.upgradeCounts[id] || 0) < 2)
+                            .map(id => ({
+                                name: UPGRADES_POOL.find(u => u.id === id)?.name || id,
+                                current: p.upgradeCounts[id] || 0
+                            }))
+                    })).sort((a,b) => a.missing.reduce((n,x) => n + 2 - x.current, 0) -
+                        b.missing.reduce((n,x) => n + 2 - x.current, 0)).slice(0, 4)
+            };
+        }
+
+        function updateBuildGuide() {
+            const panel = document.getElementById('buildGuideDetails');
+            if (!panel || !player) return;
+            const info = getBuildGuideModel(player);
+            const summary = document.getElementById('buildGuideLabel');
+            if (summary) summary.textContent = `BUILD · ${info.evolutions.length} EVRİM / ${info.synergies.length} SİNERJİ`;
+            const section = (title, rows, empty) =>
+                `<div class="mt-2 text-cyan-300 font-bold">${title}</div>` +
+                (rows.length ? rows.map(row => `<p class="mt-1 text-gray-200">${row}</p>`).join('') :
+                    `<p class="text-gray-500">${empty}</p>`);
+            panel.innerHTML =
+                `<p class="text-gray-400">Modül: ${info.totalModules} / 11 · Kademe: ${info.totalTiers} / 33</p>` +
+                section('AÇIK EVRİMLER', info.evolutions, 'Henüz evrim yok') +
+                section('AKTİF SİNERJİLER', info.synergies, 'Henüz sinerji yok') +
+                section('EVRİME YAKIN', info.nextEvolutions.map(x =>
+                    `${x.name} · Kademe ${x.tier}/3 (${x.missing} kaldı)`), 'Modül seçerek ilerle') +
+                section('SİNERJİ HEDEFLERİ', info.nearSynergies.map(s =>
+                    `${s.name}: ${s.missing.map(x => `${x.name} ${x.current}/2`).join(', ')}`),
+                    'İki modül seçince hedefler görünür');
+        }
 
         function newSynergiesForUpgrade(upgradeCounts, id) {
             const proposed = { ...upgradeCounts, [id]: (upgradeCounts[id] || 0) + 1 };
@@ -4591,6 +4670,7 @@
         function updateModulesDock() {
             const dock = document.getElementById('hudModulesDock');
             if (!dock || !player) return;
+            updateBuildGuide();
             const entries = Object.entries(player.upgradeCounts);
             if (entries.length === 0) {
                 dock.innerHTML = `<span class="text-[10px] font-cyber text-gray-500 px-1">HENÜZ MODÜL YOK</span>`;
@@ -4684,19 +4764,15 @@
             const nextLvl = currentLvl + 1;
             const newlyUnlockedSynergies = newSynergiesForUpgrade(player.upgradeCounts, upg.id);
 
+            if (currentLvl >= MAX_MODULE_TIER) return;
             upg.apply(player, rarity);
             player.upgradeCounts[upg.id] = nextLvl;
+            normalizePlayerBuildPower(player);
             player.refreshBuildTraits();
 
             if (nextLvl === 3 && EVOLUTION_DEFS[upg.id]) {
                 audio.playJackpot();
                 showDopamineBanner(`★ SİLAH EVRİMİ: ${EVOLUTION_DEFS[upg.id].name.toUpperCase()} ★`, '#ffe600');
-            } else if (nextLvl === 3) {
-                // Legacy modules keep their prior third-level reward until M3.2.
-                player.damage *= 1.15;
-                player.addOverdrive(35);
-                audio.playJackpot();
-                showDopamineBanner(`★ UZMANLIK BONUSU: ${upg.name.toUpperCase()} ★`, '#ffe600');
             }
             if (newlyUnlockedSynergies.length) {
                 audio.playJackpot();
@@ -4716,7 +4792,8 @@
         }
 
         function populateUpgradeCards() {
-            const shuffled = [...UPGRADES_POOL].sort(() => Math.random() - 0.5);
+            const shuffled = UPGRADES_POOL.filter(u =>
+                (player.upgradeCounts[u.id] || 0) < MAX_MODULE_TIER).sort(() => Math.random() - 0.5);
             // Keep one near-evolution module visible when possible without removing choice.
             const ready = shuffled.filter(u => (player.upgradeCounts[u.id] || 0) === 2 &&
                 EVOLUTION_DEFS[u.id]);
@@ -4791,6 +4868,13 @@
         }
 
         function triggerLevelUp() {
+            if (UPGRADES_POOL.every(u => (player.upgradeCounts[u.id] || 0) >= MAX_MODULE_TIER)) {
+                // Endless play stays playable after all 33 tiers; no empty choice modal.
+                player.hp = Math.min(player.maxHp, player.hp + 20);
+                player.addOverdrive(20);
+                createFloatingText(player.x, player.y - 30, 'TÜM MODÜLLER TAM · +20 CAN', '#00ff88', 15);
+                return;
+            }
             gameState = 'LEVEL_UP';
             audio.playLevelUp();
             populateUpgradeCards();
@@ -5277,6 +5361,7 @@
             modules: { ...player.upgradeCounts },
             evolutions: [...player.evolutions],
             synergies: [...player.synergies],
+            guide: getBuildGuideModel(player),
             effects: { ...player.buildStats }
         } : null;
         window.onload = function () {
