@@ -1112,19 +1112,19 @@ test('M3.1 cluster fragments respect hard projectile allocation ceiling', () => 
   const x=JSON.parse(run(`(() => {
     startNewGame();
     const target=new Enemy(player.x+80,player.y,'TANK');
-    bullets=Array.from({length:249},()=>new Bullet(30,30,0,0,1,3,1,0));
+    bullets=Array.from({length:259},()=>new Bullet(30,30,0,0,1,3,1,0));
     const payload=new Bullet(50,50,1,0,10,6,1,0,true,true);
     payload.clusterPayload=true;
     const blocked=spawnClusterFragments(payload,target);
     const underCap=bullets.length;
-    bullets.length=248;
+    bullets.length=258;
     const emitted=spawnClusterFragments(payload,target);
     return JSON.stringify({blocked,underCap,emitted,atCap:bullets.length});
   })()`));
   assert.equal(x.blocked,0);
-  assert.equal(x.underCap,249);
+  assert.equal(x.underCap,259);
   assert.equal(x.emitted,2);
-  assert.equal(x.atCap,250);
+  assert.equal(x.atCap,260);
 });
 
 
@@ -1367,4 +1367,24 @@ test('M3.2 cleared enemy projectiles cannot damage player on next simulation fra
   assert.equal(x.remaining,0);
   assert.equal(x.initialHp,x.afterHp);
   assert.equal(x.discharges,1);
+});
+
+
+test('M3.2 full auto fire never pushes player projectiles past shared cap', () => {
+  const { run }=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    player.multishot=7;player.homingMissiles=5;player.fireDelay=.12;
+    for(const id of ['multishot','firerate','homing']) player.upgradeCounts[id]=3;
+    player.refreshBuildTraits();
+    enemies.push(new Enemy(player.x+100,player.y,'TANK'));
+    bullets=Array.from({length:257},()=>new Bullet(50,50,0,0,1,4,1,0));
+    player.shotCounter=19;
+    player.autoShoot();
+    return JSON.stringify({shots:bullets.length,cap:MAX_PLAYER_PROJECTILES,
+      rails:player.buildStats.railShots,reactor:player.buildStats.reactorBursts});
+  })()`));
+  assert.equal(x.cap,260);
+  assert.ok(x.shots<=x.cap);
+  assert.equal(x.shots,260);
 });
