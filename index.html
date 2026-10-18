@@ -14,7 +14,10 @@
             --neon-purple: #b000ff;
             --neon-yellow: #ffe600;
             --neon-green: #00ff66;
-            --bg-dark: #04060c;
+            --bg-dark: #050816;
+            --surface-glass: rgba(7, 12, 27, 0.91);
+            --surface-line: rgba(59, 190, 214, 0.24);
+            --danger-core: #ff5268;
         }
 
         * {
@@ -130,17 +133,63 @@
         }
 
         .crt-overlay {
-            background: linear-gradient(
-                rgba(18, 16, 16, 0) 50%, 
-                rgba(0, 0, 0, 0.22) 50%
-            );
-            background-size: 100% 4px;
+            background: linear-gradient(transparent 50%, rgba(0, 0, 0, 0.10) 50%);
+            background-size: 100% 5px;
+            opacity: 0.16;
             pointer-events: none;
+        }
+        .terminal-shell, #hud {
+            color-scheme: dark;
+        }
+        .terminal-shell {
+            border-radius: 0;
+            background: radial-gradient(ellipse at 15% 4%, rgba(0, 200, 245, .10), transparent 40%),
+                        radial-gradient(ellipse at 87% 90%, rgba(210, 44, 130, .10), transparent 46%),
+                        linear-gradient(145deg, #070d1c, #040610);
+        }
+        #hud > div > div[class*="flex-wrap"], #hudModulesDock, #bossHudContainer {
+            border-color: var(--surface-line);
+        }
+        .chassis-card.active {
+            outline: 2px solid var(--neon-cyan);
+            outline-offset: -2px;
+        }
+        .upgrade-card:focus-visible, button:focus-visible, summary:focus-visible {
+            outline: 2px solid #9ceefa;
+            outline-offset: 3px;
+        }
+        .ui-danger { color: #ff758c; border-color: rgba(255, 82, 104, .8); }
+        .ui-risk { color: #ffdb75; border-color: rgba(255, 219, 117, .7); }
+        .ui-calm { color: #8af1eb; border-color: rgba(84, 210, 216, .5); }
+        #bossWarningBanner .warning-pill {
+            background: rgba(42, 8, 25, .95);
+            border: 1px solid #ff5268;
+            letter-spacing: .08em;
+            box-shadow: 0 0 18px rgba(255, 82, 104, .20);
+        }
+        #killstreakBanner .event-pill {
+            background: rgba(8, 13, 27, .96);
+            border: 1px solid rgba(255, 220, 100, .65);
+            box-shadow: 0 0 15px rgba(255, 220, 100, .14);
+        }
+        #hudModulesDock { scrollbar-width: thin; }
+        @media (max-width: 640px) {
+            #bossWarningBanner .warning-pill { font-size: 12px; padding: .5rem .8rem; }
+            #killstreakBanner .event-pill { font-size: 12px; padding: .4rem .7rem; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .animate-boss-warn, .animate-pulse, .animate-ping, .legendary-card-glow,
+            .epic-card-glow, .animate-spin-slow, .animate-spin-reverse {
+                animation: none !important;
+            }
+            .upgrade-card, .cyber-btn, .cyber-action-btn, .chassis-card { transition: none; }
         }
 
         .terminal-shell {
-            background: linear-gradient(135deg, rgba(5, 8, 18, 0.92) 0%, rgba(10, 14, 28, 0.88) 100%);
-            border: 1px solid rgba(0, 243, 255, 0.3);
+            background: radial-gradient(ellipse at 15% 4%, rgba(0, 200, 245, .10), transparent 40%),
+                        radial-gradient(ellipse at 87% 90%, rgba(210, 44, 130, .10), transparent 46%),
+                        linear-gradient(145deg, #070d1c, #040610);
+            border: 1px solid rgba(0, 243, 255, 0.22);
             box-shadow: inset 0 0 50px rgba(0, 243, 255, 0.07);
             position: relative;
         }
@@ -226,21 +275,21 @@
                 <div class="md:col-span-5 bg-gray-900/90 h-5 rounded-full overflow-hidden border border-cyan-500/50 p-0.5 relative shadow-[0_0_15px_rgba(0,243,255,0.3)]">
                     <div id="xpBar" class="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 rounded-full transition-all duration-150" style="width: 0%;"></div>
                     <div class="absolute inset-0 flex items-center justify-center text-[11px] sm:text-xs font-cyber font-bold tracking-widest text-white drop-shadow">
-                        SEVİYE <span id="levelText" class="mx-1 text-cyan-300">1</span> — ENERJİ: <span id="xpText" class="ml-1">0 / 120</span>
+                        SV <span id="levelText" class="mx-1 text-cyan-300">1</span> · XP <span id="xpText" class="ml-1">0 / 125</span>
                     </div>
                 </div>
                 <!-- KINETIC MOMENTUM BAR -->
                 <div class="md:col-span-3 bg-gray-900/90 h-5 rounded-full overflow-hidden border border-green-400/60 p-0.5 relative shadow-[0_0_15px_rgba(0,255,102,0.25)]">
                     <div id="momentumBar" class="h-full bg-gradient-to-r from-emerald-500 via-green-400 to-cyan-300 rounded-full transition-all duration-75" style="width: 0%;"></div>
                     <div id="momentumText" class="absolute inset-0 flex items-center justify-center text-[10px] sm:text-xs font-cyber font-black tracking-wider text-white drop-shadow">
-                        ⚡ MOMENTUM: %0
+                        MOMENTUM · %0
                     </div>
                 </div>
                 <!-- OVERDRIVE FEVER BAR -->
                 <div class="md:col-span-4 bg-gray-900/90 h-5 rounded-full overflow-hidden border border-pink-500/60 p-0.5 relative shadow-[0_0_15px_rgba(255,0,127,0.3)]">
                     <div id="overdriveBar" class="h-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600 rounded-full transition-all duration-100" style="width: 0%;"></div>
                     <div id="overdriveText" class="absolute inset-0 flex items-center justify-center text-[10px] sm:text-xs font-cyber font-black tracking-widest text-white drop-shadow">
-                        🔥 SİBER CİNNET: %0
+                        CİNNET · %0
                     </div>
                 </div>
             </div>
@@ -262,7 +311,7 @@
                             <span id="shieldText">AKTİF</span>
                         </div>
                         <!-- Defibrillator indicator -->
-                        <div id="reviveIndicator" title="Acil Durum Defibrilatörü (Ölüm Anında Kurtarma)" class="flex items-center gap-1 text-emerald-400 border-l border-gray-700 pl-2 text-xs sm:text-sm font-bold">
+                        <div id="reviveIndicator" title="Diriliş hakkı" class="flex items-center gap-1 text-emerald-400 border-l border-gray-700 pl-2 text-xs sm:text-sm font-bold">
                             <i class="fa-solid fa-heart-circle-bolt"></i>
                             <span id="reviveCountText">1x</span>
                         </div>
@@ -277,7 +326,7 @@
                     <!-- Live Mini-Mission Tracker -->
                     <div id="questHudBox" class="hidden xl:flex items-center gap-2 bg-gray-950/85 border border-green-500/40 px-3 py-1.5 rounded-xl backdrop-blur-md">
                         <i class="fa-solid fa-trophy text-green-400 text-xs"></i>
-                        <span id="questHudText" class="text-xs font-bold text-green-300">Görev: 15 Düşman İmha Et (0/15)</span>
+                        <span id="questHudText" class="text-xs font-bold text-green-300">AV · 0/15</span>
                     </div>
                 </div>
 
@@ -339,15 +388,15 @@
 
             <!-- Boss Warning Banner -->
             <div id="bossWarningBanner" class="hidden text-center py-2">
-                <div id="bossWarningText" class="inline-block bg-red-950/90 border-2 border-red-500 px-6 py-2 rounded-xl font-cyber font-black text-red-400 text-lg sm:text-2xl tracking-widest animate-boss-warn shadow-[0_0_30px_rgba(255,0,85,0.8)]">
-                    ⚠ UYARI: MEGA-ÇEKİRDEK YAKLAŞIYOR! ⚠
+                <div id="bossWarningText" class="warning-pill inline-block px-5 py-2 rounded-lg font-cyber font-black text-red-300 text-base sm:text-lg animate-boss-warn">
+                    BOSS YAKLAŞIYOR
                 </div>
             </div>
 
             <!-- Dopamine Killstreak / Jackpot Banner -->
             <div id="killstreakBanner" class="hidden text-center py-1 transition-all">
-                <div id="killstreakBadge" class="inline-block bg-gray-950/90 border-2 border-yellow-400 px-5 py-1.5 rounded-full font-cyber font-black text-yellow-300 text-sm sm:text-lg tracking-widest shadow-[0_0_25px_rgba(255,230,0,0.6)]">
-                    ⚡ KATLİAM SERİSİ! ⚡
+                <div id="killstreakBadge" class="event-pill inline-block px-4 py-1.5 rounded-lg font-cyber font-black text-yellow-200 text-sm sm:text-base">
+                    KOMBO SERİSİ
                 </div>
             </div>
         </div>
@@ -358,7 +407,7 @@
                 <div class="pointer-events-auto flex items-center gap-2 bg-gray-950/85 border border-gray-800 px-3 py-2 rounded-xl backdrop-blur-md">
                     <button id="ctrlToggleBtn" type="button" class="text-xs sm:text-sm font-semibold text-cyan-300 hover:text-white flex items-center gap-1.5 cursor-pointer">
                         <i class="fa-solid fa-computer-mouse text-cyan-400"></i>
-                        <span id="ctrlModeText">Mod: Hibrit (Fare + WASD) [M]</span>
+                        <span id="ctrlModeText">HİBRİT · M</span>
                     </button>
                     <div class="h-4 w-px bg-gray-800 mx-1"></div>
                     <button id="musicToggleBtn" type="button" title="Synthwave Bas Ritmi" class="text-purple-400 hover:text-white px-1 text-sm flex items-center gap-1 cursor-pointer">
@@ -370,7 +419,7 @@
                 </div>
 
                 <!-- Live Active Upgrades Dock -->
-                <div id="hudModulesDock" class="hidden sm:flex items-center gap-1.5 bg-gray-950/80 border border-gray-800/90 px-2.5 py-1.5 rounded-xl backdrop-blur-md flex-wrap max-w-[48vw]">
+                <div id="hudModulesDock" class="hidden lg:flex items-center gap-1.5 bg-gray-950/80 border border-gray-800/90 px-2.5 py-1.5 rounded-xl backdrop-blur-md flex-wrap max-w-[38vw] max-h-16 overflow-hidden">
                     <!-- Populated dynamically -->
                 </div>
                 <details id="buildGuidePanel" class="pointer-events-auto relative text-xs font-cyber text-cyan-300">
@@ -413,9 +462,8 @@
             <header class="shrink-0 flex flex-wrap items-center justify-between gap-3 bg-gray-950/90 border border-cyan-500/30 rounded-xl px-4 py-2.5 sm:py-3 shadow-[0_0_25px_rgba(0,0,0,0.6)]">
                 <div class="flex items-center gap-3">
                     <span class="inline-block w-2.5 h-2.5 bg-cyan-400 animate-ping rounded-full"></span>
-                    <span class="font-cyber text-xs sm:text-sm font-bold tracking-widest text-cyan-400">SYS.KERNEL // NC-3.6</span>
-                    <span class="hidden md:inline text-gray-700">|</span>
-                    <span class="hidden md:inline font-cyber text-xs tracking-wider text-emerald-400">CANLI ARENA SİMÜLASYONU: AKTİF</span>
+                    <span class="font-cyber text-xs sm:text-sm font-bold tracking-widest text-cyan-400">NEON ÇEKİRDEK</span>
+                    <span class="hidden md:inline text-xs tracking-wider text-emerald-400">● HAZIR</span>
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2.5 sm:gap-3">
@@ -425,9 +473,9 @@
                         <span id="menuGoldText" class="font-cyber text-xs sm:text-sm font-black text-yellow-400">50</span>
                     </div>
                     <button id="menuFullscreenBtn" type="button" class="bg-gray-900 hover:bg-cyan-950 border border-cyan-500/60 text-cyan-300 font-cyber text-xs font-bold px-3.5 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-2">
-                        <i class="fa-solid fa-expand"></i> TAM EKRAN MODU [F]
+                        <i class="fa-solid fa-expand"></i> TAM EKRAN
                     </button>
-                    <span class="bg-cyan-950/90 border border-cyan-500/40 font-cyber text-xs font-bold text-cyan-300 px-2.5 py-1.5 rounded-lg hidden sm:inline">REV 3.6</span>
+
                 </div>
             </header>
 
@@ -441,13 +489,13 @@
                     <div class="bg-gray-950/85 border border-cyan-500/30 rounded-xl p-4 sm:p-5 xl:p-6 flex flex-col justify-between gap-4 shadow-[0_0_35px_rgba(0,0,0,0.6)]">
                         <div>
                             <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-pink-500/10 border border-pink-500/30 text-[11px] font-cyber tracking-[0.2em] text-pink-400 font-bold mb-2 uppercase">
-                                <i class="fa-solid fa-satellite-dish text-[10px]"></i> TAKTİKSEL ARENA & SİBERNETİK EVRİM
+                                <i class="fa-solid fa-satellite-dish text-[10px]"></i> ARENA SURVIVAL
                             </div>
                             <h1 class="font-cyber text-3xl sm:text-4xl xl:text-5xl font-black tracking-tight text-white leading-none mb-2.5">
                                 NEON <span class="text-cyan-400 text-glow-cyan">ÇEKİRDEK</span>
                             </h1>
                             <p class="text-xs sm:text-sm xl:text-base text-gray-300 leading-relaxed">
-                                Siber sürülere karşı hayatta kal, <span class="text-green-400 font-bold">Kinetik Momentum</span> ile güçlen, <span class="text-pink-400 font-bold">Siber Cinnet</span> fever modunu tetikle ve ölüm anında <span class="text-emerald-400 font-bold">Defibrilatör</span> ile diril!
+                                Hayatta kal. Modülleri evrimleştir. Baskınlardan sıyrıl.
                             </p>
                         </div>
 
@@ -472,9 +520,9 @@
                     <div class="flex-1 bg-gray-950/85 border border-cyan-500/30 rounded-xl p-4 sm:p-5 flex flex-col justify-between gap-3 shadow-[0_0_35px_rgba(0,0,0,0.6)]">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-cyber font-bold text-cyan-300 tracking-wider uppercase flex items-center gap-2">
-                                <i class="fa-solid fa-shuttle-space text-cyan-400"></i> BAŞLANGIÇ ÇEKİRDEK ŞASİSİ SEÇ
+                                <i class="fa-solid fa-shuttle-space text-cyan-400"></i> ŞASİ SEÇ
                             </span>
-                            <span class="text-[11px] font-cyber text-gray-400">3 SINIF MEVCUT</span>
+
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 items-stretch">
@@ -486,7 +534,7 @@
                                             <i class="fa-solid fa-crosshairs"></i>
                                         </span>
                                     </div>
-                                    <p class="text-xs text-gray-300 leading-relaxed">Dengeli savaş gücü, +%15 Başlangıç Hasarı ve ekstra dayanıklılık.</p>
+                                    <p class="text-xs text-gray-300 leading-relaxed">Dengeli hasar · Ek diriliş</p>
                                 </div>
                                 <div class="mt-3 pt-2 border-t border-gray-800 text-[11px] font-cyber font-bold text-cyan-300">
                                     ★ +1 DEFİBRİLATÖR
@@ -501,7 +549,7 @@
                                             <i class="fa-solid fa-bolt"></i>
                                         </span>
                                     </div>
-                                    <p class="text-xs text-gray-300 leading-relaxed">+%18 Hız, +%20 Kritik Şansı ve daha hızlı Siber Atılım.</p>
+                                    <p class="text-xs text-gray-300 leading-relaxed">Hız · Kritik · Atılım</p>
                                 </div>
                                 <div class="mt-3 pt-2 border-t border-gray-800 text-[11px] font-cyber font-bold text-pink-400">
                                     ★ DELİCİ & SEKEN MERMİ
@@ -516,7 +564,7 @@
                                             <i class="fa-solid fa-shield-halved"></i>
                                         </span>
                                     </div>
-                                    <p class="text-xs text-gray-300 leading-relaxed">+50 Maksimum Zırh kapasitesi ve yakın koruma desteği.</p>
+                                    <p class="text-xs text-gray-300 leading-relaxed">+50 can · Kalkan · Uydu</p>
                                 </div>
                                 <div class="mt-3 pt-2 border-t border-gray-800 text-[11px] font-cyber font-bold text-emerald-400">
                                     ★ KALKAN & 1 UYDU
@@ -539,7 +587,7 @@
                         </div>
                         <div class="text-left flex-1 min-w-0">
                             <div class="text-[11px] font-cyber font-bold text-cyan-400 tracking-widest uppercase mb-1">
-                                SİBER LABORATUVAR TELEMETRİSİ
+                                BAŞLANGIÇ GÜCÜ
                             </div>
                             <div id="menuLoadoutSummary" class="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-xs text-gray-300 font-semibold">
                                 <div>Hasar: <span class="text-pink-400">Kademe 0</span></div>
@@ -558,98 +606,51 @@
                     <div class="shrink-0 flex flex-wrap items-center justify-between border-b border-gray-800 pb-3 gap-2">
                         <div class="flex flex-wrap gap-2">
                             <button id="tabProtocolBtn" type="button" class="px-4 py-2 rounded-lg font-cyber text-xs font-bold tracking-wider border border-cyan-400/60 text-cyan-300 bg-cyan-950/50 transition cursor-pointer">
-                                [01] SAVAŞ & KURTARMA PROTOKOLÜ
+                                KONTROLLER
                             </button>
                             <button id="tabCodexBtn" type="button" class="px-4 py-2 rounded-lg font-cyber text-xs font-bold tracking-wider border border-transparent text-gray-400 hover:text-white hover:bg-gray-900 transition cursor-pointer">
-                                [02] TEHDİT İSTİHBARATI (9 SINIF & 4 BOSS)
+                                TEHDİTLER
                             </button>
                         </div>
-                        <span class="hidden xl:inline-block font-cyber text-[11px] text-gray-500">OPERASYON REHBERİ</span>
+
                     </div>
 
                     <!-- TAB 1: Combat Protocol & Controls (Expands to fill available vertical space) -->
-                    <div id="tabProtocolContent" class="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-3.5 xl:gap-4 text-left items-stretch">
-                        <div class="bg-gray-900/80 border border-gray-800/90 hover:border-cyan-500/40 p-4 xl:p-5 rounded-xl flex flex-col justify-between transition">
-                            <div>
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="font-cyber text-xs sm:text-sm font-bold text-cyan-300 flex items-center gap-2">
-                                        <i class="fa-solid fa-crosshairs text-cyan-400"></i> OTOMATİK KİLİT & HAREKET
-                                    </span>
-                                    <span class="text-[10px] font-cyber bg-cyan-950 border border-cyan-500/40 text-cyan-300 px-2.5 py-0.5 rounded font-bold">FARE / WASD</span>
-                                </div>
-                                <p class="text-xs sm:text-sm text-gray-300 leading-relaxed">
-                                    Çekirdek imleci veya yön tuşlarını pürüzsüzce izler; menzile giren en yakın tehdidi lazer nişangahıyla işaretleyip otomatik ateş açar.
-                                </p>
-                            </div>
-                            <div class="mt-3 pt-2.5 border-t border-gray-800/80 flex items-center justify-between text-[11px] font-cyber text-cyan-400/90">
-                                <span>HAREKET BONUSU</span>
-                                <span>⚡ MOMENTUM: +%35 ATIŞ HIZI</span>
-                            </div>
+                    <div id="tabProtocolContent" class="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left items-stretch">
+                        <div class="brief-control rounded-xl border border-cyan-500/30 bg-gray-900/70 px-5 py-5 flex flex-col justify-center gap-3">
+                            <i class="fa-solid fa-arrows-up-down-left-right text-cyan-300 text-xl" aria-hidden="true"></i>
+                            <h3 class="font-cyber text-cyan-200 font-bold text-sm">HAREKET</h3>
+                            <p class="text-white font-cyber text-sm">WASD · OK TUŞLARI</p>
+                            <p class="text-gray-400 text-xs">Otomatik nişan ve ateş</p>
                         </div>
-
-                        <div class="bg-gray-900/80 border border-gray-800/90 hover:border-emerald-500/40 p-4 xl:p-5 rounded-xl flex flex-col justify-between transition">
-                            <div>
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="font-cyber text-xs sm:text-sm font-bold text-emerald-400 flex items-center gap-2">
-                                        <i class="fa-solid fa-heart-circle-bolt text-emerald-400"></i> ACİL DEFİBRİLATÖR
-                                    </span>
-                                    <span class="text-[10px] font-cyber bg-emerald-950 border border-emerald-500/40 text-emerald-300 px-2.5 py-0.5 rounded font-bold">İKİNCİ ŞANS</span>
-                                </div>
-                                <p class="text-xs sm:text-sm text-gray-300 leading-relaxed">
-                                    Canın sıfırlandığında aniden kaybetmezsin! <b>Acil Durum Defibrilatörü</b> devreye girer; %65 Can ve 3.5sn dokunulmazlıkla savaşa dönersin.
-                                </p>
-                            </div>
-                            <div class="mt-3 pt-2.5 border-t border-gray-800/80 flex items-center justify-between text-[11px] font-cyber text-emerald-400/90">
-                                <span>DİRİLİŞ ETKİSİ</span>
-                                <span>💥 360° SÜPER EMP PATLAMASI</span>
-                            </div>
+                        <div class="brief-control rounded-xl border border-yellow-500/30 bg-gray-900/70 px-5 py-5 flex flex-col justify-center gap-3">
+                            <i class="fa-solid fa-bolt text-yellow-300 text-xl" aria-hidden="true"></i>
+                            <h3 class="font-cyber text-yellow-200 font-bold text-sm">ATILIM</h3>
+                            <p class="text-white font-cyber text-sm">BOŞLUK · SOL TIK</p>
+                            <p class="text-gray-400 text-xs">Kısa dokunulmazlık</p>
                         </div>
-
-                        <div class="bg-gray-900/80 border border-gray-800/90 hover:border-yellow-500/40 p-4 xl:p-5 rounded-xl flex flex-col justify-between transition">
-                            <div>
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="font-cyber text-xs sm:text-sm font-bold text-yellow-300 flex items-center gap-2">
-                                        <i class="fa-solid fa-bolt text-yellow-400"></i> SİBER ATILIM & EMP NOVA
-                                    </span>
-                                    <span class="text-[10px] font-cyber bg-yellow-950/60 border border-yellow-500/40 text-yellow-300 px-2.5 py-0.5 rounded font-bold">SOL / SAĞ TIK</span>
-                                </div>
-                                <p class="text-xs sm:text-sm text-gray-300 leading-relaxed">
-                                    <b>Sol Tık / Boşluk:</b> Dokunulmaz atılım yaparak içinden geçtiğin düşmanları biçer. <b>Sağ Tık / E:</b> Mermileri silen EMP dalgası yayar.
-                                </p>
-                            </div>
-                            <div class="mt-3 pt-2.5 border-t border-gray-800/80 flex items-center justify-between text-[11px] font-cyber text-yellow-300/90">
-                                <span>AKTİF YETENEKLER</span>
-                                <span>🔥 SİBER CİNNET: KARTLARLA GÜÇLENİR</span>
-                            </div>
+                        <div class="brief-control rounded-xl border border-purple-500/30 bg-gray-900/70 px-5 py-5 flex flex-col justify-center gap-3">
+                            <i class="fa-solid fa-burst text-purple-300 text-xl" aria-hidden="true"></i>
+                            <h3 class="font-cyber text-purple-200 font-bold text-sm">EMP NOVA</h3>
+                            <p class="text-white font-cyber text-sm">E · SAĞ TIK</p>
+                            <p class="text-gray-400 text-xs">Mermi temizleme</p>
                         </div>
-
-                        <div class="bg-gray-900/80 border border-gray-800/90 hover:border-green-500/40 p-4 xl:p-5 rounded-xl flex flex-col justify-between transition">
-                            <div>
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="font-cyber text-xs sm:text-sm font-bold text-green-400 flex items-center gap-2">
-                                        <i class="fa-solid fa-compass text-green-400"></i> RADAR & İKMAL HALKALARI
-                                    </span>
-                                    <span class="text-[10px] font-cyber bg-green-950 border border-green-500/40 text-green-300 px-2.5 py-0.5 rounded font-bold">CANLI RADAR</span>
-                                </div>
-                                <p class="text-xs sm:text-sm text-gray-300 leading-relaxed">
-                                    Ekran kenarındaki <b>Taktiksel Radar Okları</b> uzaktaki İkmal Halkalarını, Elit Ganimet Sandıklarını ve yaklaşan Boss'ları gösterir.
-                                </p>
-                            </div>
-                            <div class="mt-3 pt-2.5 border-t border-gray-800/80 flex items-center justify-between text-[11px] font-cyber text-green-400/90">
-                                <span>MODÜL EVRİMİ</span>
-                                <span>★ 3. KADEMEDE SÜPER SİNERJİ</span>
-                            </div>
+                        <div class="brief-control rounded-xl border border-pink-500/30 bg-gray-900/70 px-5 py-5 flex flex-col justify-center gap-3">
+                            <i class="fa-solid fa-gamepad text-pink-300 text-xl" aria-hidden="true"></i>
+                            <h3 class="font-cyber text-pink-200 font-bold text-sm">DİĞER</h3>
+                            <p class="text-white font-cyber text-sm">M · KONTROL MODU</p>
+                            <p class="text-white font-cyber text-sm">P · ESC · DURAKLAT</p>
                         </div>
                     </div>
 
-                    <!-- TAB 2: Enemy Threat Codex (Expands to fill available vertical space) -->
+                                        <!-- TAB 2: Enemy Threat Codex (Expands to fill available vertical space) -->
                     <div id="tabCodexContent" class="hidden flex-1 min-h-0 grid-cols-1 sm:grid-cols-2 gap-3 xl:gap-4 text-left items-stretch overflow-y-auto pr-1">
                         <div class="bg-gray-900/80 border-l-4 border-red-500 p-3.5 xl:p-4 rounded-r-xl flex flex-col justify-center">
                             <div class="font-cyber text-xs sm:text-sm font-bold text-red-400 mb-1">KAMİKAZE & HAYALET SUİKASTÇI</div>
                             <p class="text-xs text-gray-300 leading-relaxed">Kamikazeler temas anında patlar; Dalga 5+ sonrası gelen Suikastçılar ise zikzak çizerek yüksek hızda saldırır.</p>
                         </div>
                         <div class="bg-gray-900/80 border-l-4 border-pink-500 p-3.5 xl:p-4 rounded-r-xl flex flex-col justify-center">
-                            <div class="font-cyber text-xs sm:text-sm font-bold text-pink-400 mb-1">KESKİN NİŞANCI (SNIPER)</div>
+                            <div class="font-cyber text-xs sm:text-sm font-bold text-pink-400 mb-1">KESKİN NİŞANCI</div>
                             <p class="text-xs text-gray-300 leading-relaxed">Uzaktan lazer kilidi açar ve yüksek hızlı delici mermi ateşler. Lazer çizgisini gördüğünde Siber Atılım kullan!</p>
                         </div>
                         <div class="bg-gray-900/80 border-l-4 border-purple-500 p-3.5 xl:p-4 rounded-r-xl flex flex-col justify-center">
@@ -658,7 +659,7 @@
                         </div>
                         <div class="bg-gray-900/80 border-l-4 border-sky-400 p-3.5 xl:p-4 rounded-r-xl flex flex-col justify-center">
                             <div class="font-cyber text-xs sm:text-sm font-bold text-sky-400 mb-1">AEGIS MUHAFIZI & ELİTLER</div>
-                            <p class="text-xs text-gray-300 leading-relaxed">Kritik olmayan mermilere karşı %45 hasار sönümler. Altın haleli Elitler ise imha edildiğinde Jackpot Sandığı düşürür.</p>
+                            <p class="text-xs text-gray-300 leading-relaxed">Kritik olmayan mermilere karşı %45 hasار sönümler. Altın haleli Elitler kontrollü oranlarla sandık bırakabilir.</p>
                         </div>
                         <div class="bg-gray-900/80 border-l-4 border-yellow-400 p-3.5 xl:p-4 rounded-r-xl sm:col-span-2 flex flex-col justify-center">
                             <div class="font-cyber text-xs sm:text-sm font-bold text-yellow-300 mb-1">4 FARKLI BOSS SINIFI & ÇOKLU BOSS BASKINLARI</div>
@@ -785,7 +786,7 @@
             <!-- Reroll Button -->
             <div class="mb-5 flex justify-center">
                 <button id="rerollUpgradesBtn" type="button" class="cyber-btn px-4 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-yellow-400/70 font-cyber text-xs font-bold text-yellow-300 flex items-center gap-2 cursor-pointer">
-                    <i class="fa-solid fa-dice text-yellow-400"></i> YENİDEN ZAR AT [R] (<span id="rerollCostText">15</span> <i class="fa-solid fa-coins"></i>)
+                    <i class="fa-solid fa-dice text-yellow-400"></i> YENİDEN SEÇ · R <span id="rerollCostText">15</span> <i class="fa-solid fa-coins"></i>
                 </button>
             </div>
 
@@ -849,7 +850,7 @@
 
             <div class="flex flex-col gap-3">
                 <button id="openShopFromOverBtn" type="button" class="cyber-btn w-full py-3 rounded-xl bg-gray-900 hover:bg-gray-800 font-cyber font-bold text-sm text-yellow-300 border border-yellow-400 cursor-pointer flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-coins"></i> SİBER LABORATUVAR (KALICI GÜÇLENDİRME)
+                    <i class="fa-solid fa-coins"></i> SİBER LABORATUVAR
                 </button>
                 <button id="restartBtn" type="button" class="cyber-btn w-full py-4 rounded-xl bg-gradient-to-r from-pink-600 via-purple-600 to-cyan-500 font-cyber font-black text-base tracking-wider text-white border border-pink-400 cursor-pointer">
                     TEKRAR DENE <i class="fa-solid fa-rotate-right ml-1"></i>
@@ -931,6 +932,26 @@
                     osc.start(now);
                     osc.stop(now + 0.19);
                 } catch (e) {}
+            }
+
+            playThreatCue(kind = 'raid') {
+                // Short distinct UI cue, separated from bass and rapid-fire audio.
+                if (!this.enabled || !this.allowSfx('cue-' + kind, 1.5)) return;
+                try {
+                    const notes = {boss:[260,195],raid:[570,430],phase:[440,310],event:[740,920]}[kind] || [570,430];
+                    notes.forEach((freq,index) => {
+                        const now = this.ctx.currentTime + index * .13;
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = kind === 'boss' ? 'sawtooth' : 'triangle';
+                        osc.frequency.setValueAtTime(freq,now);
+                        osc.frequency.exponentialRampToValueAtTime(freq*.92,now+.11);
+                        gain.gain.setValueAtTime(kind==='boss' ? .075 : .045,now);
+                        gain.gain.exponentialRampToValueAtTime(.001,now+.12);
+                        osc.connect(gain);gain.connect(this.ctx.destination);
+                        osc.start(now);osc.stop(now+.12);
+                    });
+                } catch(e) {}
             }
 
             playLaser(isCrit = false) {
@@ -1269,7 +1290,7 @@
                         player.addOverdrive(25);
                         createFloatingText(player.x, player.y - 45, `🏆 GÖREV TAMAMLANDI! +${goldWon} ALTIN`, '#00ff66', 18);
                     }
-                    showDopamineBanner(`🏆 GÖREV TAMAMLANDI: +${goldWon} ALTIN ÇEKİRDEK!`, '#00ff66');
+                    showDopamineBanner(`GÖREV · +${goldWon} ALTIN`, '#00ff66');
                     generateNextQuest();
                 } else {
                     updateQuestHud();
@@ -1280,7 +1301,8 @@
         function updateQuestHud() {
             const el = document.getElementById('questHudText');
             if (el && activeQuest) {
-                el.textContent = `Görev: ${activeQuest.desc} (${activeQuest.progress}/${activeQuest.target}) [+${activeQuest.rewardGold}🪙]`;
+                const shortType = {KILLS:'AV', ORBS:'KÜRE', COMBO:'KOMBO'}[activeQuest.type] || 'GÖREV';
+                el.textContent = `${shortType} · ${activeQuest.progress}/${activeQuest.target} · +${activeQuest.rewardGold}`;
             }
         }
 
@@ -1421,7 +1443,7 @@
                     screenShake = 12;
                     audio.playJackpot();
                     shockwaves.push(new Shockwave(this.x, this.y, 220, '#ff007f', 0.4));
-                    showDopamineBanner('🔥 SİBER CİNNET AKTİF! (HIZ & KRİTİK ARTIŞI) 🔥', '#ff007f');
+                    showDopamineBanner('SİBER CİNNET', '#ff007f');
                     document.getElementById('overdriveOverlay').classList.remove('hidden');
                     if (this.evolutions.has('overdrive_boost')) {
                         // Once per Overdrive activation, never once per frame.
@@ -2071,15 +2093,19 @@
 
             draw(ctx) {
                 ctx.save();
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = this.color;
+                // All hostile projectiles use the same magenta ring, including cyan bosses.
+                ctx.shadowBlur = 5;
+                ctx.shadowColor = '#ff527a';
+                ctx.strokeStyle = '#ff809b';
+                ctx.lineWidth = 2;
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.arc(this.x, this.y, this.radius + 1, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.fillStyle = '#ffffff';
+                ctx.stroke();
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 0.45, 0, Math.PI * 2);
+                ctx.fillStyle = '#170719';
+                ctx.arc(this.x, this.y, Math.max(1.5, this.radius * .37), 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
             }
@@ -2608,6 +2634,7 @@
                     const phase = this.bossPhase;
                     const delay = combatDirector ? combatDirector.reserveBossPhase(phase) : 0;
                     this.bossSpecial = { angle: aimAngle, delay, timer: phase === 3 ? 1.35 : 1.15, phase };
+                    if (delay < .01) audio.playThreatCue('phase');
                     this.actionTimer = Math.max(this.actionTimer, 1.2);
                     this.secondaryTimer = Math.max(this.secondaryTimer, 1.2);
                     if (this.type === 'BOSS_TITAN') this.state = 'CHASE';
@@ -2620,6 +2647,7 @@
                 if (!this.bossSpecial) return;
                 if (this.bossSpecial.delay > 0) {
                     this.bossSpecial.delay = Math.max(0, this.bossSpecial.delay - dt);
+                    if (this.bossSpecial.delay === 0) audio.playThreatCue('phase');
                     return;
                 }
                 this.bossSpecial.timer -= dt;
@@ -2721,9 +2749,9 @@
                 comboTimer = COMBO_MAX_TIME;
                 advanceQuest('COMBO', combo);
 
-                if (combo === 15) showDopamineBanner('⚡ SÜPER SERİ! (x15 KOMBO) ⚡', '#00f3ff');
-                else if (combo === 30) showDopamineBanner('🔥 DURDURULAMAZ! (x30 KOMBO) 🔥', '#ff007f');
-                else if (combo === 50) showDopamineBanner('👑 SİBER TANRI! (x50 KOMBO) 👑', '#ffe600');
+                if (combo === 15) showDopamineBanner('15 KOMBO', '#00f3ff');
+                else if (combo === 30) showDopamineBanner('30 KOMBO', '#ff007f');
+                else if (combo === 50) showDopamineBanner('50 KOMBO', '#ffe600');
 
                 score += Math.round(this.scoreValue * (1 + combo * 0.12));
                 player.addOverdrive(this.isBoss ? 45 : (this.isElite ? 16 : 2.8));
@@ -2777,7 +2805,7 @@
                     hitStopTimer = 0.045;
                     screenShake = 12;
                     if (combatDirector && combatDirector.registerChestDrop('elite', this.x, this.y)) {
-                        createFloatingText(this.x, this.y - 30, '★ ELİT SANDIĞI DÜŞTÜ! ★', '#ffe600', 16);
+                        createFloatingText(this.x, this.y - 30, 'ELİT SANDIK', '#ffe600', 16);
                     }
                 }
 
@@ -2807,7 +2835,7 @@
                             i < 8
                         );
                     }
-                    showDopamineBanner(`★ ${this.bossName} İMHA EDİLDİ! ★`, '#ffe600');
+                    showDopamineBanner(`${this.bossName} · İMHA`, '#ffe600');
                 } else {
                     const dropGold = Math.random() < (this.type === 'TANK' ? 0.42 : 0.11);
                     emitEnergyOrb(this.x, this.y, this.xpValue, dropGold);
@@ -3197,7 +3225,7 @@
             homing: { name: 'Küme Roketleri', desc: 'İsabet eden ana güdümlü füze iki küçük takip füzesi bırakır.' },
             lightning: { name: 'İyon Ağı', desc: 'Kritik isabetler zincirleme elektriği garanti eder; menzil 235 olur.' },
             overdrive_boost: { name: 'Cinnet Rezonansı', desc: 'Cinnet başladığında yakınındaki en fazla 12 düşman mermisini dağıtır.' },
-            crit_mastery: { name: 'Zayıf Nokta', desc: 'Kritik isabet hedefi 3 sn işaretler; normal vuruşlar %12 ek hasar verir (8 sn bekleme).' },
+            crit_mastery: { name: 'Zayıf Nokta', desc: 'Kritik isabet hedefi 3 sn işaretler; normal vuruşlar %12 ek hasar verir. 8 sn bekleme.' },
             vampiric: { name: 'Kan Reaktörü', desc: 'Her 5 düşman imhasında, en sık 4 saniyede bir +8 can geri kazanır.' },
             aegis_shield: { name: 'Aegis Karşı Ateşi', desc: 'Kalkan kırılınca en fazla 3 kısa menzilli takip mermisi ateşler.' },
             kinetic_magnet: { name: 'Kinetik Girdap', desc: 'Dash bitince 4 sn aralıkla yakındaki en fazla 8 düşmana darbe uygular ve küreleri çeker.' },
@@ -3777,6 +3805,7 @@
                 this.tokens = 4;
                 this.afterBossUntil = -Infinity;
                 this.lastEliteChestAt = -Infinity;
+                this.lastBossCueEncounter = 0;
                 this.elitePity = 0;
                 this.bossChestAwarded = false;
                 this.eliteChestTimes = [];
@@ -3877,6 +3906,7 @@
                 const fallbackY = Math.max(minY, Math.min(worldHeight - minY, player.y + (player.y < worldHeight / 2 ? 150 : -150)));
                 const farEnough = Math.hypot(x - player.x, y - player.y) >= 160;
                 this.activeArenaEvent = new ArenaEvent(kind, farEnough ? x : fallbackX, farEnough ? y : fallbackY);
+                audio.playThreatCue('event');
                 this.arenaEventIndex++;
                 this.nextArenaAt = totalTime + ARENA_EVENT_GAP;
                 this.stats.arenaOffered++;
@@ -3912,6 +3942,7 @@
                     enemies.length > this.profile.cap - 12 || this.tokens < 8) return;
                 const side = Math.floor(Math.random() * 4);
                 this.pendingEncounter = getSpecialEncounterPlan(wave, this.profile.theme, side, this.encounterIndex);
+                audio.playThreatCue('raid');
                 this.encounterIndex++;
                 this.lastEncounterAt = totalTime;
                 this.nextEncounterAt = totalTime + SPECIAL_ENCOUNTER_GAP;
@@ -4040,9 +4071,9 @@
             hudBoss.classList.add('flex');
 
             if (bossCount > 1) {
-                showDopamineBanner(`⚠ ÇOKLU BOSS BASKINI (${bossCount}X): ${spawnedNames.join(' & ')}! ⚠`, '#ff0055');
+                showDopamineBanner(`${bossCount} BOSS · ${spawnedNames.join(' + ')}`, '#ff0055');
             } else {
-                showDopamineBanner(`⚠ BOSS ALARMI: ${spawnedNames[0]} ARENADA! ⚠`, '#ff0055');
+                showDopamineBanner(`BOSS · ${spawnedNames[0]}`, '#ff0055');
             }
         }
 
@@ -4092,13 +4123,17 @@
 
             if (totalTime >= nextBossTime - 3.8 && totalTime < nextBossTime && activeBosses.length === 0) {
                 bossWarningTimer = 1;
+                if (combatDirector && combatDirector.lastBossCueEncounter !== bossEncounterCount + 1) {
+                    combatDirector.lastBossCueEncounter = bossEncounterCount + 1;
+                    audio.playThreatCue('boss');
+                }
                 const warnBanner = document.getElementById('bossWarningBanner');
                 const warnText = document.getElementById('bossWarningText');
                 const upcomingCount = (bossEncounterCount + 1) === 1 ? 1 : ((bossEncounterCount + 1) >= 3 && (bossEncounterCount + 1) % 2 === 1 ? 3 : 2);
                 if (warnText) {
                     warnText.textContent = upcomingCount > 1
-                        ? `⚠ UYARI: ${upcomingCount}X ÇOKLU BOSS BASKINI YAKLAŞIYOR! ⚠`
-                        : `⚠ UYARI: SİBER BOSS TEHDİDİ YAKLAŞIYOR! ⚠`;
+                        ? `${upcomingCount} BOSS YAKLAŞIYOR`
+                        : `BOSS YAKLAŞIYOR`;
                 }
                 warnBanner.classList.remove('hidden');
             } else {
@@ -4282,8 +4317,21 @@
         }
 
         function drawBackgroundGrid() {
-            ctx.fillStyle = '#04060c';
+            ctx.fillStyle = '#050816';
             ctx.fillRect(0, 0, worldWidth, worldHeight);
+            const phase = combatDirector?.profile?.phase;
+            const railColor = phase === 'BOSS' || phase === 'WARNING'
+                ? 'rgba(255,82,104,.36)' : phase === 'CRISIS'
+                    ? 'rgba(255,182,71,.28)' : 'rgba(0,226,236,.16)';
+            ctx.fillStyle = railColor;
+            const corner = Math.min(84, Math.max(28, Math.min(worldWidth, worldHeight) * .11));
+            for (const [x,y,dx,dy] of [
+                [10,10,1,1],[worldWidth-10,10,-1,1],
+                [10,worldHeight-10,1,-1],[worldWidth-10,worldHeight-10,-1,-1]
+            ]) {
+                ctx.fillRect(dx > 0 ? x : x-corner*.65, y, corner*.65, 2);
+                ctx.fillRect(x, dy > 0 ? y : y-corner*.65, 2, corner*.65);
+            }
 
             const spacing = 48;
             const gridShockwaves = shockwaves.map(sw => {
@@ -4341,8 +4389,8 @@
             ctx.lineWidth = 4;
             ctx.setLineDash([14, 9]);
             ctx.globalAlpha = 0.35 + 0.45 * (1 - progress);
-            ctx.strokeStyle = '#ffe600';
-            ctx.fillStyle = 'rgba(255, 180, 0, 0.08)';
+            ctx.strokeStyle = '#ffbf58';
+            ctx.fillStyle = 'rgba(255, 180, 0, 0.04)';
             const band = Math.min(70, Math.min(worldWidth, worldHeight) * 0.13);
             for (const side of sides) {
                 if (side === 0) {
@@ -4359,6 +4407,16 @@
                     ctx.beginPath(); ctx.moveTo(band, 0); ctx.lineTo(band, worldHeight); ctx.stroke();
                 }
             }
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#ffdb75';
+            const mark = Math.max(10, Math.round(26 * (1-progress)));
+            for (const side of sides) {
+                if (side === 0) ctx.fillRect(worldWidth/2-20,12,40,mark);
+                else if (side === 1) ctx.fillRect(worldWidth-12-mark,worldHeight/2-20,mark,40);
+                else if (side === 2) ctx.fillRect(worldWidth/2-20,worldHeight-12-mark,40,mark);
+                else ctx.fillRect(12,worldHeight/2-20,mark,40);
+            }
             ctx.restore();
         }
 
@@ -4367,23 +4425,21 @@
             const pad = 34;
             const targets = [];
 
-            for (const cz of conduitZones) {
-                targets.push({ x: cz.x, y: cz.y, col: '#00ff66', label: '⚡ İKMAL' });
+            for (const b of activeBosses) {
+                if (!b.dead) targets.push({ x: b.x, y: b.y, col: '#ff5268', label: 'BOSS' });
             }
             if (combatDirector?.activeArenaEvent) {
                 const event = combatDirector.activeArenaEvent;
                 targets.push({ x: event.x, y: event.y, col: event.color, label: event.kind === 'VAULT' ? '◆ KASA' : '◎ VERİ' });
             }
-            for (const lc of lootChests) {
-                targets.push({ x: lc.x, y: lc.y, col: '#ffe600', label: '★ SANDIK' });
+            for (const lc of lootChests.slice(0, 2)) {
+                targets.push({ x: lc.x, y: lc.y, col: '#ffe600', label: '' });
             }
-            for (const b of activeBosses) {
-                if (!b.dead) {
-                    targets.push({ x: b.x, y: b.y, col: b.color || '#ff0055', label: `⚠ ${b.bossName.split(' ')[0]}` });
-                }
+            for (const cz of conduitZones.slice(0, 2)) {
+                targets.push({ x: cz.x, y: cz.y, col: '#00ff66', label: '' });
             }
 
-            for (const t of targets) {
+            for (const t of targets.slice(0, 6)) {
                 const dx = t.x - player.x;
                 const dy = t.y - player.y;
                 const dist = Math.hypot(dx, dy);
@@ -4409,12 +4465,14 @@
                 ctx.fill();
                 ctx.restore();
 
-                ctx.save();
-                ctx.fillStyle = t.col;
-                ctx.font = "700 9px 'Orbitron', sans-serif";
-                ctx.textAlign = 'center';
-                ctx.fillText(t.label, ix, iy - 10);
-                ctx.restore();
+                if (t.label) {
+                    ctx.save();
+                    ctx.fillStyle = t.col;
+                    ctx.font = "700 9px 'Orbitron', sans-serif";
+                    ctx.textAlign = 'center';
+                    ctx.fillText(t.label, ix, iy - 10);
+                    ctx.restore();
+                }
             }
         }
 
@@ -4541,9 +4599,9 @@
                 const dmgPct = Math.round((metaUpgrades.baseDamage || 0) * 8 + (selectedChassis === 'VANGUARD' ? 12 : 0));
                 const revives = 1 + (metaUpgrades.defibrillator || 0) + (selectedChassis === 'VANGUARD' ? 1 : 0);
                 summaryEl.innerHTML = `
-                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Hasar: <span class="text-pink-400 font-bold">+%${dmgPct} (K.${metaUpgrades.baseDamage || 0})</span></div>
-                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Zırh: <span class="text-green-400 font-bold">${hpTotal} HP (K.${metaUpgrades.maxHp || 0})</span></div>
-                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Diriliş: <span class="text-emerald-400 font-bold">${revives}x Ücretsiz</span></div>
+                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Hasar: <span class="text-pink-400 font-bold">+%${dmgPct}</span></div>
+                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Zırh: <span class="text-green-400 font-bold">${hpTotal} HP</span></div>
+                    <div class="bg-gray-900/90 border border-gray-800 px-2.5 py-1.5 rounded-lg">Diriliş: <span class="text-emerald-400 font-bold">${revives}x</span></div>
                 `;
             }
         }
@@ -4560,18 +4618,18 @@
             document.getElementById('momentumBar').style.width = `${momPct}%`;
             const momText = document.getElementById('momentumText');
             if (momPct >= 80) {
-                momText.textContent = `⚡ KİNETİK AŞIRI YÜK! (%${momPct})`;
+                momText.textContent = `MOMENTUM · %${momPct}`;
             } else {
-                momText.textContent = `⚡ MOMENTUM: %${momPct}`;
+                momText.textContent = `MOMENTUM · %${momPct}`;
             }
 
             const odPct = Math.min(100, player.overdrive);
             document.getElementById('overdriveBar').style.width = `${odPct}%`;
             const odText = document.getElementById('overdriveText');
             if (player.overdriveActive) {
-                odText.textContent = `🔥 SİBER CİNNET! (${player.overdriveTimer.toFixed(1)}s) 🔥`;
+                odText.textContent = `CİNNET · ${player.overdriveTimer.toFixed(1)}s`;
             } else {
-                odText.textContent = `🔥 SİBER CİNNET: %${Math.floor(odPct)}`;
+                odText.textContent = `CİNNET · %${Math.floor(odPct)}`;
             }
 
             const hpPct = Math.max(0, (player.hp / player.maxHp) * 100);
@@ -4647,7 +4705,7 @@
                 const nameEl = document.getElementById('bossNameText');
                 if (nameEl) {
                     const prefix = activeBosses.length > 1 ? `⚠ AKTİF BOSS (${activeBosses.length}X): ` : '⚠ ';
-                    nameEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation animate-bounce"></i> ${prefix}${names.join(' + ')}`;
+                    nameEl.textContent = `${prefix}${names.join(' + ')}`;
                 }
             }
 
@@ -4688,7 +4746,7 @@
                 if (!upg) return '';
                 const isEvolved = count >= 3 && !!EVOLUTION_DEFS[id];
                 return `
-                    <div title="${upg.name} (Kademe ${count})${isEvolved ? ' · ' + EVOLUTION_DEFS[id].name : ''}" class="flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-cyber font-bold" style="border-color:${isEvolved ? '#ffe600' : upg.color}; color:${isEvolved ? '#ffe600' : '#fff'}; background:rgba(0,0,0,0.6);">
+                    <div title="${upg.name} · K${count}${isEvolved ? ' · ' + EVOLUTION_DEFS[id].name : ''}" class="flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-cyber font-bold" style="border-color:${isEvolved ? '#ffe600' : upg.color}; color:${isEvolved ? '#ffe600' : '#fff'}; background:rgba(0,0,0,0.6);">
                         <i class="${upg.icon}" style="color:${upg.color}"></i>
                         <span>${isEvolved ? '★' + count : count}</span>
                     </div>
@@ -4790,7 +4848,7 @@
             document.getElementById('upgradeModal').classList.remove('flex');
             gameState = 'PLAYING';
             shockwaves.push(new Shockwave(player.x, player.y, 170, rarity.border, 0.4));
-            createFloatingText(player.x, player.y - 30, `${upg.name} (K.${nextLvl})`, rarity.textCol, 17);
+            createFloatingText(player.x, player.y - 30, `${upg.name} · K${nextLvl}`, rarity.textCol, 17);
             updateModulesDock();
             updateHUD();
             // A collected stacked orb may grant more than one full level.
@@ -4854,7 +4912,7 @@
                                     [${idx + 1}] ★ ${rarity.name}
                                 </span>
                                 <span class="font-cyber text-[11px] ${willEvolve ? 'text-yellow-300 font-bold animate-pulse' : 'text-gray-400'}">
-                                    Kademe ${currentLvl} → ${currentLvl + 1} ${willEvolve ? '(EVRİM!)' : ''}
+                                    Kademe ${currentLvl} → ${currentLvl + 1} ${willEvolve ? '· EVRİM' : ''}
                                 </span>
                             </div>
                         </div>
@@ -4937,9 +4995,9 @@
 
                 const confirmBtn = document.getElementById('confirmReviveBtn');
                 if (canUseFree) {
-                    confirmBtn.innerHTML = `⚡ ÜCRETSİZ DEFİBRİLATÖR İLE DİRİL (${player.freeRevives} HAK) [BOŞLUK]`;
+                    confirmBtn.innerHTML = `DİRİL · ${player.freeRevives} HAK · BOŞLUK`;
                 } else {
-                    confirmBtn.innerHTML = `⚡ ${goldReviveCost} ALTIN KARŞILIĞI REAKTÖRÜ BAŞLAT [BOŞLUK]`;
+                    confirmBtn.innerHTML = `DİRİL · ${goldReviveCost} ALTIN · BOŞLUK`;
                 }
 
                 const modal = document.getElementById('reviveModal');
@@ -4984,7 +5042,7 @@
             audio.playJackpot();
             screenShake = 18;
             shockwaves.push(new Shockwave(player.x, player.y, 380, '#10b981', 0.6));
-            showDopamineBanner('⚡ SİBER DİRİLİŞ AKTİF! (3.5S DOKUNULMAZLIK & TAM GÜÇ) ⚡', '#10b981');
+            showDopamineBanner('⚡ DİRİLİŞ · 3,5s KORUMA ⚡', '#10b981');
 
             const modal = document.getElementById('reviveModal');
             modal.classList.add('hidden');
@@ -5214,8 +5272,8 @@
             controlMode = controlMode === 'HYBRID' ? 'KEYBOARD' : 'HYBRID';
             const txt = document.getElementById('ctrlModeText');
             txt.textContent = controlMode === 'HYBRID'
-                ? 'Mod: Hibrit (Fare + WASD) [M]'
-                : 'Mod: Sadece Klavye (WASD) [M]';
+                ? 'HİBRİT · M'
+                : 'KLAVYE · M';
         }
 
         document.getElementById('startBtn').addEventListener('click', startNewGame);
@@ -5259,13 +5317,13 @@
                 const badge = document.getElementById('selectedChassisBadge');
                 const dot = document.getElementById('menuCorePreviewDot');
                 if (selectedChassis === 'VANGUARD') {
-                    badge.textContent = 'ÖNCÜ (DENGELİ)';
+                    badge.textContent = 'ÖNCÜ';
                     dot.style.backgroundColor = '#00f3ff';
                 } else if (selectedChassis === 'PHANTOM') {
-                    badge.textContent = 'HAYALET (KRİTİK & HIZ)';
+                    badge.textContent = 'HAYALET';
                     dot.style.backgroundColor = '#ff007f';
                 } else {
-                    badge.textContent = 'TİTAN (AĞIR ZIRH & UYDU)';
+                    badge.textContent = 'TİTAN';
                     dot.style.backgroundColor = '#00ff66';
                 }
                 audio.init();
