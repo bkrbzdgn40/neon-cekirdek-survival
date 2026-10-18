@@ -106,3 +106,78 @@ test('purchased free revives can be used after the second revival', () => {
   assert.equal(run('gameState'), 'PLAYING');
   assert.equal(run('player.freeRevives'), 2);
 });
+
+
+test('spatial grid includes every geometric collision and rejects distant bullets', () => {
+  const { run } = setup();
+  const result = JSON.parse(run(`(() => {
+    let seed = 42;
+    const rand = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+    bullets = Array.from({length: 400}, (_, i) => ({
+      x: rand() * 1280, y: rand() * 720, radius: i === 0 ? 60 : 2 + rand() * 8,
+      dead: i % 37 === 0 && i !== 0
+    }));
+    buildBulletCollisionGrid();
+    let missing = 0, candidateTotal = 0, duplicateCount = 0;
+    for (let n = 0; n < 160; n++) {
+      const x = rand() * 1280, y = rand() * 720;
+      const radius = n % 10 === 0 ? 52 : 10 + rand() * 16;
+      const candidateIndices = getNearbyBulletIndices(x, y, radius);
+      const choices = new Set(candidateIndices);
+      candidateTotal += choices.size;
+      duplicateCount += candidateIndices.length - choices.size;
+      for (let i = 0; i < bullets.length; i++) {
+        const b = bullets[i];
+        if (b.dead) continue;
+        const dx = x - b.x, dy = y - b.y, hitRadius = radius + b.radius;
+        if (dx * dx + dy * dy < hitRadius * hitRadius && !choices.has(i)) missing++;
+      }
+    }
+    return JSON.stringify({ missing, duplicateCount, candidateTotal, bruteChecks: bullets.length * 160 });
+  })()`));
+  assert.equal(result.missing, 0, 'No real collision may be filtered out by the grid');
+  assert.equal(result.duplicateCount, 0, 'A bullet in one grid cell must be visited once');
+  assert.ok(result.candidateTotal < result.bruteChecks * 0.4,
+    `Broad-phase candidates: ${result.candidateTotal}/${result.bruteChecks}`);
+});
+
+test('indexed projectile collisions still damage a stationary enemy', () => {
+  const { run } = setup();
+  const hit = JSON.parse(run(`(() => {
+    startNewGame();
+    player.fireTimer = 500;
+    const target = new Enemy(player.x + 60, player.y, 'SWARM');
+    target.speed = 0;
+    enemies.push(target);
+    const shot = new Bullet(target.x, target.y, 0, 0, 20, 7, 1, 0);
+    bullets.push(shot);
+    updateGame(0.016);
+    return JSON.stringify({ hp: target.hp, maxHp: target.maxHp, dead: shot.dead });
+  })()`));
+  assert.ok(hit.hp < hit.maxHp);
+  assert.equal(hit.dead, true);
+});
+
+test('visual budgets cap particle and text objects without removing new feedback', () => {
+  const { run } = setup();
+  const counts = JSON.parse(run(`(() => {
+    particles = []; floatingTexts = [];
+    for (let i = 0; i < 1200; i++) {
+      emitParticle({ life: 1 });
+      createFloatingText(0, 0, 'label_' + i);
+    }
+    return JSON.stringify({ particles: particles.length, texts: floatingTexts.length,
+      lastText: floatingTexts.at(-1).text });
+  })()`));
+  assert.equal(counts.particles, 420);
+  assert.equal(counts.texts, 110);
+  assert.equal(counts.lastText, 'label_1199');
+});
+
+test('HUD updates at controlled frequency rather than every simulation frame', () => {
+  const { run } = setup();
+  run('startNewGame(); updateGame(0.025); updateGame(0.025); updateGame(0.025)');
+  assert.ok(run('hudRefreshAccumulator') > 0.07);
+  run('updateGame(0.025)');
+  assert.ok(run('hudRefreshAccumulator') < 0.03);
+});
