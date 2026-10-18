@@ -2077,7 +2077,7 @@
                 }
             }
 
-            draw(ctx) {
+            draw(ctx, compact = false) {
                 const visual = getProjectileVisualStyle(this);
                 const speed = Math.hypot(this.vx, this.vy) || 1;
                 const dx = this.vx / speed, dy = this.vy / speed;
@@ -2092,17 +2092,19 @@
                     ctx.moveTo(this.x - dx * trailLength, this.y - dy * trailLength);
                     ctx.lineTo(this.x, this.y);
                     ctx.stroke();
-                    ctx.globalAlpha = 0.95;
-                    ctx.lineWidth = Math.max(1.4, visual.width - 1);
-                    ctx.strokeStyle = visual.core;
-                    ctx.beginPath();
-                    ctx.moveTo(this.x - dx * trailLength * 0.58, this.y - dy * trailLength * 0.58);
-                    ctx.lineTo(this.x, this.y);
-                    ctx.stroke();
+                    if (!compact) {
+                        ctx.globalAlpha = 0.95;
+                        ctx.lineWidth = Math.max(1.4, visual.width - 1);
+                        ctx.strokeStyle = visual.core;
+                        ctx.beginPath();
+                        ctx.moveTo(this.x - dx * trailLength * 0.58, this.y - dy * trailLength * 0.58);
+                        ctx.lineTo(this.x, this.y);
+                        ctx.stroke();
+                    }
                 }
                 ctx.fillStyle = visual.color;
                 ctx.shadowColor = visual.color;
-                ctx.shadowBlur = visual.glow;
+                ctx.shadowBlur = compact ? 0 : visual.glow;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();
@@ -2111,7 +2113,7 @@
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, Math.max(1.1, this.radius * 0.43), 0, Math.PI * 2);
                 ctx.fill();
-                if (this.evoRail) {
+                if (this.evoRail && !compact) {
                     const px = -dy * (this.radius + 3), py = dx * (this.radius + 3);
                     ctx.strokeStyle = visual.color;
                     ctx.lineWidth = 1.5;
@@ -2166,15 +2168,23 @@
             return 2;
         }
 
-        // Weapon visuals are cosmetic: no projectile damage, speed or collision rules.
+        // Reusable immutable paint recipes: no per-bullet allocations each render.
+        const PROJECTILE_VISUAL_STYLES = Object.freeze({
+            rail: { type:'rail', color:'#f7fbff', core:'#ffffff', trail:43, width:5, glow:14 },
+            reactor: { type:'reactor', color:'#2bdfff', core:'#f0ffff', trail:24, width:3, glow:8 },
+            prism: { type:'prism', color:'#b68aff', core:'#ffffff', trail:28, width:4, glow:9 },
+            cluster: { type:'missile', color:'#7dffba', core:'#e2ffec', trail:32, width:4, glow:9 },
+            missile: { type:'missile', color:'#30ec83', core:'#e2ffec', trail:32, width:4, glow:9 },
+            critical: { type:'critical', color:'#ffe070', core:'#ffffff', trail:26, width:4, glow:12 },
+            plasma: { type:'plasma', color:'#15d7ed', core:'#e3ffff', trail:18, width:3, glow:7 }
+        });
         function getProjectileVisualStyle(b) {
-            if (b.evoRail) return { type:'rail', color:'#f7fbff', core:'#ffffff', trail:43, width:5, glow:14 };
-            if (b.reactorPulse) return { type:'reactor', color:'#2bdfff', core:'#f0ffff', trail:24, width:3, glow:8 };
-            if (b.prismEvolved) return { type:'prism', color:'#b68aff', core:'#ffffff', trail:28, width:4, glow:9 };
-            if (b.isHoming) return { type:'missile', color:b.clusterPayload ? '#7dffba' : '#30ec83',
-                core:'#e2ffec', trail:32, width:4, glow:9 };
-            if (b.isCrit) return { type:'critical', color:'#ffe070', core:'#ffffff', trail:26, width:4, glow:12 };
-            return { type:'plasma', color:'#15d7ed', core:'#e3ffff', trail:18, width:3, glow:7 };
+            if (b.evoRail) return PROJECTILE_VISUAL_STYLES.rail;
+            if (b.reactorPulse) return PROJECTILE_VISUAL_STYLES.reactor;
+            if (b.prismEvolved) return PROJECTILE_VISUAL_STYLES.prism;
+            if (b.isHoming) return b.clusterPayload ?
+                PROJECTILE_VISUAL_STYLES.cluster : PROJECTILE_VISUAL_STYLES.missile;
+            return b.isCrit ? PROJECTILE_VISUAL_STYLES.critical : PROJECTILE_VISUAL_STYLES.plasma;
         }
 
         class EnemyProjectile {
@@ -4542,6 +4552,86 @@
             }
         }
 
+        // The ambient palette reacts to encounter pacing, never to random FX.
+        // Boss warning contrast overrides player Overdrive so danger remains legible.
+        function getArenaAtmosphereProfile(phase, overdrive) {
+            if (phase === 'WARNING' || phase === 'BOSS')
+                return { id:'danger', color:'#ff526d', accent:'#ffb15c', strength:0.83, speed:1.8 };
+            if (overdrive)
+                return { id:'overdrive', color:'#ff3ba7', accent:'#5de7ff', strength:0.8, speed:2.1 };
+            if (phase === 'CRISIS')
+                return { id:'crisis', color:'#f4a44b', accent:'#ff6277', strength:0.68, speed:1.6 };
+            if (phase === 'PRESSURE')
+                return { id:'pressure', color:'#00cde7', accent:'#9776ff', strength:0.54, speed:1.3 };
+            if (phase === 'RECOVERY')
+                return { id:'recovery', color:'#39c7a5', accent:'#48a9db', strength:0.32, speed:0.65 };
+            return { id:'buildup', color:'#25b2d7', accent:'#567ad1', strength:0.39, speed:0.8 };
+        }
+
+        const PREFERS_REDUCED_VFX_MOTION =
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function drawArenaAtmosphere() {
+            if (gameState !== 'PLAYING') return;
+            const profile = getArenaAtmosphereProfile(combatDirector?.profile?.phase,
+                !!player?.overdriveActive);
+            const phaseTime = PREFERS_REDUCED_VFX_MOTION ? 0 : totalTime;
+            const beat = (1 + Math.sin(phaseTime * profile.speed * 2.1)) * 0.5;
+            const intensity = profile.strength * (0.7 + beat * 0.28);
+            const side = Math.min(96, worldWidth * 0.09);
+            ctx.save();
+            // Peripheral circuitry. Never paint solid light over central projectiles.
+            ctx.strokeStyle = profile.color;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.12 + intensity * 0.15;
+            for (const x of [side, worldWidth - side]) {
+                ctx.beginPath();
+                ctx.moveTo(x, 38);
+                ctx.lineTo(x, worldHeight * 0.25);
+                ctx.moveTo(x, worldHeight * 0.75);
+                ctx.lineTo(x, worldHeight - 38);
+                ctx.stroke();
+            }
+            // Receding arcs hint at an industrial reactor beneath the arena floor.
+            const cx = worldWidth / 2, cy = worldHeight / 2;
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.10 + intensity * 0.10;
+            for (let ring = 0; ring < 3; ring++) {
+                const radius = Math.min(worldWidth, worldHeight) * (0.27 + ring * 0.19);
+                const offset = phaseTime * (ring % 2 ? -0.075 : 0.06);
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, offset + ring * 0.4, offset + ring * 0.4 + Math.PI * 0.68);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, offset + Math.PI + ring * 0.4,
+                    offset + Math.PI * 1.65 + ring * 0.4);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 0.12 + intensity * 0.26;
+            ctx.fillStyle = profile.accent;
+            const segmentSize = Math.min(95, Math.max(24, worldWidth * 0.06));
+            for (const [x, y, sign] of [
+                [20, 24, 1], [worldWidth - 20, 24, -1],
+                [20, worldHeight - 24, 1], [worldWidth - 20, worldHeight - 24, -1]
+            ]) {
+                ctx.fillRect(sign > 0 ? x : x - segmentSize, y, segmentSize, 2);
+                ctx.fillRect(x - 1, y - (y > cy ? 24 : 0), 2, 24);
+            }
+            // Subtle synchronized lane markers become sharper during crisis or boss.
+            if (profile.id === 'crisis' || profile.id === 'danger') {
+                ctx.fillStyle = profile.color;
+                ctx.globalAlpha = intensity * (0.13 + beat * 0.13);
+                for (let i = 0; i < 5; i++) {
+                    const y = (i + 1) * worldHeight / 6;
+                    ctx.fillRect(7, y - 1, Math.max(8, side * 0.35), 2);
+                    ctx.fillRect(worldWidth - 7 - Math.max(8, side * 0.35), y - 1,
+                        Math.max(8, side * 0.35), 2);
+                }
+            }
+            ctx.restore();
+        }
+
         function drawSpecialEncounterWarning() {
             if (!combatDirector || !combatDirector.pendingEncounter || gameState !== 'PLAYING') return;
             const plan = combatDirector.pendingEncounter;
@@ -4681,7 +4771,8 @@
             for (const pu of powerups) pu.draw(ctx);
             for (const p of particles) p.draw(ctx);
             for (const ep of enemyProjectiles) ep.draw(ctx);
-            for (const b of bullets) b.draw(ctx);
+            const denseVolley = bullets.length > 150;
+            for (const b of bullets) b.draw(ctx, denseVolley);
             drawWeaponImpacts();
 
             for (const lb of lightningBolts) {
