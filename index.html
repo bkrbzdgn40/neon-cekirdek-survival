@@ -5105,27 +5105,48 @@
             return { x: -offset, y: fraction * worldHeight };
         }
 
-        function getSpecialEncounterPlan(currentWave, theme, side, index) {
-            const type = (index % 2 === 0) ? 'PINCER' : 'SPEARHEAD';
-            if (type === 'PINCER') {
-                return {
-                    type, side, label: 'ÇİFT YÖNLÜ KISKAÇ', warning: SPECIAL_ENCOUNTER_WARNING,
-                    units: [
-                        { type: 'SWARM', side, slot: 0, count: 2 },
-                        { type: currentWave >= 2 ? 'DASHER' : 'SWARM', side, slot: 1, count: 2 },
-                        { type: 'SWARM', side: (side + 2) % 4, slot: 0, count: 2 },
-                        { type: currentWave >= 2 ? 'DASHER' : 'SWARM', side: (side + 2) % 4, slot: 1, count: 2 }
-                    ]
-                };
+        // M5.4: combinations use existing enemy roles and the same Director budget.
+        const SPECIAL_ENCOUNTER_VARIANTS=Object.freeze([
+            Object.freeze({type:'PINCER',from:3,label:'ÇİFT YÖNLÜ KISKAÇ',color:'#ffbf58'}),
+            Object.freeze({type:'SPEARHEAD',from:3,label:'ÖNCÜ HÜCUMU',color:'#ffbf58'}),
+            Object.freeze({type:'ESCORT',from:8,label:'KESKİN NİŞANCI KORUMASI',color:'#fa9cd7'}),
+            Object.freeze({type:'INTERCEPT',from:10,label:'İKİ YÖNLÜ AVCI BASKINI',color:'#77dcff'}),
+            Object.freeze({type:'BREACH',from:13,label:'AĞIR HAT YARMA',color:'#ffac70'})
+        ]);
+        function getSpecialEncounterKinds(currentWave){
+            return SPECIAL_ENCOUNTER_VARIANTS.filter(p=>currentWave>=p.from);
+        }
+        function getSpecialEncounterPlan(currentWave,theme,side,index){
+            const available=getSpecialEncounterKinds(currentWave);
+            const kind=available[Math.max(0,index)%available.length];
+            const opposite=(side+2)%4;
+            const offset=(side+1)%4;
+            const unit=(type,edge,slot,count)=>({type,side:edge,slot,count});
+            let units;
+            if(kind.type==='PINCER'){
+                units=[unit('SWARM',side,0,2),
+                    unit(currentWave>=2?'DASHER':'SWARM',side,1,2),
+                    unit('SWARM',opposite,0,2),
+                    unit(currentWave>=2?'DASHER':'SWARM',opposite,1,2)];
+            }else if(kind.type==='SPEARHEAD'){
+                const guard=currentWave>=4&&theme==='SIEGE'?'SHIELD_BEARER':'TANK';
+                units=[unit('SWARM',side,0,3),unit(guard,side,1,3),
+                    unit(currentWave>=3?'SHOOTER':'SWARM',side,2,3)];
+            }else if(kind.type==='ESCORT'){
+                // Frontline protects the long-range sniper; no bonus enemy HP.
+                units=[unit('SWARM',side,0,4),unit('SHIELD_BEARER',side,1,4),
+                    unit('SNIPER',side,2,4),unit('SWARM',side,3,4)];
+            }else if(kind.type==='INTERCEPT'){
+                units=[unit('DASHER',side,0,2),unit('ASSASSIN',side,1,2),
+                    unit('DASHER',opposite,0,2),unit('SHOOTER',opposite,1,2)];
+            }else{
+                units=[unit('TANK',side,0,3),unit('SPLITTER',side,1,3),
+                    unit('GRAV_WELL',side,2,3),unit('SWARM',offset,0,1)];
             }
-            const guard = currentWave >= 4 && theme === 'SIEGE' ? 'SHIELD_BEARER' : 'TANK';
             return {
-                type, side, label: 'ÖNCÜ HÜCUMU', warning: SPECIAL_ENCOUNTER_WARNING,
-                units: [
-                    { type: 'SWARM', side, slot: 0, count: 3 },
-                    { type: guard, side, slot: 1, count: 3 },
-                    { type: currentWave >= 3 ? 'SHOOTER' : 'SWARM', side, slot: 2, count: 3 }
-                ]
+                type:kind.type,side,label:kind.label,color:kind.color,
+                warning:SPECIAL_ENCOUNTER_WARNING,units,
+                threatCost:Math.round(units.reduce((n,u)=>n+ENEMY_THREAT_COST[u.type],0)*10)/10
             };
         }
 
@@ -5895,12 +5916,35 @@
             return encounterNumber%2===1?3:2;
         }
 
-        function getBossArchetypesForEncounter(encounterNumber) {
-            if(encounterNumber>=1 && encounterNumber<=OPENING_BOSS_ORDER.length){
+        // Fixed first three introductions remain untouched. The late game uses
+        // distinct combinations of existing boss abilities, never extra boss count.
+        const LATE_BOSS_ENCOUNTER_PATTERNS=Object.freeze([
+            Object.freeze({id:'ARMOR_PRISM',label:'ZIRH + PRİZMA',
+                types:Object.freeze(['BOSS_TITAN','BOSS_PRISM'])}),
+            Object.freeze({id:'VOID_CROSSFIRE',label:'HİÇLİK ÇAPRAZI',
+                types:Object.freeze(['BOSS_DESTROYER','BOSS_VOID','BOSS_PRISM'])}),
+            Object.freeze({id:'BREAKING_LINE',label:'KIRICI HAT',
+                types:Object.freeze(['BOSS_TITAN','BOSS_DESTROYER'])}),
+            Object.freeze({id:'GRAVITY_NET',label:'GRAVİTASYON AĞI',
+                types:Object.freeze(['BOSS_TITAN','BOSS_VOID','BOSS_PRISM'])}),
+            Object.freeze({id:'SIEGE_BEAMS',label:'IŞIN KUŞATMASI',
+                types:Object.freeze(['BOSS_DESTROYER','BOSS_PRISM'])}),
+            Object.freeze({id:'VOID_IRON',label:'HİÇLİK VE ZIRH',
+                types:Object.freeze(['BOSS_TITAN','BOSS_DESTROYER','BOSS_VOID'])})
+        ]);
+        function getBossEncounterPlan(encounterNumber){
+            if(encounterNumber>=1&&encounterNumber<=OPENING_BOSS_ORDER.length){
                 const type=OPENING_BOSS_ORDER[encounterNumber-1];
-                return [BOSS_ARCHETYPES.find(arch=>arch.type===type)];
+                return {id:'INTRO_'+encounterNumber,label:BOSS_VISUALS[type].tag,
+                    types:[type]};
             }
-            return [...BOSS_ARCHETYPES].sort(()=>Math.random()-.5);
+            const pattern=LATE_BOSS_ENCOUNTER_PATTERNS[
+                Math.max(0,encounterNumber-4)%LATE_BOSS_ENCOUNTER_PATTERNS.length];
+            return {id:pattern.id,label:pattern.label,types:[...pattern.types]};
+        }
+        function getBossArchetypesForEncounter(encounterNumber){
+            return getBossEncounterPlan(encounterNumber).types.map(type=>
+                BOSS_ARCHETYPES.find(arch=>arch.type===type));
         }
 
         function spawnBossEncounter() {
@@ -5908,8 +5952,9 @@
             if (combatDirector) combatDirector.onBossEncounter();
             nextBossTime = Number.POSITIVE_INFINITY;
             const bossCount = getBossCountForEncounter(bossEncounterCount);
-
+            const encounterPlan=getBossEncounterPlan(bossEncounterCount);
             const selectedArchetypes=getBossArchetypesForEncounter(bossEncounterCount);
+            if(combatDirector) combatDirector.recordBossPattern(encounterPlan.id);
             const spawnedNames = [];
 
             for (let i = 0; i < bossCount; i++) {
@@ -5926,7 +5971,7 @@
             hudBoss.classList.add('flex');
 
             if (bossCount > 1) {
-                showDopamineBanner(`${bossCount} BOSS · ${spawnedNames.join(' + ')}`, '#ff0055');
+                showDopamineBanner(bossCount+' BOSS · '+encounterPlan.label, '#ff0055');
             } else {
                 showDopamineBanner(`BOSS · ${spawnedNames[0]}`, '#ff0055');
             }
@@ -5989,10 +6034,13 @@
                 const warnBanner = document.getElementById('bossWarningBanner');
                 const warnText = document.getElementById('bossWarningText');
                 const upcomingCount=getBossCountForEncounter(bossEncounterCount+1);
+                const upcomingPlan=getBossEncounterPlan(bossEncounterCount+1);
                 if (warnText) {
-                    warnText.textContent = upcomingCount > 1
-                        ? `${upcomingCount} BOSS YAKLAŞIYOR`
-                        : `BOSS YAKLAŞIYOR`;
+                    warnText.textContent=upcomingCount>1?
+                        upcomingCount+' BOSS · '+upcomingPlan.label:
+                        'BOSS YAKLAŞIYOR';
+                    warnText.title=upcomingPlan.types.map(type=>
+                        BOSS_ARCHETYPES.find(arch=>arch.type===type).name).join(' + ');
                 }
                 warnBanner.classList.remove('hidden');
             } else {
