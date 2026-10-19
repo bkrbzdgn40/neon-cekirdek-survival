@@ -395,6 +395,212 @@
             .upgrade-card[data-rarity="LEGENDARY"]::after{display:none;}
         }
 
+
+        /* M4.3.3.1: reward-first rarity hierarchy, with independent weapon/evolution art. */
+        #upgradeCardsContainer{align-items:stretch;}
+        .upgrade-card{
+            --rarity-ink:#53f2a5;--rarity-dark:#092d26;
+            --rarity-halo:rgba(38,220,143,.24);--rarity-spark:rgba(104,255,183,.70);
+            --rarity-rgb:60,238,153;
+            padding-top:24px!important;
+            border-width:2px;
+            background:
+                radial-gradient(ellipse at 83% -12%,var(--rarity-halo),transparent 65%),
+                linear-gradient(155deg,var(--rarity-dark),#081323 53%,#050914);
+            box-shadow:inset 0 2px 0 rgba(255,255,255,.11),0 15px 34px rgba(0,0,0,.40),
+                0 0 19px rgba(var(--rarity-rgb),.19);
+            transition:transform .24s cubic-bezier(.16,1,.3,1),box-shadow .24s ease,filter .24s ease;
+        }
+        .upgrade-card.upgrade-card[data-rarity="COMMON"]{
+            --rarity-ink:#55f7a7;--rarity-dark:#0a342b;--rarity-halo:rgba(38,218,124,.31);
+            --rarity-spark:rgba(149,255,193,.84);--rarity-rgb:57,236,142;
+            --card-accent:#55f7a7;--card-glow:rgba(38,218,124,.30);border-color:#47e898;
+        }
+        .upgrade-card.upgrade-card[data-rarity="RARE"]{
+            --rarity-ink:#67b9ff;--rarity-dark:#0c2252;--rarity-halo:rgba(48,126,255,.36);
+            --rarity-spark:rgba(161,221,255,.92);--rarity-rgb:58,149,255;
+            --card-accent:#67b9ff;--card-glow:rgba(53,148,255,.35);border-color:#4a9eff;
+        }
+        .upgrade-card.upgrade-card[data-rarity="EPIC"]{
+            --rarity-ink:#ff78e4;--rarity-dark:#371348;--rarity-halo:rgba(255,56,193,.37);
+            --rarity-spark:rgba(255,179,241,.95);--rarity-rgb:250,62,194;
+            --card-accent:#ff78e4;--card-glow:rgba(236,57,175,.40);border-color:#ee55d0;
+        }
+
+        /* Make the field behind each card actually change hue, not just its border. */
+        .upgrade-card.upgrade-card[data-rarity="COMMON"]{
+            background:radial-gradient(ellipse at 78% -6%,rgba(37,220,132,.21),transparent 61%),
+                linear-gradient(147deg,#0d332a,#09201f 51%,#050f1b);
+        }
+        .upgrade-card.upgrade-card[data-rarity="RARE"]{
+            background:radial-gradient(ellipse at 78% -6%,rgba(60,154,255,.25),transparent 61%),
+                linear-gradient(147deg,#112952,#0b1b36 51%,#071020);
+        }
+        .upgrade-card.upgrade-card[data-rarity="EPIC"]{
+            background:radial-gradient(ellipse at 78% -6%,rgba(252,64,188,.27),transparent 61%),
+                linear-gradient(147deg,#401547,#22132f 51%,#0a0b1b);
+        }
+        .upgrade-card.upgrade-card[data-rarity="LEGENDARY"]{
+            --rarity-ink:#ffe283;--rarity-dark:#362008;--rarity-halo:rgba(255,200,49,.40);
+            --rarity-spark:rgba(255,248,183,.98);--rarity-rgb:255,193,50;
+            --card-accent:#ffd663;--card-glow:rgba(255,198,51,.48);border-color:#ffd24b;
+            background:
+                radial-gradient(ellipse at 80% -10%,rgba(255,209,65,.36),transparent 65%),
+                linear-gradient(149deg,#422809,#1e1b18 45%,#0b0c17);
+        }
+        /* Colour is always a rarity channel. A purple evolution orbit and
+           blue weapon scanner stay independent of the card's loot tier. */
+        .upgrade-card::before{
+            opacity:1;z-index:0;
+            background:
+                radial-gradient(ellipse at 93% 0%,var(--rarity-halo),transparent 64%),
+                linear-gradient(125deg,rgba(255,255,255,.055),transparent 35%),
+                linear-gradient(10deg,transparent 46%,rgba(var(--rarity-rgb),.075) 100%);
+        }
+        .upgrade-card[data-role="weapon"]::before{
+            background:
+                radial-gradient(ellipse at 87% 0%,var(--rarity-halo),transparent 62%),
+                repeating-linear-gradient(135deg,transparent 0 22px,rgba(78,208,241,.060) 22px 23px,transparent 23px 43px),
+                linear-gradient(170deg,rgba(56,208,238,.08),transparent 65%);
+        }
+        .upgrade-card[data-role="evolution"]::before{
+            background:
+                radial-gradient(ellipse at 86% 3%,var(--rarity-halo),transparent 62%),
+                radial-gradient(ellipse at 18% 96%,rgba(160,100,255,.23),transparent 60%),
+                linear-gradient(145deg,transparent 40%,rgba(64,231,255,.095) 75%,transparent);
+        }
+        .upgrade-card .upgrade-rarity-crown{
+            position:absolute;z-index:0;top:-40px;right:-21px;
+            width:198px;height:171px;pointer-events:none;
+            background:radial-gradient(ellipse,var(--rarity-halo),transparent 70%);
+            opacity:.95;
+        }
+        .upgrade-card .upgrade-rarity-crown::before{
+            content:'';position:absolute;inset:18px;border-radius:50%;
+            border:1px solid rgba(var(--rarity-rgb),.24);
+            transform:rotate(-22deg) scaleX(.85);
+        }
+        .upgrade-card .upgrade-rarity-crown::after{
+            content:'';position:absolute;left:38px;top:20px;width:100px;height:100px;
+            border-radius:50%;border:1px dashed rgba(var(--rarity-rgb),.14);
+        }
+        .upgrade-card[data-rarity="EPIC"] .upgrade-rarity-crown{
+            background:radial-gradient(ellipse,var(--rarity-halo),transparent 70%);
+            animation:upgrade-epic-ambient 3.2s ease-in-out infinite;
+        }
+        .upgrade-card[data-rarity="RARE"] .upgrade-rarity-crown::before{border-style:dashed;}
+        .upgrade-card[data-rarity="LEGENDARY"] .upgrade-rarity-crown::after{border-style:solid;}
+        .upgrade-card .upgrade-rarity-band{
+            position:absolute;inset:0 0 auto;z-index:3;height:6px;pointer-events:none;
+            background:linear-gradient(90deg,transparent 0%,var(--rarity-ink) 15%,
+                var(--rarity-spark) 50%,var(--rarity-ink) 85%,transparent 100%);
+            box-shadow:0 1px 15px rgba(var(--rarity-rgb),.47);
+        }
+        .upgrade-card .upgrade-rarity-gem{
+            position:relative;display:inline-flex;align-items:center;justify-content:center;
+            width:28px;height:28px;border:1px solid rgba(var(--rarity-rgb),.62);
+            border-radius:9px;color:var(--rarity-ink);
+            background:rgba(var(--rarity-rgb),.14);
+            box-shadow:0 0 13px rgba(var(--rarity-rgb),.28);
+        }
+        .upgrade-card .upgrade-rarity-label{
+            display:inline-flex;align-items:center;gap:7px;padding:5px 9px 5px 5px;
+            border:1px solid rgba(var(--rarity-rgb),.78);border-radius:11px;
+            color:var(--rarity-ink);background:rgba(var(--rarity-rgb),.15);
+            box-shadow:inset 0 0 18px rgba(var(--rarity-rgb),.08),
+                0 0 15px rgba(var(--rarity-rgb),.17);
+            font:800 10px 'Orbitron',sans-serif;letter-spacing:.035em;
+        }
+        .upgrade-card .upgrade-rarity-title{font-size:11px;font-weight:900;letter-spacing:.085em;}
+        .upgrade-card .upgrade-role-label{
+            color:#d4dfea;border-color:rgba(177,194,209,.40);
+            background:rgba(7,15,29,.86);
+        }
+        .upgrade-card[data-role="weapon"] .upgrade-role-label{color:#8bdeff;border-color:#428caa;}
+        .upgrade-card[data-role="evolution"] .upgrade-role-label{color:#d3b1ff;border-color:#a979ea;}
+        .upgrade-card .upgrade-icon{
+            width:66px;height:66px;font-size:28px;border:2px solid rgba(var(--rarity-rgb),.75);
+            border-radius:16px;color:var(--rarity-ink);
+            background:
+                radial-gradient(circle at 42% 28%,rgba(var(--rarity-rgb),.25),transparent 74%),
+                linear-gradient(145deg,rgba(var(--rarity-rgb),.17),rgba(6,12,26,.95));
+            box-shadow:0 0 18px rgba(var(--rarity-rgb),.28),inset 0 1px 0 rgba(255,255,255,.14);
+            transition:transform .24s ease,box-shadow .24s ease;
+        }
+        .upgrade-card:hover .upgrade-icon,.upgrade-card:focus-visible .upgrade-icon{
+            transform:translateY(-2px) rotate(-5deg) scale(1.07);
+            box-shadow:0 0 27px rgba(var(--rarity-rgb),.58);
+        }
+        .upgrade-card[data-role="evolution"] .upgrade-icon{
+            border-radius:18px;transform:rotate(-7deg);
+        }
+        .upgrade-card[data-role="evolution"]:hover .upgrade-icon{
+            transform:rotate(4deg) scale(1.08);
+        }
+        .upgrade-card .upgrade-card-name{
+            font-size:clamp(17px,1.5vw,21px);
+            text-shadow:0 0 13px rgba(var(--rarity-rgb),.20);
+        }
+        .upgrade-card:hover .upgrade-card-name{color:var(--rarity-ink);}
+        .upgrade-card .upgrade-card-desc{color:#e0e9f3;font-size:14px;line-height:1.55;}
+        .upgrade-card .upgrade-tier-step{
+            height:6px;width:23px;background:rgba(var(--rarity-rgb),.20);
+        }
+        .upgrade-card .upgrade-tier-step.filled,.upgrade-card .upgrade-tier-step.next{
+            background:var(--rarity-ink);box-shadow:0 0 11px rgba(var(--rarity-rgb),.35);
+        }
+        .upgrade-card .upgrade-card-footer{
+            color:var(--rarity-ink)!important;
+            border-color:rgba(var(--rarity-rgb),.40);
+            background:linear-gradient(90deg,rgba(var(--rarity-rgb),.16),transparent);
+            padding:12px 9px 0;border-radius:0 0 8px 8px;
+        }
+        .upgrade-card .upgrade-card-footer i{transition:transform .2s ease;}
+        .upgrade-card:hover .upgrade-card-footer i{transform:translateX(4px);}
+        .upgrade-card:hover:not(:disabled),.upgrade-card:focus-visible{
+            transform:translateY(-7px) scale(1.015);
+            box-shadow:0 21px 43px rgba(0,0,0,.47),0 0 28px rgba(var(--rarity-rgb),.43),
+                inset 0 0 22px rgba(var(--rarity-rgb),.12);
+        }
+        .upgrade-card:not([data-rarity="LEGENDARY"])::after{
+            content:'';pointer-events:none;position:absolute;inset:0;z-index:0;
+            opacity:0;
+            background:linear-gradient(112deg,transparent 35%,rgba(var(--rarity-rgb),.14) 51%,transparent 65%);
+            transform:translateX(-60%);transition:opacity .18s ease;
+        }
+        .upgrade-card:not([data-rarity="LEGENDARY"]):hover::after{
+            opacity:1;animation:upgrade-color-swish .6s ease-out both;
+        }
+        .upgrade-card .upgrade-evolution-benefit{
+            box-shadow:inset 0 0 24px rgba(150,77,239,.13);
+        }
+        .upgrade-card .upgrade-weapon-brackets{opacity:.83;}
+        .upgrade-card .upgrade-weapon-scan{z-index:1;}
+        @keyframes upgrade-color-swish{
+            from{transform:translateX(-85%);}to{transform:translateX(85%);}
+        }
+        @keyframes upgrade-epic-ambient{
+            0%,100%{opacity:.62;transform:scale(.95);}
+            50%{opacity:1;transform:scale(1.10);}
+        }
+        @media(max-width:767px){
+            .upgrade-card{min-height:282px!important;padding-top:22px!important;}
+            .upgrade-card .upgrade-icon{width:56px;height:56px;font-size:23px;}
+        }
+        @media(hover:none){
+            .upgrade-card:hover:not(:disabled){transform:none;box-shadow:0 0 19px rgba(var(--rarity-rgb),.19);}
+            .upgrade-card:hover .upgrade-icon{transform:none;}
+            .upgrade-card[data-role="evolution"]:hover .upgrade-icon{transform:rotate(-7deg);}
+        }
+        @media(prefers-reduced-motion:reduce){
+            .upgrade-card[data-rarity="EPIC"] .upgrade-rarity-crown,
+            .upgrade-card:not([data-rarity="LEGENDARY"]):hover::after,
+            .upgrade-card .upgrade-icon{animation:none!important;transition:none!important;}
+            .upgrade-card:hover .upgrade-icon{transform:none!important;}
+            .upgrade-card[data-role="evolution"]:hover .upgrade-icon{transform:rotate(-7deg)!important;}
+            .upgrade-card:hover .upgrade-card-footer i{transform:none!important;}
+        }
+
         /* M4.2: content-density without placeholder-sized cards. */
         .menu-panel-v2 {background:linear-gradient(145deg,rgba(7,15,30,.94),rgba(6,9,20,.95));border:1px solid rgba(0,218,238,.24);}
         .menu-chassis-v2{min-height:174px;gap:10px;align-content:start;}
@@ -6103,19 +6309,33 @@
             return {role,label:labels[role],roleIcon:icons[role],willEvolve,
                 isLegendary:rarity.id==='LEGENDARY'};
         }
+
+        // Cosmetic map only; rarity roll weights and power stay in RARITIES.
+        const UPGRADE_RARITY_MOTIFS=Object.freeze({
+            COMMON:Object.freeze({icon:'fa-solid fa-seedling',tag:'YAYGIN'}),
+            RARE:Object.freeze({icon:'fa-solid fa-gem',tag:'NADİR'}),
+            EPIC:Object.freeze({icon:'fa-solid fa-star-of-life',tag:'DESTANSI'}),
+            LEGENDARY:Object.freeze({icon:'fa-solid fa-crown',tag:'EFSANEVİ'})
+        });
         function renderUpgradeCardMarkup(upg,rarity,currentLvl,index,presentation,unlocks) {
             const {role,label,roleIcon,willEvolve,isLegendary}=presentation;
+            const rarityMotif=UPGRADE_RARITY_MOTIFS[rarity.id] || UPGRADE_RARITY_MOTIFS.COMMON;
             const tiers=Array.from({length:MAX_MODULE_TIER},(_,i)=>
                 `<span class="upgrade-tier-step ${i<currentLvl?'filled':i===currentLvl?'next':''}"></span>`).join('');
             const evolution=willEvolve?EVOLUTION_DEFS[upg.id]:null;
             return `
+                <span class="upgrade-rarity-band" aria-hidden="true"></span>
+                <span class="upgrade-rarity-crown" aria-hidden="true"></span>
                 ${role==='evolution'?'<span class="upgrade-evolution-orbit" aria-hidden="true"></span>':''}
                 ${role==='weapon'?'<span class="upgrade-weapon-brackets" aria-hidden="true"></span><span class="upgrade-weapon-scan" aria-hidden="true"></span>':''}
                 <div class="upgrade-card-body">
                     <div class="flex items-start justify-between gap-2 mb-4">
-                        <div class="upgrade-icon text-2xl" aria-hidden="true"><i class="${upg.icon}"></i></div>
+                        <div class="upgrade-icon" aria-hidden="true"><i class="${upg.icon}"></i></div>
                         <div class="flex flex-col items-end gap-2 text-right">
-                            <span class="upgrade-rarity">[${index+1}] ${isLegendary?'✦ ':''}${rarity.name}</span>
+                            <span class="upgrade-rarity-label">
+                                <span class="upgrade-rarity-gem" aria-hidden="true"><i class="${rarityMotif.icon}"></i></span>
+                                <span class="upgrade-rarity-title">[${index+1}] ${isLegendary?'✦ ':''}${rarityMotif.tag}</span>
+                            </span>
                             <span class="upgrade-role-label"><i class="${roleIcon}"></i>${label}</span>
                         </div>
                     </div>

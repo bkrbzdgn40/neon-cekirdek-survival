@@ -2302,3 +2302,73 @@ test('M4.3.3 reduced motion covers all animations and keyboard/reroll flows rema
   assert.match(html,/function triggerLevelUp\(\)/);
   assert.match(html,/function selectUpgradeOption\(index\)/);
 });
+
+
+test('M4.3.3.1 four distinct rarity identities use green, electric blue, pink and gold', () => {
+  const expectations = [
+    ['COMMON','#55f7a7','#0d332a'],
+    ['RARE','#67b9ff','#112952'],
+    ['EPIC','#ff78e4','#401547'],
+    ['LEGENDARY','#ffe283','#422809']
+  ];
+  for(const [id,accent] of expectations){
+    assert.ok(html.includes('.upgrade-card.upgrade-card[data-rarity="'+id+'"]'),id+' selector is missing');
+    assert.ok(html.includes('--rarity-ink:'+accent),id+' identity is missing');
+  }
+  assert.match(html,/--rarity-dark:#0a342b/);
+  assert.match(html,/#0d332a/);
+  assert.match(html,/#112952/);
+  assert.match(html,/#401547/);
+  assert.match(html,/#ffd24b/);
+});
+
+test('M4.3.3.1 markup provides distinct icons and explicit rarity names for all four drops', () => {
+  const {run}=setup();
+  const rows=JSON.parse(run("(()=>{const u=UPGRADES_POOL.find(v=>v.id==='homing');return JSON.stringify(RARITIES.map(r=>{const motif=UPGRADE_RARITY_MOTIFS[r.id];const p=getUpgradeCardPresentation(u,r,0);const html=renderUpgradeCardMarkup(u,r,0,0,p,[]);return {id:r.id,icon:motif.icon,tag:motif.tag,markup:html};}));})()"));
+  assert.equal(rows.length,4);
+  assert.equal(new Set(rows.map(r=>r.icon)).size,4);
+  for(const row of rows) {
+    assert.ok(row.markup.includes(row.icon),row.id);
+    assert.ok(row.markup.includes(row.tag),row.id);
+    assert.ok(row.markup.includes('upgrade-rarity-band'),row.id);
+    assert.ok(row.markup.includes('upgrade-rarity-crown'),row.id);
+    assert.ok(row.markup.includes('upgrade-rarity-gem'),row.id);
+    assert.ok(row.markup.includes('upgrade-weapon-scan'),row.id);
+    assert.equal(row.markup.includes('✦ EFSANEVİ'),row.id==='LEGENDARY');
+  }
+});
+
+test('M4.3.3.1 rarity is independent of evolution and weapon roles for every tier', () => {
+  const {run}=setup();
+  const rows=JSON.parse(run("(()=>{const weapon=UPGRADES_POOL.find(u=>u.id==='homing'),system=UPGRADES_POOL.find(u=>u.id==='vampiric');return JSON.stringify(RARITIES.map(r=>{const e=getUpgradeCardPresentation(weapon,r,2),w=getUpgradeCardPresentation(weapon,r,0),m=getUpgradeCardPresentation(system,r,0);return {rarity:r.id,ev:e.role,weapon:w.role,utility:m.role,evolutionMarkup:renderUpgradeCardMarkup(weapon,r,2,0,e,[]),weaponMarkup:renderUpgradeCardMarkup(weapon,r,0,0,w,[])};}));})()"));
+  for(const x of rows){
+    assert.equal(x.ev,'evolution');
+    assert.equal(x.weapon,'weapon');
+    assert.equal(x.utility,'module');
+    assert.match(x.evolutionMarkup,/upgrade-evolution-orbit/);
+    assert.match(x.evolutionMarkup,/Küme Roketleri/);
+    assert.doesNotMatch(x.evolutionMarkup,/upgrade-weapon-scan/);
+    assert.match(x.weaponMarkup,/upgrade-weapon-brackets/);
+    assert.match(x.weaponMarkup,/upgrade-weapon-scan/);
+    assert.ok(x.evolutionMarkup.includes('upgrade-rarity-gem'));
+  }
+});
+
+test('M4.3.3.1 legacy rarity odds and module power remain unchanged', () => {
+  const {run}=setup();
+  const data=JSON.parse(run("(()=>{startNewGame();return JSON.stringify({rarities:RARITIES.map(r=>[r.id,r.weight,r.mult]),modules:UPGRADES_POOL.length,evolutions:Object.keys(EVOLUTION_DEFS).length,tier:MAX_MODULE_TIER});})()"));
+  assert.deepEqual(data.rarities,[['COMMON',48,1],['RARE',30,1.35],['EPIC',15,1.75],['LEGENDARY',7,2.3]]);
+  assert.equal(data.modules,11);
+  assert.equal(data.evolutions,11);
+  assert.equal(data.tier,3);
+});
+
+test('M4.3.3.1 additional animation is disabled by reduced motion and clipped for small screens', () => {
+  assert.match(html,/@keyframes upgrade-epic-ambient/);
+  assert.match(html,/@keyframes upgrade-color-swish/);
+  assert.match(html,/\.upgrade-card\[data-rarity="EPIC"\] \.upgrade-rarity-crown,/);
+  assert.match(html,/\.upgrade-card:hover \.upgrade-icon/);
+  assert.match(html,/\.upgrade-card\{min-height:282px!important;padding-top:22px!important/);
+  assert.match(html,/\.upgrade-card\{[\s\S]*?overflow:hidden/);
+  assert.match(html,/animation:none!important/);
+});
