@@ -927,10 +927,10 @@
                         <span id="ctrlModeText">HİBRİT · M</span>
                     </button>
                     <div class="h-4 w-px bg-gray-800 mx-1"></div>
-                    <button id="musicToggleBtn" type="button" title="Synthwave Bas Ritmi" class="text-purple-400 hover:text-white px-1 text-sm flex items-center gap-1 cursor-pointer">
+                    <button id="musicToggleBtn" type="button" title="Adaptif Savaş Müziği (aç/kapat)" aria-label="Müzik aç veya kapat" class="text-purple-400 hover:text-white px-1 text-sm flex items-center gap-1 cursor-pointer">
                         <i id="musicIcon" class="fa-solid fa-music"></i>
                     </button>
-                    <button id="soundToggleBtn" type="button" title="Ses Efektleri" class="text-cyan-400 hover:text-white px-1 text-sm cursor-pointer">
+                    <button id="soundToggleBtn" type="button" title="Ses Efektleri (aç/kapat)" aria-label="Ses efektlerini aç veya kapat" class="text-cyan-400 hover:text-white px-1 text-sm cursor-pointer">
                         <i id="soundIcon" class="fa-solid fa-volume-high"></i>
                     </button>
                 </div>
@@ -1370,6 +1370,21 @@
     </div>
 
     <script>
+
+        // Audio arrangement only. Game timing and collision do not depend on music.
+        const ADAPTIVE_MUSIC_PROFILES = Object.freeze({
+            NORMAL: Object.freeze({beat:.24,root:1,volume:.027,filter:280,accentEvery:8,accentGain:.013}),
+            APPROACH: Object.freeze({beat:.215,root:.91,volume:.030,filter:320,accentEvery:4,accentGain:.014}),
+            BOSS: Object.freeze({beat:.19,root:.82,volume:.034,filter:370,accentEvery:4,accentGain:.016}),
+            OVERDRIVE: Object.freeze({beat:.155,root:1.22,volume:.036,filter:405,accentEvery:2,accentGain:.018})
+        });
+        function getCombatMusicPhase(isOverdrive, bossCount, bossApproaching) {
+            if (isOverdrive) return 'OVERDRIVE';
+            if (bossCount>0) return 'BOSS';
+            if (bossApproaching) return 'APPROACH';
+            return 'NORMAL';
+        }
+
         class SoundEngine {
             constructor() {
                 this.ctx = null;
@@ -1379,13 +1394,26 @@
                 this.musicStep = 0;
                 this.bassNotes = [55, 55, 65.41, 55, 73.42, 65.41, 49, 55];
                 this.lastSfxTime = Object.create(null);
+                this.musicPhase = 'NORMAL';
+                this.lastMusicPhase = null;
+                this.sfxWindowAt = -Infinity;
+                this.sfxWindowCount = 0;
+                this.sfxWindowSeconds = .12;
+                this.sfxWindowMax = 9; // Low-priority effects only: phase warnings bypass it.
             }
 
-            allowSfx(channel, spacingSeconds) {
+            allowSfx(channel, spacingSeconds, important = false) {
                 if (!this.ctx) return false;
                 const now = this.ctx.currentTime;
+                if (now < this.sfxWindowAt || now - this.sfxWindowAt >= this.sfxWindowSeconds) {
+                    this.sfxWindowAt = now;
+                    this.sfxWindowCount = 0;
+                }
                 const previous = this.lastSfxTime[channel];
                 if (previous !== undefined && now - previous < spacingSeconds) return false;
+                // An encounter must never hide its warning cue behind cheap explosions.
+                if (!important && this.sfxWindowCount >= this.sfxWindowMax) return false;
+                this.sfxWindowCount++;
                 this.lastSfxTime[channel] = now;
                 return true;
             }
@@ -1404,18 +1432,37 @@
                 }
             }
 
-            updateMusic(dt, isActive, isOverdrive = false) {
-                if (!this.enabled || !this.musicEnabled || !isActive || !this.ctx) return;
-                this.musicTimer -= dt * (isOverdrive ? 1.45 : 1.0);
-                if (this.musicTimer <= 0) {
-                    this.musicTimer = 0.22;
-                    const freq = this.bassNotes[this.musicStep % this.bassNotes.length] * (isOverdrive ? 1.25 : 1.0);
-                    this.musicStep++;
-                    this.playBassPulse(freq);
+            updateMusic(dt, isActive, isOverdrive = false, bossCount = 0, bossApproaching = false) {
+                if (!isActive) {
+                    this.musicTimer = 0;
+                    this.musicStep = 0;
+                    this.lastMusicPhase = null;
+                    this.musicPhase = 'NORMAL';
+                    return;
+                }
+                const phase = getCombatMusicPhase(isOverdrive, bossCount, bossApproaching);
+                this.musicPhase = phase;
+                if (phase !== this.lastMusicPhase) {
+                    this.lastMusicPhase = phase;
+                    this.musicTimer = 0; // Introduce the next mood promptly, never queue old layers.
+                    this.musicStep = 0;
+                }
+                // SFX toggle never mutes music. The two HUD switches are independent.
+                if (!this.musicEnabled || !this.ctx || this.ctx.state === 'suspended') return;
+                this.musicTimer -= Math.max(0,dt);
+                if (this.musicTimer > 0) return;
+                const profile = ADAPTIVE_MUSIC_PROFILES[phase];
+                this.musicTimer = profile.beat;
+                const step = this.musicStep++;
+                const freq = this.bassNotes[step % this.bassNotes.length] * profile.root;
+                this.playBassPulse(freq,profile);
+                if (step % profile.accentEvery === profile.accentEvery - 1) {
+                    this.playMusicAccent(freq*4,profile);
                 }
             }
 
-            playBassPulse(freq) {
+            playBassPulse(freq,profile=ADAPTIVE_MUSIC_PROFILES.NORMAL) {
+                if (!this.ctx) return;
                 try {
                     const now = this.ctx.currentTime;
                     const osc = this.ctx.createOscillator();
@@ -1424,26 +1471,40 @@
 
                     osc.type = 'sawtooth';
                     osc.frequency.setValueAtTime(freq, now);
-
                     filter.type = 'lowpass';
-                    filter.frequency.setValueAtTime(340, now);
+                    filter.frequency.setValueAtTime(profile.filter, now);
                     filter.frequency.exponentialRampToValueAtTime(80, now + 0.18);
-
-                    gain.gain.setValueAtTime(0.035, now);
+                    gain.gain.setValueAtTime(profile.volume, now);
                     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
 
                     osc.connect(filter);
                     filter.connect(gain);
                     gain.connect(this.ctx.destination);
-
                     osc.start(now);
                     osc.stop(now + 0.19);
                 } catch (e) {}
             }
 
+            playMusicAccent(freq,profile) {
+                if (!this.ctx) return;
+                try {
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = this.musicPhase === 'OVERDRIVE' ? 'triangle' : 'sine';
+                    osc.frequency.setValueAtTime(Math.min(900,freq),now);
+                    osc.frequency.exponentialRampToValueAtTime(Math.min(950,freq*1.07),now+.13);
+                    gain.gain.setValueAtTime(profile.accentGain,now);
+                    gain.gain.exponentialRampToValueAtTime(.001,now+.14);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);osc.stop(now+.14);
+                } catch(e) {}
+            }
+
             playThreatCue(kind = 'raid') {
                 // Short distinct UI cue, separated from bass and rapid-fire audio.
-                if (!this.enabled || !this.allowSfx('cue-' + kind, 1.5)) return;
+                if (!this.enabled || !this.allowSfx('cue-' + kind, 1.5, true)) return;
                 try {
                     const notes = {boss:[260,195],raid:[570,430],phase:[440,310],event:[740,920]}[kind] || [570,430];
                     notes.forEach((freq,index) => {
@@ -1462,7 +1523,7 @@
             }
 
             playLaser(isCrit = false) {
-                if (!this.enabled || !this.allowSfx('laser', 0.035)) return;
+                if (!this.enabled || !this.allowSfx('laser', 0.035, isCrit)) return;
                 try {
                     const now = this.ctx.currentTime;
                     const osc = this.ctx.createOscillator();
@@ -1482,7 +1543,7 @@
             }
 
             playExplosion(isBig = false) {
-                if (!this.enabled || !this.allowSfx(isBig ? 'bigExplosion' : 'smallExplosion', isBig ? 0.12 : 0.06)) return;
+                if (!this.enabled || !this.allowSfx(isBig ? 'bigExplosion' : 'smallExplosion', isBig ? 0.12 : 0.06, isBig)) return;
                 try {
                     const now = this.ctx.currentTime;
                     const osc = this.ctx.createOscillator();
@@ -1523,7 +1584,7 @@
             }
 
             playDash() {
-                if (!this.enabled || !this.ctx) return;
+                if (!this.enabled || !this.allowSfx('dash', .1, true)) return;
                 try {
                     const now = this.ctx.currentTime;
                     const osc = this.ctx.createOscillator();
@@ -1543,7 +1604,7 @@
             }
 
             playLevelUp() {
-                if (!this.enabled || !this.ctx) return;
+                if (!this.enabled || !this.allowSfx('levelup', .25, true)) return;
                 try {
                     const notes = [440, 554.37, 659.25, 880];
                     notes.forEach((freq, idx) => {
@@ -1565,7 +1626,7 @@
             }
 
             playJackpot() {
-                if (!this.enabled || !this.ctx) return;
+                if (!this.enabled || !this.allowSfx('jackpot', .24, true)) return;
                 try {
                     const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
                     notes.forEach((freq, idx) => {
@@ -5486,7 +5547,10 @@
                 }
             }
 
-            audio.updateMusic(dt, gameState === 'PLAYING', player && player.overdriveActive);
+            const bossApproaching = activeBosses.length===0 &&
+                totalTime >= nextBossTime-3.8 && totalTime<nextBossTime;
+            audio.updateMusic(dt, gameState === 'PLAYING', !!player?.overdriveActive,
+                activeBosses.length, bossApproaching);
 
             if (waveTimer >= 16) {
                 waveTimer = 0;
