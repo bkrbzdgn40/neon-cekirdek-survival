@@ -1,6 +1,6 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.1 | İlk plan: 18.10.2026 | Durum: 19.10.2026
+Sürüm: 1.2 | İlk plan: 18.10.2026 | Durum: 19.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
@@ -438,3 +438,23 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
   altın/XP balans değerlendirmeleri.
 [SONRAKİ] M5.2 ileri görev çeşitliliği; M5.3 arena olayları;
   M5.4 alternatif tehditler; M5.5 oyun sonu analiz raporu.
+
+
+======================================================================
+14. M5.1.1 — OYUNCU GERİ BİLDİRİMİ: BOSS TEMPOSU VE SANDIK ŞANSI
+======================================================================
+
+[UYGULANDI] Birinci ve ikinci boss encounter tek boss.
+  Üçüncü ve dördüncü iki boss, beşinci üç boss ile kademeli artış.
+[UYGULANDI] Elit sandıklarında 60 saniyede iki adet kesin tavan
+  kaldırıldı. Başarılı düşüş başına azalan olasılık: %65, %38, %22,
+  %12, %6. 60 saniyelik oyun saati dilimlerinde sıfırlanır.
+[UYGULANDI] 5 saniyelik anti-yığılma beklemesi, en çok 4 adet
+  alınmamış elit sandığı; boss sandığı her karşılaşmada garanti.
+[UYGULANDI] Boss sonrası zorunlu NEFES 9 yerine 4 saniye;
+  periyodik NEFES'teki düşük spawn/token temposu yumuşatıldı.
+[KORUNDU] Boss canı, hareketleri, saldırı kalıpları, evrim/XP
+  ve diğer oynanış mekanikleri, premium boss ödülleri.
+[AÇIK] Gerçek üç şasiyle uzun koşuda FPS, boss adaleti ve
+  60 saniyelik döngülerin ödül hissi testleri. Issue #2 açık.
+[SONRAKİ] M5.2: Gelişmiş görev sistemi.
