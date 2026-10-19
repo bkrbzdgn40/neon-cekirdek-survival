@@ -2372,3 +2372,64 @@ test('M4.3.3.1 additional animation is disabled by reduced motion and clipped fo
   assert.match(html,/\.upgrade-card\{[\s\S]*?overflow:hidden/);
   assert.match(html,/animation:none!important/);
 });
+
+
+test('M4.3.3.2 complementary icon palette differs for each rarity', () => {
+  const css=html.slice(html.indexOf('/* M4.3.3.2:'),html.indexOf('/* M4.2: content-density'));
+  const expected=[
+    ['COMMON','#ffae70','255,174,112'],
+    ['RARE','#e3a6ff','227,166,255'],
+    ['EPIC','#8af4ff','138,244,255'],
+    ['LEGENDARY','#fff8e6','255,248,230']
+  ];
+  assert.equal(new Set(expected.map(x=>x[1])).size,4);
+  for(const [rarity,color,rgb] of expected) {
+    const key='.upgrade-card.upgrade-card[data-rarity="'+rarity+'"] {';
+    const block=css.split(key)[1]?.split('}')[0];
+    assert.ok(block,rarity+' selector missing');
+    assert.ok(block.includes('--rarity-contrast:'+color),rarity+' contrast missing');
+    assert.ok(block.includes('--rarity-contrast-rgb:'+rgb),rarity+' glow missing');
+  }
+  assert.ok(!expected.slice(0,3).some(x=>/#ffd|#ffe|#ffcf/.test(x[1])),'gold must stay legendary-only');
+});
+
+test('M4.3.3.2 accent applies to upgrade and badge icons, next tier, CTA arrow and top band', () => {
+  const css=html.slice(html.indexOf('/* M4.3.3.2:'),html.indexOf('/* M4.2: content-density'));
+  for(const selector of [
+    '.upgrade-card .upgrade-icon i',
+    '.upgrade-card .upgrade-rarity-gem i',
+    '.upgrade-card .upgrade-tier-step.next',
+    '.upgrade-card .upgrade-card-footer i',
+    '.upgrade-card .upgrade-rarity-band'
+  ]) {
+    assert.ok(css.includes(selector),selector+' missing');
+  }
+  assert.match(css,/\.upgrade-card \.upgrade-icon i \{[\s\S]*?color:var\(--rarity-contrast\)/);
+  assert.match(css,/\.upgrade-card \.upgrade-tier-step.next \{[\s\S]*?background:var\(--rarity-contrast\)/);
+  assert.match(css,/\.upgrade-card \.upgrade-card-footer i \{[\s\S]*?color:var\(--rarity-contrast\)/);
+  assert.match(css,/\.upgrade-card \.upgrade-rarity-band \{[\s\S]*?var\(--rarity-contrast\)/);
+});
+
+test('M4.3.3.2 evolution and weapon overlays persist for every rarity with unchanged choices', () => {
+  const {run}=setup();
+  const models=JSON.parse(run("(()=>{const w=UPGRADES_POOL.find(u=>u.id==='homing');return JSON.stringify(RARITIES.map(r=>{const e=getUpgradeCardPresentation(w,r,2),v=getUpgradeCardPresentation(w,r,0);return {rarity:r.id,evolution:renderUpgradeCardMarkup(w,r,2,0,e,[]),weapon:renderUpgradeCardMarkup(w,r,0,1,v,[])};}));})()"));
+  assert.equal(models.length,4);
+  for(const model of models) {
+    assert.match(model.evolution,/upgrade-evolution-orbit/);
+    assert.match(model.evolution,/EVRİMİ AÇ/);
+    assert.match(model.weapon,/upgrade-weapon-scan/);
+    assert.match(model.weapon,/SİLAHI GÜÇLENDİR/);
+  }
+});
+
+test('M4.3.3.2 original rarity odds and keyboard/reduced-motion safeguards remain intact', () => {
+  const {run}=setup();
+  const odds=JSON.parse(run("JSON.stringify(RARITIES.map(({id,weight,mult})=>({id,weight,mult})))"));
+  assert.deepEqual(odds.map(x=>x.weight),[48,30,15,7]);
+  assert.deepEqual(odds.map(x=>x.mult),[1,1.35,1.75,2.3]);
+  assert.match(html,/card\.setAttribute\('aria-keyshortcuts',String\(idx\+1\)\)/);
+  assert.match(html,/else if \(e\.code === 'KeyR'\)/);
+  const css=html.slice(html.indexOf('/* M4.3.3.2:'),html.indexOf('/* M4.2: content-density'));
+  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
+  assert.match(css,/\.upgrade-card \.upgrade-icon i \{transition:none!important;\}/);
+});
