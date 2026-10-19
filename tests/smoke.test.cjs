@@ -2825,3 +2825,103 @@ test('M5.2 second boss pre-warning now uses actual encounter count helper',()=>{
   const {run}=setup();
   assert.deepEqual(JSON.parse(run("JSON.stringify([1,2,3,4,5].map(getBossCountForEncounter))")),[1,1,2,2,3]);
 });
+
+
+test('M5.3 six kinds unlock by wave, preserving first RELAY and VAULT',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("JSON.stringify({early:[0,1,2].map(i=>chooseArenaEventKind(i,4)),six:[0,1,2,3,4,5].map(i=>chooseArenaEventKind(i,12)),w6:chooseArenaEventKind(2,6),w7:chooseArenaEventKind(3,7),w9:chooseArenaEventKind(4,9),all:ARENA_EVENT_SEQUENCE})"));
+ assert.deepEqual(a.early,['RELAY','VAULT','RELAY']);
+ assert.deepEqual(a.six,['RELAY','VAULT','STORM','REACTOR','CORRIDOR','ANOMALY']);
+ assert.equal(a.w6,'STORM');assert.equal(a.w7,'REACTOR');assert.equal(a.w9,'CORRIDOR');
+ assert.deepEqual(a.all,a.six);
+});
+
+test('M5.3 arena kinds have finite activation risks and bounded capture times',()=>{
+ const {run}=setup();const specs=JSON.parse(run("JSON.stringify(ARENA_EVENT_SPECS)"));
+ assert.equal(Object.keys(specs).length,6);
+ for(const [name,x] of Object.entries(specs)){
+  assert.ok(x.minWave>=4 && x.minWave<=11,name);
+  assert.ok(x.duration>=3 && x.duration<=4.1,name);
+  assert.ok(x.cost>=0 && x.cost<=12,name);
+  assert.ok(x.label.length>12,name);
+  assert.match(x.color,/^#[0-9a-f]{6}$/i);
+ }
+ assert.equal(specs.VAULT.cost,12);assert.equal(specs.REACTOR.cost,10);
+});
+
+test('M5.3 director rotates live six kinds without overlaps or repeated rewards',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();wave=12;totalTime=150;nextBossTime=500;combatDirector.nextArenaAt=0;const kinds=[];for(let i=0;i<6;i++){combatDirector.update(.01);const e=combatDirector.activeArenaEvent;kinds.push(e?.kind);combatDirector.update(.01);e.update(18);combatDirector.nextArenaAt=0;}return JSON.stringify({kinds,offered:combatDirector.stats.arenaOffered,expired:combatDirector.stats.arenaExpired,active:combatDirector.activeArenaEvent,byKind:combatDirector.stats.arenaByKind});})()"));
+ assert.deepEqual(a.kinds,['RELAY','VAULT','STORM','REACTOR','CORRIDOR','ANOMALY']);
+ assert.equal(a.offered,6);assert.equal(a.expired,6);assert.equal(a.active,null);
+ for(const kind of a.kinds)assert.equal(a.byKind[kind].offered,1);
+});
+
+test('M5.3 storm costs momentum on voluntary capture, not when ignored',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();wave=8;totalTime=150;player.momentum=80;const e=new ArenaEvent('STORM',200,200);combatDirector.activeArenaEvent=e;const before={hp:player.hp,momentum:player.momentum,xp:player.xp};e.update(.5);const idle=player.momentum;player.x=200;player.y=200;e.update(1);const inside=player.momentum;e.update(2.6);return JSON.stringify({before,idle,inside,dead:e.dead,spent:e.momentumSpent,after:player.momentum,xp:player.xp,hp:player.hp,done:combatDirector.stats.arenaCompleted});})()"));
+ assert.equal(a.idle,a.before.momentum);assert.equal(a.hp,a.before.hp);
+ assert.ok(a.inside<a.idle);assert.ok(a.spent>20&&a.spent<40);
+ assert.equal(a.dead,true);assert.ok(a.xp>a.before.xp);
+ assert.ok(a.after>a.inside);assert.equal(a.done,1);
+});
+
+test('M5.3 damaged reactor pays 10 HP only once and rewards gold and haste',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();wave=8;totalTime=150;const e=new ArenaEvent('REACTOR',player.x,player.y);combatDirector.activeArenaEvent=e;player.hp=80;const gold=sessionGold;e.update(.3);const one=player.hp;e.update(.3);const two=player.hp;e.update(3.3);return JSON.stringify({one,two,hp:player.hp,gold:sessionGold-gold,ledger:combatDirector.stats.goldBySource.arena,haste:player.hasteTimer,dead:e.dead,done:combatDirector.stats.arenaCompleted});})()"));
+ assert.equal(a.one,70);assert.equal(a.two,70);assert.equal(a.hp,70);
+ assert.equal(a.gold,49);assert.equal(a.ledger,49);
+ assert.equal(a.haste,5);assert.equal(a.dead,true);assert.equal(a.done,1);
+});
+
+test('M5.3 reactor refuses low-HP activation and refunds boss cancellation',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();wave=8;totalTime=150;nextBossTime=500;const e=new ArenaEvent('REACTOR',player.x,player.y);combatDirector.activeArenaEvent=e;player.hp=24;e.update(.5);const refused=!e.committed;player.hp=65;e.update(.5);const paid=player.hp;nextBossTime=totalTime+10;combatDirector.update(.01);return JSON.stringify({refused,paid,hp:player.hp,cancelled:combatDirector.stats.arenaCancelled,event:combatDirector.activeArenaEvent});})()"));
+ assert.equal(a.refused,true);assert.equal(a.paid,55);
+ assert.equal(a.hp,65);assert.equal(a.cancelled,1);assert.equal(a.event,null);
+});
+
+test('M5.3 corridor blocks a bounded number of shots only inside its lane',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();wave=10;totalTime=150;const e=new ArenaEvent('CORRIDOR',player.x,player.y);combatDirector.activeArenaEvent=e;enemyProjectiles=[];for(let i=0;i<20;i++)enemyProjectiles.push(new EnemyProjectile(e.x,e.y,0,0,4,8));enemyProjectiles.push(new EnemyProjectile(e.x+200,e.y+150,0,0,4,8));e.update(.5);return JSON.stringify({blocked:e.projectilesBlocked,left:enemyProjectiles.length,outside:enemyProjectiles.some(b=>b.x===e.x+200)});})()"));
+ assert.equal(a.blocked,8);assert.equal(a.left,13);assert.equal(a.outside,true);
+});
+
+test('M5.3 corridor offers one bounded Cinnet and momentum reward',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();wave=10;totalTime=150;player.momentum=10;const e=new ArenaEvent('CORRIDOR',player.x,player.y);combatDirector.activeArenaEvent=e;const before=player.overdrive;e.update(4.2);const after=player.overdrive;e.update(1);return JSON.stringify({dead:e.dead,before,after,again:player.overdrive,momentum:player.momentum,done:combatDirector.stats.arenaCompleted});})()"));
+ assert.equal(a.dead,true);assert.equal(a.after-a.before,38);
+ assert.equal(a.again,a.after);assert.equal(a.momentum,30);assert.equal(a.done,1);
+});
+
+test('M5.3 anomaly requires the ring rather than the unstable center',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();wave=12;totalTime=150;const e=new ArenaEvent('ANOMALY',200,200);combatDirector.activeArenaEvent=e;player.x=200;player.y=200;e.update(1);const center=e.progress;player.x=250;e.update(2);const ring=e.progress;player.x=400;e.update(.5);const lost=e.progress;player.x=250;e.update(2.8);return JSON.stringify({center,ring,lost,dead:e.dead,invuln:player.invulnTimer,done:combatDirector.stats.arenaCompleted});})()"));
+ assert.equal(a.center,0);assert.equal(a.ring,2);assert.ok(a.lost<a.ring);
+ assert.equal(a.dead,true);assert.ok(a.invuln>=2.2);assert.equal(a.done,1);
+});
+
+test('M5.3 all unclaimed events expire without penalty',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{const out=[];for(const kind of ARENA_EVENT_SEQUENCE){startNewGame();totalTime=150;player.momentum=65;const e=new ArenaEvent(kind,15,15);combatDirector.activeArenaEvent=e;const x=[player.hp,sessionGold,player.overdrive,player.momentum];e.update(18);out.push({kind,same:JSON.stringify(x)===JSON.stringify([player.hp,sessionGold,player.overdrive,player.momentum]),expired:combatDirector.stats.arenaExpired,empty:combatDirector.activeArenaEvent===null});}return JSON.stringify(out);})()"));
+ assert.equal(a.length,6);assert.ok(a.every(x=>x.same&&x.expired===1&&x.empty));
+});
+
+test('M5.3 per-kind diagnostics are copy-safe and reset on new run',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();wave=12;totalTime=150;nextBossTime=500;combatDirector.arenaEventIndex=4;combatDirector.nextArenaAt=0;combatDirector.update(.01);const kind=combatDirector.activeArenaEvent.kind;combatDirector.activeArenaEvent.update(18);const snapshot=combatDirector.getDiagnostics();const original=snapshot.arenaByKind[kind].expired;snapshot.arenaByKind[kind].expired=999;const unchanged=combatDirector.getDiagnostics().arenaByKind[kind].expired;startNewGame();return JSON.stringify({kind,original,unchanged,fresh:combatDirector.getDiagnostics().arenaByKind,offers:combatDirector.stats.arenaOffered});})()"));
+ assert.equal(a.kind,'CORRIDOR');assert.equal(a.original,1);assert.equal(a.unchanged,1);
+ assert.deepEqual(a.fresh,{});assert.equal(a.offers,0);
+});
+
+test('M5.3 optional events never overlap imminent bosses or directional raids',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();wave=12;totalTime=150;nextBossTime=160;combatDirector.nextArenaAt=0;combatDirector.update(.016);const boss=!!combatDirector.activeArenaEvent;nextBossTime=500;combatDirector.pendingEncounter={type:'RAID',warning:3};combatDirector.update(.016);const raid=!!combatDirector.activeArenaEvent;combatDirector.pendingEncounter=null;combatDirector.update(.016);return JSON.stringify({boss,raid,offered:combatDirector.activeArenaEvent?.kind});})()"));
+ assert.equal(a.boss,false);assert.equal(a.raid,false);assert.equal(a.offered,'RELAY');
+});
+
+test('M5.3 six optional events and offscreen hints draw with bounded visuals',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();const kinds=[];for(const kind of ARENA_EVENT_SEQUENCE){const e=new ArenaEvent(kind,200,200);e.progress=e.required*.45;e.draw(ctx);combatDirector.activeArenaEvent=e;drawOffscreenIndicators();kinds.push(e.kind);}return JSON.stringify(kinds);})()"));
+ assert.deepEqual(a,['RELAY','VAULT','STORM','REACTOR','CORRIDOR','ANOMALY']);
+});
