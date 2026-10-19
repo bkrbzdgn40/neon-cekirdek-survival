@@ -2494,3 +2494,76 @@ test('M4.4.1 original boss cues and audio controls preserve category behavior', 
   assert.match(html,/audio\.enabled = !audio\.enabled/);
   assert.match(html,/title="Adaptif Savaş Müziği \(aç\/kapat\)"/);
 });
+
+
+test('M4.4.2 audio family is derived from real projectile flags', () => {
+  const {run}=setup();
+  const names=JSON.parse(run("(()=>{const b=new Bullet(0,0,1,0,4,5,1,0),n=[];n.push(getWeaponSoundFamily(b));b.prismEvolved=true;n.push(getWeaponSoundFamily(b));b.isHoming=true;n.push(getWeaponSoundFamily(b));b.clusterPayload=true;n.push(getWeaponSoundFamily(b));b.clusterFragment=true;n.push(getWeaponSoundFamily(b));b.reactorPulse=true;n.push(getWeaponSoundFamily(b));b.evoRail=true;n.push(getWeaponSoundFamily(b));return JSON.stringify(n);})()"));
+  assert.deepEqual(names,['plasma','prism','missile','cluster','cluster','reactor','rail']);
+});
+
+test('M4.4.2 unique firing, impact and boss envelopes have bounded frequencies and amplitude', () => {
+  const {run}=setup();
+  const data=JSON.parse(run("JSON.stringify({fire:WEAPON_SFX,hit:HIT_SFX,boss:BOSS_DEATH_SFX})"));
+  assert.deepEqual(Object.keys(data.fire),['plasma','prism','reactor','rail','missile','cluster','arc']);
+  assert.deepEqual(Object.keys(data.boss),['BOSS_DESTROYER','BOSS_TITAN','BOSS_VOID','BOSS_PRISM']);
+  assert.equal(new Set(Object.values(data.boss).map(x=>x.start)).size,4);
+  for(const channel of Object.values(data)){
+    for(const cue of Object.values(channel)){
+      assert.ok(cue.start>=45 && cue.start<=1000);
+      assert.ok(cue.end>=45 && cue.end<=1000);
+      assert.ok(cue.gain>0 && cue.gain<=.09);
+      assert.ok(cue.length>=.05 && cue.length<=.65);
+      assert.ok(cue.lowpass<=1000);
+    }
+  }
+});
+
+test('M4.4.2 shot salvo chooses actual missile and rail and produces only one shot sound', () => {
+  const {run}=setup();
+  const data=JSON.parse(run("(()=>{startNewGame();enemies=[new Enemy(player.x+130,player.y,'TANK')];const names=[];audio.playWeaponFire=kind=>names.push(kind);player.critChance=0;player.autoShoot();player.homingMissiles=1;player.shotCounter=2;player.autoShoot();player.evolutions.add('multishot');player.shotCounter=3;player.autoShoot();return JSON.stringify({names,missile:player.homingMissiles,railShots:player.buildStats.railShots});})()"));
+  assert.deepEqual(data.names,['plasma','missile','rail']);
+  assert.equal(data.missile,1);
+  assert.equal(data.railShots,1);
+});
+
+test('M4.4.2 actual bullet collision triggers matching sound without affecting damage', () => {
+  const {run}=setup();
+  const data=JSON.parse(run("(()=>{startNewGame();player.fireTimer=100;const e=new Enemy(player.x+90,player.y,'TANK');e.speed=0;enemies=[e];const b=new Bullet(e.x,e.y,0,0,16,6,1,0,false,true);bullets=[b];const calls=[];audio.playWeaponHit=(type,crit,boss)=>calls.push([type,crit,boss]);const hp=e.hp;updateGame(.016);return JSON.stringify({damage:hp-e.hp,calls,dead:b.dead});})()"));
+  assert.equal(data.damage,16);
+  assert.deepEqual(data.calls,[['missile',false,false]]);
+  assert.equal(data.dead,true);
+});
+
+test('M4.4.2 shared low-priority impact budget and mute limit audio voices', () => {
+  const {run}=setup();
+  const data=JSON.parse(run("(()=>{const a=new SoundEngine();let now=5,voices=0;const param={setValueAtTime(){},exponentialRampToValueAtTime(){}};a.ctx={get currentTime(){return now;},createOscillator:()=>({frequency:param,connect(){},start(){voices++},stop(){}}),createGain:()=>({gain:param,connect(){}}),createBiquadFilter:()=>({frequency:param,connect(){}}),destination:{}};for(let i=0;i<12;i++)a.playWeaponHit('rail',false);const limited=voices;now+=.07;a.playWeaponHit('missile',false);const later=voices;a.enabled=false;now+=.08;a.playWeaponHit('plasma',true);return JSON.stringify({limited,later,muted:voices});})()"));
+  assert.deepEqual(data,{limited:1,later:2,muted:2});
+});
+
+test('M4.4.2 each boss death has own cue and avoids extra regular explosion', () => {
+  const {run}=setup();
+  const data=JSON.parse(run("(()=>{startNewGame();const heard=[],bursts=[];audio.playBossDeath=kind=>heard.push(kind);audio.playExplosion=big=>bursts.push(big);for(const type of ['BOSS_DESTROYER','BOSS_TITAN','BOSS_VOID','BOSS_PRISM']){const b=new Enemy(player.x+190,player.y,type);b.hp=1;b.takeDamage(9000,0,0,false,false);}return JSON.stringify({heard,bursts,bossKills:combatDirector.stats.bossKills,fx:bossDeathVfx.length});})()"));
+  assert.deepEqual(data.heard,['BOSS_DESTROYER','BOSS_TITAN','BOSS_VOID','BOSS_PRISM']);
+  assert.equal(data.bursts.length,0);
+  assert.equal(data.bossKills,4);
+  assert.ok(data.fx<=3);
+});
+
+test('M4.4.2 successfully executed revive uses restorative cue instead of jackpot', () => {
+  const {run}=setup();
+  const data=JSON.parse(run("(()=>{startNewGame();gameState='REVIVE_PROMPT';let revived=0,jackpots=0;audio.playRevive=()=>revived++;audio.playJackpot=()=>jackpots++;const before=player.freeRevives;executePlayerRevive();return JSON.stringify({revived,jackpots,state:gameState,before,after:player.freeRevives,invulnerable:player.invulnTimer});})()"));
+  assert.equal(data.revived,1);
+  assert.equal(data.jackpots,0);
+  assert.equal(data.state,'PLAYING');
+  assert.equal(data.after,data.before-1);
+  assert.equal(data.invulnerable,3.5);
+});
+
+test('M4.4.2 audio is optional and music / SFX switches stay independent', () => {
+  const {run}=setup();
+  const data=JSON.parse(run("(()=>{const a=new SoundEngine();a.playWeaponFire('rail');a.playWeaponHit('missile');a.playBossDeath('BOSS_TITAN');a.playRevive();return JSON.stringify({ctx:a.ctx,enabled:a.enabled,music:a.musicEnabled});})()"));
+  assert.deepEqual(data,{ctx:null,enabled:true,music:true});
+  assert.match(html,/audio\.musicEnabled = !audio\.musicEnabled/);
+  assert.match(html,/audio\.enabled = !audio\.enabled/);
+});
