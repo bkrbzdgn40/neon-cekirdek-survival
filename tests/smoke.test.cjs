@@ -2171,3 +2171,66 @@ test('M4.3.2.2 phase resonance expires while original boss attack scheduling rem
   assert.equal(r.same,true);
   assert.ok(Math.abs(r.timer-1.14)<1e-9);
 });
+
+
+test('M4.3.2.3 detail tiers react to projectile pressure without altering bullet lists', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();const high=getBossFxQuality();bullets=new Array(110).fill(null);const middle=getBossFxQuality();bullets=new Array(250).fill(null);const low=getBossFxQuality();return JSON.stringify({high,middle,low,count:bullets.length});})()"));
+  assert.deepEqual(x,{high:2,middle:1,low:0,count:250});
+});
+
+test('M4.3.2.3 hit accent follows incoming direction and throttles repeated hits', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();totalTime=5;const boss=new Enemy(280,280,'BOSS_DESTROYER');const original=boss.hp;boss.takeDamage(17,100,0,true,false);const first={angle:boss.bossHitAngle,crit:boss.bossHitAccentCrit,age:boss.bossHitAccentAge,next:boss.bossNextAccentAt};boss.takeDamage(9,0,100,false,false);return JSON.stringify({first,age:boss.bossHitAccentAge,angle:boss.bossHitAngle,health:original-boss.hp,projectiles:enemyProjectiles.length});})()"));
+  assert.equal(x.first.angle,0);
+  assert.equal(x.first.crit,true);
+  assert.equal(x.first.age,.22);
+  assert.equal(x.age,.22);
+  assert.equal(x.angle,0);
+  assert.equal(x.health,26);
+  assert.equal(x.projectiles,0);
+});
+
+test('M4.3.2.3 cosmetic timers decay and all four boss identities still draw', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();const rows=[];for(const a of BOSS_ARCHETYPES){const b=new Enemy(200,200,a.type);b.bossHitAccentAge=.22;b.bossVolleyRecoil=.25;b.bossPhaseFlash=.7;b.bossHitAccentCrit=true;b.hp=b.maxHp*.32;b.bossPhase=3;const radius=b.radius;b.draw(ctx);b.update(.10);rows.push({radiusSame:b.radius===radius,accent:b.bossHitAccentAge,recoil:b.bossVolleyRecoil,flash:b.bossPhaseFlash});}return JSON.stringify(rows);})()"));
+  assert.equal(x.length,4);
+  for(const v of x){assert.equal(v.radiusSame,true);assert.ok(v.accent<.22);assert.ok(v.recoil<.25);assert.ok(v.flash<.7);}
+});
+
+test('M4.3.2.3 low detail collapse draws fewer fragments without touching score or loot', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();const boss=new Enemy(240,240,'BOSS_PRISM');boss.hp=1;boss.die();const fx=bossDeathVfx[0],reward=combatDirector.stats.chestDrops.boss,scoreBefore=score;let fills=0;const spy=new Proxy({}, {get:(_,k)=> k==='fill'?()=>{fills++}:()=>{}});drawBossDeathVfx(spy,fx);const full=fills;bullets=new Array(260).fill(null);fills=0;drawBossDeathVfx(spy,fx);return JSON.stringify({full,low:fills,reward,unchangedScore:score===scoreBefore,life:fx.duration});})()"));
+  assert.equal(x.full,4);
+  assert.equal(x.low,2);
+  assert.equal(x.reward,1);
+  assert.equal(x.unchangedScore,true);
+  assert.ok(x.life<=.85);
+});
+
+test('M4.3.2.3 offscreen boss sprite culling preserves active phase telegraph', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();const b=new Enemy(-900,220,'BOSS_TITAN');activeBosses=[b];b.bossSpecial={angle:0,phase:2,delay:0,timer:.6};let strokes=0;const spy=new Proxy({}, {get:(_,k)=>k==='stroke'?()=>{strokes++}:()=>{}});b.draw(spy);const sprite=strokes;drawBossAttackTelegraphs(spy);return JSON.stringify({sprite,telegraph:strokes,shots:enemyProjectiles.length,timer:b.bossSpecial.timer});})()"));
+  assert.equal(x.sprite,0);
+  assert.ok(x.telegraph>0);
+  assert.equal(x.shots,0);
+  assert.equal(x.timer,.6);
+});
+
+test('M4.3.2.3 visual-only volley recoil resets after a fresh game', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();const boss=new Enemy(180,180,'BOSS_VOID');const before=fireBossPhaseAttack(boss,0,2),recoil=boss.bossVolleyRecoil;startNewGame();const fresh=new Enemy(180,180,'BOSS_VOID');return JSON.stringify({before,recoil,after:fresh.bossVolleyRecoil,deathFx:bossDeathVfx.length});})()"));
+  assert.equal(x.before,5);
+  assert.equal(x.recoil,.25);
+  assert.equal(x.after,0);
+  assert.equal(x.deathFx,0);
+});
+
+
+test('M4.3.2.3 genuine phase transition renews resonance before it decays', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();const b=new Enemy(150,150,'BOSS_DESTROYER');b.bossPhaseFlash=.2;b.hp=b.maxHp*.68;b.updateBossPhases(.01,1,0);const renewed=b.bossPhaseFlash;const phase=b.bossPhase;b.update(.05);return JSON.stringify({renewed,after:b.bossPhaseFlash,phase});})()"));
+  assert.equal(x.phase,2);
+  assert.equal(x.renewed,.7);
+  assert.ok(x.after<.7);
+});
