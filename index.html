@@ -7569,8 +7569,8 @@
                     reportPair('Boss sandığı düştü',reportNumber(drops.boss||0))+
                     reportPair('Toplam açılan',reportNumber(openedTotal))+
                     reportPair('Sandık / dakika',String(r.economy.totalChestsPerMinute||0))+
-                    ...Object.entries(REPORT_CHEST_NAMES).map(([key,label])=>
-                        reportPair(label,reportNumber(opened[key]||0))))+
+                    Object.entries(REPORT_CHEST_NAMES).map(([key,label])=>
+                        reportPair(label,reportNumber(opened[key]||0))).join(''))+
                 reportBlock('SANDIK ÖDÜL DETAYI','fa-gift',
                     reportPair('Altın',reportNumber(rewardSum('gold')))+
                     reportPair('İyileştirilen can',reportNumber(rewardSum('heal')))+
