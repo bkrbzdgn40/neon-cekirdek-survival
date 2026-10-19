@@ -254,6 +254,147 @@
             transform: translateY(-6px) scale(1.02);
         }
     
+
+        /* M4.3.3: category is orthogonal to rarity; gold is LEGENDARY-exclusive. */
+        #upgradeModal{overscroll-behavior:contain;}
+        .upgrade-modal-kicker{display:inline-flex;align-items:center;justify-content:center;padding:6px 14px;border:1px solid #427c96;border-radius:40px;color:#b7f5ff;background:#0d1c2f;font:700 10px 'Orbitron',sans-serif;letter-spacing:.075em;}
+        .upgrade-card{
+            --card-accent:#82cbdc;--card-glow:rgba(66,157,177,.12);
+            position:relative;isolation:isolate;overflow:hidden;min-width:0;min-height:312px;
+            border:1.5px solid var(--card-accent);color:#edf7ff;
+            background:linear-gradient(150deg,rgba(17,27,45,.97),rgba(5,9,21,.99) 67%);
+            box-shadow:inset 0 1px rgba(243,251,255,.05),0 11px 28px rgba(0,0,0,.33);
+            animation:upgrade-card-enter .34s cubic-bezier(.18,.82,.26,1) backwards;
+            transition:transform .22s ease,box-shadow .22s ease;
+        }
+        .upgrade-card:hover:not(:disabled),.upgrade-card:focus-visible{
+            transform:translateY(-5px);
+            box-shadow:0 16px 34px rgba(0,0,0,.44),0 0 21px var(--card-glow);
+        }
+        .upgrade-card:active:not(:disabled){transform:translateY(-1px) scale(.99);}
+        .upgrade-card::before{content:'';pointer-events:none;position:absolute;inset:0;z-index:-1;opacity:.8;background:radial-gradient(circle at 85% 8%,var(--card-glow),transparent 55%);}
+        .upgrade-card[data-role="weapon"]{
+            --card-accent:#67d6ef;--card-glow:rgba(57,187,223,.23);
+            background:linear-gradient(155deg,rgba(13,35,55,.96),rgba(5,10,22,.99) 70%);
+        }
+        .upgrade-card[data-role="weapon"]::before{
+            background:repeating-linear-gradient(135deg,transparent 0 22px,rgba(77,204,234,.06) 22px 23px,transparent 23px 43px),
+                linear-gradient(180deg,transparent 50%,rgba(57,188,223,.1));
+        }
+        .upgrade-card[data-role="evolution"]{
+            --card-accent:#b78cff;--card-glow:rgba(147,89,233,.30);
+            background:linear-gradient(150deg,rgba(34,17,68,.98),rgba(7,10,28,.98) 73%);
+        }
+        .upgrade-card[data-role="evolution"]::before{
+            background:radial-gradient(ellipse at 84% 9%,rgba(160,104,250,.27),transparent 56%),
+                linear-gradient(146deg,transparent 36%,rgba(32,210,230,.09) 73%,transparent);
+        }
+        .upgrade-card[data-rarity="EPIC"]:not([data-role="evolution"]){--card-accent:#ec9ad8;--card-glow:rgba(229,92,171,.24);}
+        .upgrade-card[data-rarity="LEGENDARY"]{
+            --card-accent:#ffd45a;--card-glow:rgba(255,197,70,.46);
+            border:2px solid #ffce53;
+            animation:upgrade-card-enter .34s cubic-bezier(.18,.82,.26,1) backwards,
+                upgrade-legendary-glow 2.6s ease-in-out .4s infinite;
+        }
+        .upgrade-card[data-rarity="LEGENDARY"]::after{
+            content:'';position:absolute;inset:-30% -160%;z-index:-1;pointer-events:none;
+            background:linear-gradient(105deg,transparent 42%,rgba(255,231,140,.31) 50%,transparent 58%);
+            opacity:0;transform:translateX(-42%) rotate(-8deg);
+            animation:upgrade-legendary-shine 4.2s ease-in-out 1s infinite;
+        }
+        .upgrade-card .upgrade-card-body,.upgrade-card .upgrade-card-footer{position:relative;z-index:2;}
+        .upgrade-card .upgrade-icon{
+            display:grid;place-items:center;flex:none;width:54px;height:54px;border-radius:12px;
+            border:1px solid var(--card-accent);color:var(--card-accent);
+            background:linear-gradient(155deg,rgba(14,37,55,.89),rgba(6,11,25,.94));
+            box-shadow:inset 0 0 14px var(--card-glow);
+        }
+        .upgrade-card[data-role="evolution"] .upgrade-icon{border-radius:17px;transform:rotate(-7deg);}
+        .upgrade-card .upgrade-rarity{
+            display:inline-block;border:1px solid rgba(131,177,203,.45);border-radius:40px;
+            padding:5px 9px;background:rgba(10,25,41,.85);
+            color:#d3ebfa;font:700 10px 'Orbitron',sans-serif;white-space:nowrap;
+        }
+        .upgrade-card[data-rarity="RARE"] .upgrade-rarity{color:#dfcaff;border-color:#9879d8;}
+        .upgrade-card[data-rarity="EPIC"] .upgrade-rarity{color:#ffb9e2;border-color:#dd84bd;}
+        .upgrade-card[data-rarity="LEGENDARY"] .upgrade-rarity{
+            color:#ffeca6;border-color:#ffd65b;background:rgba(87,57,13,.77);
+            text-shadow:0 0 13px rgba(255,215,106,.66);
+        }
+        .upgrade-card .upgrade-role-label{
+            display:inline-flex;align-items:center;gap:6px;border:1px solid var(--card-accent);
+            background:rgba(5,12,27,.81);color:var(--card-accent);padding:5px 8px;border-radius:7px;
+            font:700 9px 'Orbitron',sans-serif;letter-spacing:.06em;
+        }
+        .upgrade-card[data-role="evolution"][data-rarity="LEGENDARY"] .upgrade-role-label{
+            border-color:#aa86f7;color:#d7bcff;
+        }
+        .upgrade-card .upgrade-card-name{color:#f4f9ff;overflow-wrap:anywhere;line-height:1.35;transition:color .18s ease;}
+        .upgrade-card:hover .upgrade-card-name{color:var(--card-accent);}
+        .upgrade-card .upgrade-card-desc{font-size:14px;color:#bfd0df;line-height:1.5;}
+        .upgrade-card .upgrade-tier-track{display:inline-flex;gap:5px;}
+        .upgrade-card .upgrade-tier-step{width:20px;height:4px;border-radius:4px;background:rgba(119,146,168,.31);}
+        .upgrade-card .upgrade-tier-step.filled{background:var(--card-accent);}
+        .upgrade-card .upgrade-tier-step.next{background:var(--card-accent);opacity:.65;}
+        .upgrade-card .upgrade-evolution-benefit{
+            margin-top:12px;padding:11px;border:1px solid rgba(174,126,255,.59);border-radius:10px;
+            color:#e8dbff;background:linear-gradient(120deg,rgba(85,39,142,.3),rgba(5,39,60,.33));
+            font-size:12px;line-height:1.45;
+        }
+        .upgrade-card .upgrade-synergy-benefit{color:#93ebee;font-size:12px;line-height:1.45;margin-top:9px;}
+        .upgrade-card .upgrade-evolution-orbit{
+            position:absolute;right:-30px;top:-42px;z-index:0;pointer-events:none;
+            width:170px;height:170px;border-radius:50%;border:1px solid rgba(180,124,255,.28);
+            box-shadow:inset 0 0 0 15px rgba(145,89,218,.045),0 0 0 13px rgba(54,210,237,.025);
+            animation:upgrade-evolution-orbit 16s linear infinite;
+        }
+        .upgrade-card .upgrade-evolution-orbit::before,.upgrade-card .upgrade-evolution-orbit::after{
+            content:'';position:absolute;top:-4px;left:50%;width:8px;height:8px;border-radius:2px;
+            transform:translateX(-50%) rotate(45deg);background:#b79af7;
+        }
+        .upgrade-card .upgrade-evolution-orbit::after{top:auto;bottom:-4px;background:#79eff5;}
+        .upgrade-card .upgrade-weapon-brackets{
+            position:absolute;inset:14px;z-index:0;pointer-events:none;opacity:.56;
+            background:
+                linear-gradient(var(--card-accent),var(--card-accent)) top left/15px 1.5px no-repeat,
+                linear-gradient(var(--card-accent),var(--card-accent)) top left/1.5px 15px no-repeat,
+                linear-gradient(var(--card-accent),var(--card-accent)) bottom right/15px 1.5px no-repeat,
+                linear-gradient(var(--card-accent),var(--card-accent)) bottom right/1.5px 15px no-repeat;
+        }
+        .upgrade-card .upgrade-weapon-scan{
+            position:absolute;z-index:0;left:14px;right:14px;top:4%;height:2px;opacity:0;
+            pointer-events:none;background:linear-gradient(90deg,transparent,rgba(111,224,247,.72),transparent);
+            animation:upgrade-weapon-scan 3.6s linear .4s infinite;
+        }
+        .upgrade-card .upgrade-card-footer{
+            border-top:1px solid rgba(124,166,194,.25);color:var(--card-accent);
+        }
+        .upgrade-card[data-role="evolution"]:not([data-rarity="LEGENDARY"]) .upgrade-card-footer{color:#d7b7ff;}
+        .upgrade-card[data-role="evolution"][data-rarity="LEGENDARY"] .upgrade-card-footer{color:#d7b7ff;}
+        @keyframes upgrade-card-enter{from{opacity:0;transform:translateY(14px) scale(.98);}to{opacity:1;transform:translateY(0) scale(1);}}
+        @keyframes upgrade-legendary-glow{
+            0%,100%{box-shadow:0 0 20px rgba(255,191,52,.33),inset 0 0 13px rgba(255,204,80,.11);}
+            50%{box-shadow:0 0 48px rgba(255,198,62,.70),inset 0 0 25px rgba(255,214,104,.22);}
+        }
+        @keyframes upgrade-legendary-shine{
+            0%,28%,100%{opacity:0;transform:translateX(-42%) rotate(-8deg);}
+            40%{opacity:.76;}57%{opacity:0;transform:translateX(42%) rotate(-8deg);}
+        }
+        @keyframes upgrade-evolution-orbit{to{transform:rotate(360deg);}}
+        @keyframes upgrade-weapon-scan{
+            0%,12%,94%,100%{opacity:0;top:4%;}
+            23%{opacity:.6;}54%{opacity:.36;top:84%;}65%{opacity:0;top:96%;}
+        }
+        @media(max-width:767px){.upgrade-card{min-height:254px;padding:18px;}}
+        @media(hover:none){.upgrade-card:hover:not(:disabled){transform:none;}}
+        @media(prefers-reduced-motion:reduce){
+            .upgrade-card,.upgrade-card[data-rarity="LEGENDARY"],.upgrade-card::after,
+            .upgrade-card .upgrade-evolution-orbit,.upgrade-card .upgrade-weapon-scan{animation:none!important;}
+            .upgrade-card,.upgrade-card .upgrade-card-name{transition:none!important;}
+            .upgrade-card:hover:not(:disabled){transform:none!important;}
+            .upgrade-card[data-rarity="LEGENDARY"]::after{display:none;}
+        }
+
         /* M4.2: content-density without placeholder-sized cards. */
         .menu-panel-v2 {background:linear-gradient(145deg,rgba(7,15,30,.94),rgba(6,9,20,.95));border:1px solid rgba(0,218,238,.24);}
         .menu-chassis-v2{min-height:174px;gap:10px;align-content:start;}
@@ -834,13 +975,13 @@
     <!-- LEVEL UP / UPGRADE SELECTION MODAL -->
     <div id="upgradeModal" class="fixed inset-0 z-30 hidden items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
         <div class="max-w-5xl w-full text-center my-auto">
-            <div class="inline-block px-4 py-1 rounded-full bg-yellow-500/20 border border-yellow-400 text-yellow-300 font-cyber text-xs font-bold mb-2 animate-bounce">
+            <div class="upgrade-modal-kicker mb-2">
                 SEVİYE ATLADIN! — [1] [2] [3] TUŞLARIYLA SEÇEBİLİRSİN
             </div>
             <h2 class="font-cyber text-2xl sm:text-4xl font-black text-white text-glow-cyan mb-1">
                 SİBER YÜKSELTME SEÇ
             </h2>
-            <p class="text-gray-300 text-xs sm:text-base mb-3">Aynı modülü 3. kademeye ulaştırmak <span class="text-yellow-300 font-bold">★ SÜPER SİNERJİ EVRİMİ</span> kazandırır!</p>
+            <p class="text-gray-300 text-xs sm:text-base mb-3">Aynı modülü 3. kademeye ulaştırmak <span class="text-purple-300 font-bold">✦ MODÜL EVRİMİ</span> açar!</p>
 
             <!-- Live Player Stats Summary Bar -->
             <div id="upgradeStatsSummary" class="flex flex-wrap items-center justify-center gap-3 sm:gap-6 bg-gray-950/90 border border-cyan-500/30 rounded-xl px-4 py-2 mb-4 max-w-3xl mx-auto text-xs font-cyber">
@@ -849,13 +990,13 @@
 
             <!-- Reroll Button -->
             <div class="mb-5 flex justify-center">
-                <button id="rerollUpgradesBtn" type="button" class="cyber-btn px-4 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-yellow-400/70 font-cyber text-xs font-bold text-yellow-300 flex items-center gap-2 cursor-pointer">
-                    <i class="fa-solid fa-dice text-yellow-400"></i> YENİDEN SEÇ · R <span id="rerollCostText">15</span> <i class="fa-solid fa-coins"></i>
+                <button id="rerollUpgradesBtn" type="button" class="cyber-btn px-4 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-cyan-400/65 font-cyber text-xs font-bold text-cyan-100 flex items-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-dice text-cyan-300"></i> YENİDEN SEÇ · R <span id="rerollCostText">15</span> <i class="fa-solid fa-coins"></i>
                 </button>
             </div>
 
             <!-- 3 Upgrade Cards Container -->
-            <div id="upgradeCardsContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+            <div id="upgradeCardsContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 pb-2" role="group" aria-label="Yükseltme seçenekleri">
                 <!-- Dynamically populated via JS -->
             </div>
         </div>
@@ -5926,7 +6067,7 @@
 
             if (nextLvl === 3 && EVOLUTION_DEFS[upg.id]) {
                 audio.playJackpot();
-                showDopamineBanner(`★ SİLAH EVRİMİ: ${EVOLUTION_DEFS[upg.id].name.toUpperCase()} ★`, '#ffe600');
+                showDopamineBanner(`✦ MODÜL EVRİMİ: ${EVOLUTION_DEFS[upg.id].name.toUpperCase()} ✦`, '#ab83ff');
             }
             if (newlyUnlockedSynergies.length) {
                 audio.playJackpot();
@@ -5936,13 +6077,66 @@
             document.getElementById('upgradeModal').classList.add('hidden');
             document.getElementById('upgradeModal').classList.remove('flex');
             gameState = 'PLAYING';
-            shockwaves.push(new Shockwave(player.x, player.y, 170, rarity.border, 0.4));
+            const isEvolutionReward = nextLvl === MAX_MODULE_TIER && !!EVOLUTION_DEFS[upg.id];
+            shockwaves.push(new Shockwave(player.x, player.y, 170,
+                isEvolutionReward && rarity.id !== 'LEGENDARY' ? '#ab83ff' : rarity.border, 0.4));
             createFloatingText(player.x, player.y - 30, `${upg.name} · K${nextLvl}`, rarity.textCol, 17);
             updateModulesDock();
             updateHUD();
             // A collected stacked orb may grant more than one full level.
             // Queue additional choices one at a time without discarding earned XP.
             if (player.xp >= player.xpToNext) player.gainXp(0);
+        }
+
+
+        // Visual role (evolution, weapon, module) and rarity are independent axes.
+        // No extra item rolls, unlock conditions, or power calculations.
+        const WEAPON_UPGRADE_IDS = new Set([
+            'multishot','firerate','orbital','pierce_ricochet',
+            'homing','lightning','crit_mastery'
+        ]);
+        function getUpgradeCardPresentation(upg, rarity, currentLvl) {
+            const willEvolve=currentLvl+1===MAX_MODULE_TIER && !!EVOLUTION_DEFS[upg.id];
+            const role=willEvolve?'evolution':WEAPON_UPGRADE_IDS.has(upg.id)?'weapon':'module';
+            const labels={evolution:'EVRİM EŞİĞİ',weapon:'SİLAH MODÜLÜ',module:'SİSTEM MODÜLÜ'};
+            const icons={evolution:'fa-solid fa-atom',weapon:'fa-solid fa-crosshairs',module:'fa-solid fa-microchip'};
+            return {role,label:labels[role],roleIcon:icons[role],willEvolve,
+                isLegendary:rarity.id==='LEGENDARY'};
+        }
+        function renderUpgradeCardMarkup(upg,rarity,currentLvl,index,presentation,unlocks) {
+            const {role,label,roleIcon,willEvolve,isLegendary}=presentation;
+            const tiers=Array.from({length:MAX_MODULE_TIER},(_,i)=>
+                `<span class="upgrade-tier-step ${i<currentLvl?'filled':i===currentLvl?'next':''}"></span>`).join('');
+            const evolution=willEvolve?EVOLUTION_DEFS[upg.id]:null;
+            return `
+                ${role==='evolution'?'<span class="upgrade-evolution-orbit" aria-hidden="true"></span>':''}
+                ${role==='weapon'?'<span class="upgrade-weapon-brackets" aria-hidden="true"></span><span class="upgrade-weapon-scan" aria-hidden="true"></span>':''}
+                <div class="upgrade-card-body">
+                    <div class="flex items-start justify-between gap-2 mb-4">
+                        <div class="upgrade-icon text-2xl" aria-hidden="true"><i class="${upg.icon}"></i></div>
+                        <div class="flex flex-col items-end gap-2 text-right">
+                            <span class="upgrade-rarity">[${index+1}] ${isLegendary?'✦ ':''}${rarity.name}</span>
+                            <span class="upgrade-role-label"><i class="${roleIcon}"></i>${label}</span>
+                        </div>
+                    </div>
+                    <h3 class="upgrade-card-name font-cyber text-base sm:text-lg font-black mb-2">${upg.name}</h3>
+                    <p class="upgrade-card-desc">${upg.getDesc(rarity)}</p>
+                    <div class="flex items-center justify-between flex-wrap gap-2 mt-4">
+                        <span class="text-[11px] font-cyber text-slate-300">KADEME ${currentLvl} → ${currentLvl+1}</span>
+                        <span class="upgrade-tier-track" aria-label="${currentLvl} / ${MAX_MODULE_TIER} kademe">${tiers}</span>
+                    </div>
+                    ${evolution?`<div class="upgrade-evolution-benefit">
+                        <strong class="font-cyber block mb-1 text-purple-200">✦ ${evolution.name}</strong>
+                        ${evolution.desc}
+                    </div>`:''}
+                    ${unlocks.map(s=>`<p class="upgrade-synergy-benefit"><strong>YENİ SİNERJİ:</strong> ${s.name} · ${s.desc}</p>`).join('')}
+                </div>
+                <div class="upgrade-card-footer mt-5 pt-3 flex items-center justify-between gap-2 text-[11px] font-cyber font-bold">
+                    <span>${role==='evolution'?'[ '+(index+1)+' ] EVRİMİ AÇ':
+                        role==='weapon'?'[ '+(index+1)+' ] SİLAHI GÜÇLENDİR':
+                        '[ '+(index+1)+' ] MODÜLÜ ENTEGRE ET'}</span>
+                    <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                </div>`;
         }
 
         function populateUpgradeCards() {
@@ -5960,7 +6154,7 @@
             if (statsBar && player) {
                 statsBar.innerHTML = `
                     <div>HASAR: <span class="text-pink-400 font-bold">${Math.round(player.damage)}</span></div>
-                    <div>KRİTİK: <span class="text-yellow-300 font-bold">%${Math.round(player.critChance * 100)}</span></div>
+                    <div>KRİTİK: <span class="text-sky-300 font-bold">%${Math.round(player.critChance * 100)}</span></div>
                     <div>ÇOKLU ATIŞ: <span class="text-cyan-300 font-bold">${player.multishot}x</span></div>
                     <div>DELİCİ/SEKME: <span class="text-purple-400 font-bold">${player.pierce}/${player.ricochet}</span></div>
                     <div>UYDU: <span class="text-green-400 font-bold">${player.orbitals}</span></div>
@@ -5979,42 +6173,18 @@
                 const rarity = rollRarity();
                 currentUpgradeChoices.push({ upg, rarity });
                 const currentLvl = player.upgradeCounts[upg.id] || 0;
-                const willEvolve = currentLvl + 1 === 3 && !!EVOLUTION_DEFS[upg.id];
                 const unlocks = newSynergiesForUpgrade(player.upgradeCounts, upg.id);
-                const isLegendary = rarity.id === 'LEGENDARY';
-                const isEpic = rarity.id === 'EPIC';
-
-                const card = document.createElement('button');
-                card.type = 'button';
-                card.className = `upgrade-card rounded-2xl p-6 text-left flex flex-col justify-between cursor-pointer group relative ${isLegendary ? 'legendary-card-glow' : (isEpic ? 'epic-card-glow' : '')}`;
-                card.style.border = `2px solid ${willEvolve ? '#ffe600' : rarity.border}`;
-                card.style.boxShadow = `0 0 ${isLegendary ? '45px' : (isEpic ? '30px' : '20px')} ${rarity.badgeBg}`;
-
-                card.innerHTML = `
-                    <div>
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl border ${isLegendary ? 'animate-bounce' : ''}" style="color: ${upg.color}; border-color: ${rarity.border}; background: rgba(0,0,0,0.65);">
-                                <i class="${upg.icon}"></i>
-                            </div>
-                            <div class="text-right">
-                                <span class="font-cyber text-[11px] font-black px-3 py-1 rounded-full block mb-1 ${isLegendary ? 'animate-pulse' : ''}" style="background:${rarity.badgeBg}; color:${rarity.textCol}; border:1px solid ${rarity.border};">
-                                    [${idx + 1}] ★ ${rarity.name}
-                                </span>
-                                <span class="font-cyber text-[11px] ${willEvolve ? 'text-yellow-300 font-bold animate-pulse' : 'text-gray-400'}">
-                                    Kademe ${currentLvl} → ${currentLvl + 1} ${willEvolve ? '· EVRİM' : ''}
-                                </span>
-                            </div>
-                        </div>
-                        <h3 class="font-cyber text-lg font-black text-white group-hover:text-cyan-300 transition mb-2">${upg.name}</h3>
-                        <p class="text-sm text-gray-300 leading-relaxed">${upg.getDesc(rarity)}</p>
-                        ${willEvolve ? `<p class="mt-2 text-xs font-bold text-yellow-300">EVRİM: ${EVOLUTION_DEFS[upg.id].name} · ${EVOLUTION_DEFS[upg.id].desc}</p>` : ''}
-                        ${unlocks.map(s => `<p class="mt-2 text-xs font-bold text-cyan-300">YENİ SİNERJİ: ${s.name} · ${s.desc}</p>`).join('')}
-                    </div>
-                    <div class="mt-6 pt-3 border-t border-gray-800 flex items-center justify-between text-xs font-cyber font-bold" style="color:${rarity.textCol};">
-                        <span>[${idx + 1}] MODÜLÜ ENTEGRE ET</span>
-                        <i class="fa-solid fa-chevron-right group-hover:translate-x-1 transition"></i>
-                    </div>
-                `;
+                const presentation=getUpgradeCardPresentation(upg,rarity,currentLvl);
+                const card=document.createElement('button');
+                card.type='button';
+                card.className='upgrade-card rounded-2xl p-5 sm:p-6 text-left flex flex-col justify-between cursor-pointer group relative';
+                card.setAttribute('data-role',presentation.role);
+                card.setAttribute('data-rarity',rarity.id);
+                card.setAttribute('aria-label',
+                    `Seçenek ${idx+1}: ${rarity.name} ${upg.name}. ${presentation.label}. Kademe ${currentLvl+1}`);
+                card.setAttribute('aria-keyshortcuts',String(idx+1));
+                card.style.animationDelay=`${idx*65}ms`;
+                card.innerHTML=renderUpgradeCardMarkup(upg,rarity,currentLvl,idx,presentation,unlocks);
 
                 card.addEventListener('click', () => selectUpgradeOption(idx));
                 container.appendChild(card);
