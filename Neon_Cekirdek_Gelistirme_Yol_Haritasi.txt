@@ -1,10 +1,10 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.6 | İlk plan: 18.10.2026 | Durum: 19.10.2026
+Sürüm: 1.7 | İlk plan: 18.10.2026 | Durum: 19.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: M0-M4 ve M5.1-M5.4 kod paketleri uygulandı; gerçek uzun oyun kabulü sürüyor.
+Durum: M0-M5.5 tamamlandı, M5.5 manuel kabul edildi. M6.1.1 giriş güvenliği değişiklikleri PR incelemesindedir.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -556,3 +556,22 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
 [OTOMATİK] 17 yeni smoke testi; toplam 230 test hedefi.
 [AÇIK] Mobil ve üç şaside gerçek oyun sonu ekranı kabulü.
 [SONRAKİ] M6 planı ve genel UX kabulü.
+
+
+======================================================================
+20. M6.1 — OYUN AKIŞI / UI-UX DENETİMİ
+======================================================================
+
+[M5.5 MANUEL KABUL] Kullanıcı yeni oyun sonu analiz ekranını onayladı.
+[M6.1.1] Giriş kontrolü ve odak güvenliği: yeni koşu/duraklatmada
+  stale input reset; Alt+Tab/gizli sekmede auto-pause; key repeat
+  engelleme; dirilmede Enter/Space ile odaklı buton önceliği;
+  touchend/touchcancel ile dokunmatik hedef temizliği.
+  Ayrıntı: docs/M6.1.1-input-safety.md
+[OTOMATİK] 6 yeni olay işleyicisi regresyon testi, tüm eski testler
+  ile PR ve main CI doğrulaması gereklidir.
+[AÇIK] Kullanıcı: Alt+Tab, tekrarlanan P/R, gerçek dokunmatik
+  kontrol ve dirilme klavye kararını manuel doğrulamalı.
+[SONRAKİ] M6.1.2 uzun koşu koruması ve modal odak/erişilebilirlik;
+  M6.1.3 çevrimdışı CSS; M6.1.4 tarayıcı smoke testi;
+  M6.2 gerçek uzun koşu profil ölçümleri ve teknoloji kararı.
