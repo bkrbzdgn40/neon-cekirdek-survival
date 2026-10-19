@@ -5341,6 +5341,32 @@
         const ARENA_EVENT_GAP = 82;
         const ARENA_EVENT_LIFETIME = 17;
 
+        const ARENA_EVENT_SPECS=Object.freeze({
+            RELAY:Object.freeze({minWave:4,label:'VERİ AKTARIMI · XP / CİNNET',color:'#00f3ff',duration:3.0,cost:0}),
+            VAULT:Object.freeze({minWave:4,label:'RİSKLİ KASA · -12 CAN / ALTIN',color:'#ffe600',duration:4.1,cost:12}),
+            STORM:Object.freeze({minWave:6,label:'ENERJİ FIRTINASI · MOMENTUM HARCА / XP',color:'#a5b4fc',duration:3.5,cost:0}),
+            REACTOR:Object.freeze({minWave:7,label:'HASARLI REAKTÖR · -10 CAN / GÜÇ',color:'#fb923c',duration:3.7,cost:10}),
+            CORRIDOR:Object.freeze({minWave:9,label:'GÜVENLİ KORİDOR · SIĞIN / CİNNET',color:'#6ee7b7',duration:4.0,cost:0}),
+            ANOMALY:Object.freeze({minWave:11,label:'AKI ANOMALİSİ · HALKADA KAL',color:'#e879f9',duration:4.0,cost:0})
+        });
+        const ARENA_EVENT_SEQUENCE=Object.freeze([
+            'RELAY','VAULT','STORM','REACTOR','CORRIDOR','ANOMALY'
+        ]);
+        function chooseArenaEventKind(index,currentWave){
+            const eligible=ARENA_EVENT_SEQUENCE.filter(kind=>
+                currentWave>=ARENA_EVENT_SPECS[kind].minWave);
+            return eligible[Math.max(0,index)%eligible.length];
+        }
+        function isInsideArenaEvent(event,x,y,radius=0){
+            const dx=x-event.x,dy=y-event.y;
+            if(event.kind==='CORRIDOR') return Math.abs(dx)<143+radius*.1 &&
+                Math.abs(dy)<43+radius*.1;
+            const distance=Math.hypot(dx,dy);
+            if(event.kind==='ANOMALY') return distance>=34 &&
+                distance<event.radius-radius*.25;
+            return distance<event.radius-radius*.25;
+        }
+
         class ArenaEvent {
             constructor(kind, x, y) {
                 this.kind = kind;
@@ -5350,11 +5376,14 @@
                 this.dead = false;
                 this.timeLeft = ARENA_EVENT_LIFETIME;
                 this.progress = 0;
-                this.required = kind === 'VAULT' ? 4.1 : 3.0;
-                this.committed = false;
-                this.cost = kind === 'VAULT' ? 12 : 0;
-                this.color = kind === 'VAULT' ? '#ffe600' : '#00f3ff';
-                this.label = kind === 'VAULT' ? 'RİSKLİ KASA · -12 CAN / ALTIN' : 'VERİ AKTARIMI · XP / CİNNET';
+                const spec=ARENA_EVENT_SPECS[kind]||ARENA_EVENT_SPECS.RELAY;
+                this.required=spec.duration;
+                this.committed=false;
+                this.cost=spec.cost;
+                this.color=spec.color;
+                this.label=spec.label;
+                this.projectilesBlocked=0;
+                this.momentumSpent=0;
             }
 
             update(dt) {
@@ -5365,19 +5394,36 @@
                     if (combatDirector) combatDirector.finishArenaEvent(this, 'expired');
                     return;
                 }
-                const distance = Math.hypot(this.x - player.x, this.y - player.y);
-                const inside = distance < this.radius - player.radius * 0.25;
+                const inside=isInsideArenaEvent(this,player.x,player.y,player.radius);
                 if (inside && !this.committed) {
-                    if (this.cost && player.hp <= this.cost + 10) return;
+                    if (this.cost && player.hp <= this.cost + (this.kind==='VAULT'?10:14)) return;
                     this.committed = true;
                     if (this.cost) {
                         player.hp -= this.cost;
-                        createFloatingText(player.x, player.y - 36, '-12 CAN · KASA AÇILIYOR', '#ffe600', 15);
+                        createFloatingText(player.x, player.y - 36,
+                            '-'+this.cost+' CAN · '+(this.kind==='VAULT'?'KASA':'REAKTÖR'),this.color,15);
                     }
                 }
                 if (!this.committed) return;
+                // Risk and benefits are strictly opt-in; ignored events stay harmless.
+                if(this.kind==='STORM' && inside && player.momentum>0){
+                    const drained=Math.min(player.momentum,dt*9);
+                    player.momentum-=drained;
+                    this.momentumSpent+=drained;
+                }
+                if(this.kind==='CORRIDOR' && inside && enemyProjectiles.length){
+                    // The corridor shelters the player from a small number of bullets.
+                    let removed=0;
+                    for(let i=enemyProjectiles.length-1;i>=0&&removed<8;i--){
+                        const b=enemyProjectiles[i];
+                        if(isInsideArenaEvent(this,b.x,b.y)){
+                            enemyProjectiles.splice(i,1);removed++;
+                        }
+                    }
+                    this.projectilesBlocked+=removed;
+                }
                 this.progress = Math.max(0, Math.min(this.required,
-                    this.progress + (inside ? dt : -dt * 1.1)));
+                    this.progress + (inside ? dt : -dt * (this.kind==='ANOMALY'?1.35:1.1))));
                 if (this.progress >= this.required) {
                     this.dead = true;
                     if (this.kind === 'VAULT') {
@@ -5388,11 +5434,34 @@
                         player.hp = Math.min(player.maxHp, player.hp + 6);
                         saveMetaProgress();
                         createFloatingText(this.x, this.y - 28, `+ ${gold} ALTIN · +6 CAN`, '#ffe600', 17);
-                    } else {
+                    } else if(this.kind==='RELAY'){
                         const xp = Math.min(140, player.xpToNext * 0.32);
                         player.addOverdrive(25);
                         player.gainXp(xp);
                         createFloatingText(this.x, this.y - 28, 'VERİ BAŞARILI · XP + CİNNET', '#00f3ff', 17);
+                    } else if(this.kind==='STORM'){
+                        player.momentum=Math.min(100,player.momentum+35);
+                        player.gainXp(Math.min(155,player.xpToNext*.38));
+                        createFloatingText(this.x,this.y-28,'FIRTINA DENGELENDİ · MOMENTUM + XP',
+                            this.color,16);
+                    } else if(this.kind==='REACTOR'){
+                        const gold=Math.min(72,25+wave*3);
+                        totalGold+=gold;sessionGold+=gold;
+                        if(combatDirector) combatDirector.onGoldGranted('arena',gold);
+                        saveMetaProgress();
+                        player.hasteTimer=Math.max(player.hasteTimer,5);
+                        createFloatingText(this.x,this.y-28,'REAKTÖR ONARILDI · ALTIN + HIZ',
+                            this.color,16);
+                    } else if(this.kind==='CORRIDOR'){
+                        player.addOverdrive(38);
+                        player.momentum=Math.min(100,player.momentum+20);
+                        createFloatingText(this.x,this.y-28,'KORİDOR GÜVENDE · CİNNET + MOMENTUM',
+                            this.color,16);
+                    } else if(this.kind==='ANOMALY'){
+                        player.invulnTimer=Math.max(player.invulnTimer,2.2);
+                        player.addOverdrive(24);
+                        createFloatingText(this.x,this.y-28,'ANOMALİ ÇÖZÜLDÜ · KORUMA + CİNNET',
+                            this.color,16);
                     }
                     audio.playJackpot();
                     if (combatDirector) combatDirector.finishArenaEvent(this, 'completed');
@@ -5401,32 +5470,45 @@
 
             draw(ctx) {
                 ctx.save();
-                const pulse = 0.08 * Math.sin(totalTime * 5);
+                const pulse=.08*Math.sin(totalTime*5);
+                const corridor=this.kind==='CORRIDOR';
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.kind === 'VAULT' ? 'rgba(255,230,0,0.09)' : 'rgba(0,243,255,0.07)';
+                if(corridor) ctx.rect(this.x-143,this.y-43,286,86);
+                else ctx.arc(this.x,this.y,this.radius,0,Math.PI*2);
+                ctx.fillStyle=this.kind==='VAULT'?'rgba(255,230,0,.09)':
+                    this.kind==='REACTOR'?'rgba(251,146,60,.10)':
+                    this.kind==='ANOMALY'?'rgba(232,121,249,.10)':
+                    this.kind==='STORM'?'rgba(165,180,252,.10)':
+                    'rgba(0,243,255,.07)';
                 ctx.fill();
-                ctx.lineWidth = 2.5;
-                ctx.strokeStyle = this.color;
-                ctx.globalAlpha = 0.7 + pulse;
-                ctx.setLineDash([8, 6]);
-                ctx.stroke();
-                ctx.setLineDash([]);
-                if (this.progress > 0) {
-                    ctx.lineWidth = 6;
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.radius - 7, -Math.PI / 2,
-                        -Math.PI / 2 + Math.PI * 2 * (this.progress / this.required));
-                    ctx.stroke();
+                ctx.lineWidth=2.5;
+                ctx.strokeStyle=this.color;
+                ctx.globalAlpha=.7+pulse;
+                ctx.setLineDash([8,6]);ctx.stroke();ctx.setLineDash([]);
+                if(this.kind==='ANOMALY'){
+                    // Hollow center is intentionally unsafe for anomaly capture.
+                    ctx.beginPath();ctx.arc(this.x,this.y,34,0,Math.PI*2);
+                    ctx.strokeStyle='#ff809e';ctx.lineWidth=1.8;ctx.stroke();
                 }
-                ctx.globalAlpha = 1;
-                ctx.fillStyle = this.color;
-                ctx.textAlign = 'center';
-                ctx.font = "bold 12px 'Orbitron', sans-serif";
-                ctx.fillText(this.label, this.x, this.y - this.radius - 18);
-                ctx.font = "bold 11px 'Orbitron', sans-serif";
-                ctx.fillText(this.committed ? `${Math.ceil(this.required - this.progress)}s KAL` :
-                    `${Math.ceil(this.timeLeft)}s · İÇİNE GİR`, this.x, this.y + 4);
+                if(this.kind==='STORM'){
+                    ctx.beginPath();
+                    ctx.arc(this.x,this.y,50,Math.PI*.1+totalTime*.8,
+                        Math.PI*1.1+totalTime*.8);
+                    ctx.lineWidth=2;ctx.stroke();
+                }
+                if(this.progress>0){
+                    ctx.beginPath();ctx.lineWidth=5;
+                    ctx.arc(this.x,this.y,this.radius+7,-Math.PI/2,
+                        -Math.PI/2+Math.PI*2*(this.progress/this.required));
+                    ctx.strokeStyle=this.color;ctx.stroke();
+                }
+                ctx.globalAlpha=1;ctx.fillStyle=this.color;ctx.textAlign='center';
+                ctx.font="bold 12px 'Orbitron', sans-serif";
+                ctx.fillText(this.label,this.x,this.y-(corridor?60:this.radius+18));
+                ctx.font="bold 11px 'Orbitron', sans-serif";
+                ctx.fillText(this.committed?
+                    Math.ceil(this.required-this.progress)+'s KAL':
+                    Math.ceil(this.timeLeft)+'s · İÇİNE GİR',this.x,this.y+4);
                 ctx.restore();
             }
         }
@@ -5498,6 +5580,7 @@
                     encounters: 0, specialEncounters: 0, specialUnits: 0, specialCancelled: 0,
                     bossSpecialAttacks: 0, bossAttacksDeferred: 0,
                     arenaOffered: 0, arenaCompleted: 0, arenaExpired: 0, arenaCancelled: 0,
+                    arenaByKind:{},
                     chestDrops: { elite: 0, boss: 0 },
                     chestDenied:{cooldown:0,groundCap:0,roll:0},
                     chestOpened: { goldHeal: 0, overdriveXp: 0, bulletNova: 0 },
@@ -5576,7 +5659,7 @@
                 if (totalTime < this.nextArenaAt || bossApproaching ||
                     this.pendingEncounter || !['BUILDUP', 'PRESSURE'].includes(this.profile.phase) ||
                     wave < 4) return;
-                const kind = this.arenaEventIndex % 2 === 0 ? 'RELAY' : 'VAULT';
+                const kind=chooseArenaEventKind(this.arenaEventIndex,wave);
                 const safeMargin = 115;
                 const minX = Math.min(safeMargin, worldWidth / 3);
                 const minY = Math.min(safeMargin, worldHeight / 3);
@@ -5585,14 +5668,19 @@
                 const fallbackX = Math.max(minX, Math.min(worldWidth - minX, player.x + (player.x < worldWidth / 2 ? 190 : -190)));
                 const fallbackY = Math.max(minY, Math.min(worldHeight - minY, player.y + (player.y < worldHeight / 2 ? 150 : -150)));
                 const farEnough = Math.hypot(x - player.x, y - player.y) >= 160;
-                this.activeArenaEvent = new ArenaEvent(kind, farEnough ? x : fallbackX, farEnough ? y : fallbackY);
+                // Wide corridor lanes must stay visible, including near arena edges.
+                const eventX=farEnough?x:fallbackX,eventY=farEnough?y:fallbackY;
+                const finalX=kind==='CORRIDOR'?Math.max(154,Math.min(worldWidth-154,eventX)):eventX;
+                this.activeArenaEvent=new ArenaEvent(kind,finalX,eventY);
                 audio.playThreatCue('event');
                 this.arenaEventIndex++;
                 this.nextArenaAt = totalTime + ARENA_EVENT_GAP;
                 this.stats.arenaOffered++;
+                if(!this.stats.arenaByKind[kind]) this.stats.arenaByKind[kind]={
+                    offered:0,completed:0,expired:0,cancelled:0,projectilesBlocked:0,momentumSpent:0};
+                this.stats.arenaByKind[kind].offered++;
                 createFloatingText(player.x, player.y - 68,
-                    kind === 'VAULT' ? '⚠ RİSKLİ KASA: -12 CAN · ALTIN ÖDÜLÜ' :
-                        '◎ VERİ AKTARIMI: ALANDA KAL, XP KAZAN',
+                    this.activeArenaEvent.label,
                     this.activeArenaEvent.color, 16);
             }
 
@@ -5602,6 +5690,12 @@
                 if (result === 'completed') this.stats.arenaCompleted++;
                 else if (result === 'cancelled') this.stats.arenaCancelled++;
                 else this.stats.arenaExpired++;
+                const entry=this.stats.arenaByKind[event.kind];
+                if(entry){
+                    entry[result==='completed'?'completed':result==='cancelled'?'cancelled':'expired']++;
+                    entry.projectilesBlocked+=event.projectilesBlocked||0;
+                    entry.momentumSpent+=Math.round((event.momentumSpent||0)*10)/10;
+                }
             }
 
             updateSpecialEncounter(dt) {
@@ -5774,6 +5868,8 @@
                     arenaProgress: this.activeArenaEvent ?
                         Math.round(100 * this.activeArenaEvent.progress / this.activeArenaEvent.required) : 0,
                     ...this.stats,
+                    arenaByKind:Object.fromEntries(Object.entries(this.stats.arenaByKind)
+                        .map(([kind,entry])=>[kind,{...entry}])),
                     chestDrops:{...this.stats.chestDrops},
                     chestDenied:{...this.stats.chestDenied},
                     chestOpened:{...this.stats.chestOpened},
@@ -6270,7 +6366,9 @@
             }
             if (combatDirector?.activeArenaEvent) {
                 const event = combatDirector.activeArenaEvent;
-                targets.push({ x: event.x, y: event.y, col: event.color, label: event.kind === 'VAULT' ? '◆ KASA' : '◎ VERİ' });
+                const names={RELAY:'◎ VERİ',VAULT:'◆ KASA',STORM:'◉ FIRTINA',
+                    REACTOR:'◇ REAKTÖR',CORRIDOR:'⇥ KORİDOR',ANOMALY:'◌ ANOMALİ'};
+                targets.push({x:event.x,y:event.y,col:event.color,label:names[event.kind]||'ETKİNLİK'});
             }
             for (const lc of lootChests.slice(0, 2)) {
                 targets.push({ x: lc.x, y: lc.y, col: '#ffe600', label: '' });

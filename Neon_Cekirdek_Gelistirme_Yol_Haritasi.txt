@@ -1,6 +1,6 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.2 | İlk plan: 18.10.2026 | Durum: 19.10.2026
+Sürüm: 1.4 | İlk plan: 18.10.2026 | Durum: 19.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
@@ -458,3 +458,33 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
 [AÇIK] Gerçek üç şasiyle uzun koşuda FPS, boss adaleti ve
   60 saniyelik döngülerin ödül hissi testleri. Issue #2 açık.
 [SONRAKİ] M5.2: Gelişmiş görev sistemi.
+
+
+======================================================================
+15. M5.2 — GELİŞMİŞ GÖREV SİSTEMİ (GEÇMİŞ DURUM DÜZELTMESİ)
+======================================================================
+
+[UYGULANDI] AV/KÜRE/KOMBO görevleri korundu; ELİT AV, ZİNCİR,
+  HASARSIZ, SAVUN ve KURTAR hedefleri eklendi.
+[UYGULANDI] Uygunluk ve dalga kilitleri, tek koşu görev geçmişi,
+  mobil HUD, savunma/kurtarma işaretleri, ödül muhasebesi.
+[DOĞRULANDI] 181/181 smoke testi, PR #26; manuel kabul kullanıcı
+  tarafından bildirildi. docs/M5.2-advanced-quests.md.
+
+======================================================================
+16. M5.3 — ARENA OLAYLARI 2.0
+======================================================================
+
+[UYGULANDI] M2.3 RELAY ve VAULT kontratları korundu; ENERJİ
+  FIRTINASI, HASARLI REAKTÖR, GÜVENLİ KORİDOR ve AKI
+  ANOMALİSİ etkinlikleri eklendi. Toplam altı olay.
+[UYGULANDI] Kademeli dalga kilitleri; boss ve yönlü baskınla
+  örtüşmeme; güvenli iptal ve ödenmiş canın iadesi.
+[UYGULANDI] Fırtına momentum takası, reaktörün HP/altın/hız
+  takası, koridorda düşman mermisi engelleme, anomali halka hedefi.
+[UYGULANDI] Renk ve şekil ayrımı, ekran-dışı yön göstergeleri,
+  olay tipine göre telemetri, yeni koşuda tam sıfırlama.
+[OTOMATİK] Olay kilidi/teklif, ödül, boss iptali, bütçe ve
+  render regresyon testleri.
+[AÇIK] Üç şasi ve 20-30 dakika gerçek oynanış/FPS kabulü.
+[SONRAKİ] M5.4 alternatif düşman ve boss karşılaşmaları.
