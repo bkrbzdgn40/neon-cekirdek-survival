@@ -2433,3 +2433,64 @@ test('M4.3.3.2 original rarity odds and keyboard/reduced-motion safeguards remai
   assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
   assert.match(css,/\.upgrade-card \.upgrade-icon i \{transition:none!important;\}/);
 });
+
+
+test('M4.4.1 four audio states are classified by explicit priority', () => {
+  const {run}=setup();
+  const phases=JSON.parse(run("JSON.stringify([getCombatMusicPhase(false,0,false),getCombatMusicPhase(false,0,true),getCombatMusicPhase(false,2,false),getCombatMusicPhase(false,2,true),getCombatMusicPhase(true,2,true)])"));
+  assert.deepEqual(phases,['NORMAL','APPROACH','BOSS','BOSS','OVERDRIVE']);
+  const profiles=JSON.parse(run("JSON.stringify(Object.fromEntries(Object.entries(ADAPTIVE_MUSIC_PROFILES).map(([key,p])=>[key,p.beat])))"));
+  assert.ok(profiles.NORMAL>profiles.APPROACH && profiles.APPROACH>profiles.BOSS && profiles.BOSS>profiles.OVERDRIVE);
+});
+
+test('M4.4.1 music timing, transition reset and voice count remain bounded', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{const a=new SoundEngine(),notes=[];a.ctx={currentTime:10,state:'running'};a.playBassPulse=(f,p)=>notes.push(['bass',a.musicPhase,f,p.beat]);a.playMusicAccent=(f,p)=>notes.push(['accent',a.musicPhase,f,p.accentGain]);a.updateMusic(.016,true,false,0,false);for(let i=0;i<12;i++)a.updateMusic(.27,true,false,0,false);const normal=notes.filter(x=>x[1]==='NORMAL').length;a.updateMusic(.016,true,false,0,true);a.updateMusic(.016,true,false,1,false);a.updateMusic(.016,true,true,1,false);const step=a.musicStep,phase=a.musicPhase;return JSON.stringify({normal,states:notes.slice(-3).map(x=>x[1]),phase,step,max:notes.length,oneTransitionBeat:notes.slice(-1)[0][3]});})()"));
+  assert.equal(x.phase,'OVERDRIVE');
+  assert.equal(x.step,1);
+  assert.deepEqual(x.states,['APPROACH','BOSS','OVERDRIVE']);
+  assert.ok(x.normal>=12 && x.normal<=14);
+  assert.ok(x.max<=20);
+  assert.equal(x.oneTransitionBeat,.155);
+});
+
+test('M4.4.1 music and sound toggles are independent and paused music emits no notes', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{const a=new SoundEngine(),notes=[];a.ctx={currentTime:2,state:'running'};a.playBassPulse=(f)=>notes.push(f);a.playMusicAccent=()=>{};a.enabled=false;a.updateMusic(.02,true);const onlyMusic=notes.length;a.musicEnabled=false;a.enabled=true;a.updateMusic(.3,true);const musicOff=notes.length;a.updateMusic(.3,false);const paused=notes.length;a.musicEnabled=true;a.updateMusic(.02,true,false,1,false);return JSON.stringify({onlyMusic,musicOff,paused,resumed:notes.length,phase:a.musicPhase});})()"));
+  assert.equal(x.onlyMusic,1);
+  assert.equal(x.musicOff,1);
+  assert.equal(x.paused,1);
+  assert.equal(x.resumed,2);
+  assert.equal(x.phase,'BOSS');
+});
+
+test('M4.4.1 global SFX budget preserves boss warnings and remains time-window bounded', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{const a=new SoundEngine();let t=5;a.ctx={get currentTime(){return t;}};const low=[];for(let i=0;i<30;i++)low.push(a.allowSfx('low-'+i,0));const first=low.filter(Boolean).length;const important=a.allowSfx('cue-boss',1.5,true);const blocked=a.allowSfx('after-full',0);t+=.13;const next=a.allowSfx('after-full',0);return JSON.stringify({first,important,blocked,next,count:a.sfxWindowCount});})()"));
+  assert.equal(x.first,9);
+  assert.equal(x.important,true);
+  assert.equal(x.blocked,false);
+  assert.equal(x.next,true);
+  assert.equal(x.count,1);
+});
+
+test('M4.4.1 game loop routes genuine boss approach, boss and overdrive into audio', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();const seen=[];audio.updateMusic=(dt,active,overdrive,count,approach)=>seen.push({active,overdrive,count,approach});totalTime=52;nextBossTime=55;updateGame(.016);const warn=seen.at(-1);const b=new Enemy(150,180,'BOSS_TITAN');activeBosses=[b];totalTime=53;nextBossTime=Infinity;updateGame(.016);const boss=seen.at(-1);player.overdriveActive=true;updateGame(.016);const over=seen.at(-1);return JSON.stringify({warn,boss,over});})()"));
+  assert.equal(x.warn.active,true);
+  assert.equal(x.warn.approach,true);
+  assert.equal(x.warn.count,0);
+  assert.equal(x.boss.count,1);
+  assert.equal(x.boss.approach,false);
+  assert.equal(x.over.overdrive,true);
+});
+
+test('M4.4.1 original boss cues and audio controls preserve category behavior', () => {
+  assert.match(html,/audio\.playThreatCue\('boss'\)/);
+  assert.match(html,/audio\.playThreatCue\('phase'\)/);
+  assert.match(html,/audio\.playThreatCue\('raid'\)/);
+  assert.match(html,/this\.allowSfx\('cue-' \+ kind, 1\.5, true\)/);
+  assert.match(html,/audio\.musicEnabled = !audio\.musicEnabled/);
+  assert.match(html,/audio\.enabled = !audio\.enabled/);
+  assert.match(html,/title="Adaptif Savaş Müziği \(aç\/kapat\)"/);
+});
