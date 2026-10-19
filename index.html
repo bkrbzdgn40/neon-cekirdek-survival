@@ -7830,7 +7830,6 @@
                 else if (e.code === 'Digit2' || e.code === 'Numpad2') selectUpgradeOption(1);
                 else if (e.code === 'Digit3' || e.code === 'Numpad3') selectUpgradeOption(2);
                 else if (e.code === 'KeyR') {
-                    if (isInteractiveKeyTarget(e.target)) return;
                     e.preventDefault();
                     document.getElementById('rerollUpgradesBtn').click();
                 }
