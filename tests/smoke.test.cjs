@@ -2124,3 +2124,50 @@ test('M4.3.2.1 boss kill effects do not delay score or director recovery', () =>
   assert.equal(x.kills,1);
   assert.equal(x.after,true);
 });
+
+
+test('M4.3.2.2 shares real volley counts, spread and color across four bosses', () => {
+  const {run}=setup();
+  const result=JSON.parse(run("(()=>{startNewGame();const rows=[];for(const a of BOSS_ARCHETYPES){const config=BOSS_PHASE_VOLLEYS[a.type];const boss=new Enemy(220,220,a.type);for(const phase of [2,3]){enemyProjectiles=[];const n=fireBossPhaseAttack(boss,.25,phase);rows.push({type:a.type,phase,n,configured:phase===3?config.count3:config.count2,firstAngle:Math.atan2(enemyProjectiles[0].vy,enemyProjectiles[0].vx),expect:.25-(n-1)/2*config.spread,color:enemyProjectiles[0].color,baseColor:config.color});}}return JSON.stringify(rows);})()"));
+  assert.equal(result.length,8);
+  for (const r of result) {
+    assert.equal(r.n,r.configured);
+    assert.ok(Math.abs(r.firstAngle-r.expect)<1e-9);
+    assert.equal(r.color,r.baseColor);
+  }
+});
+test('M4.3.2.2 active/queued phase warnings are never visually conflated', () => {
+  const {run}=setup();
+  const rows=JSON.parse(run("(()=>{startNewGame();const b=new Enemy(300,300,'BOSS_PRISM');b.bossSpecial={angle:1.2,phase:3,delay:2,timer:1.35};const queued=getBossAttackVisualState(b);b.bossSpecial.delay=0;const active=getBossAttackVisualState(b);b.bossSpecial.timer=.6;const progressed=getBossAttackVisualState(b);return JSON.stringify({queued,active,progressed});})()"));
+  assert.equal(rows.queued.kind,'queued');
+  assert.equal(rows.queued.progress,0);
+  assert.equal(rows.active.kind,'phase');
+  assert.equal(rows.active.progress,0);
+  assert.equal(rows.active.angle,1.2);
+  assert.ok(rows.progressed.progress>0 && rows.progressed.progress<1);
+});
+test('M4.3.2.2 Titan charge and Prism aim use existing combat timing only', () => {
+  const {run}=setup();
+  const r=JSON.parse(run("(()=>{startNewGame();const t=new Enemy(200,200,'BOSS_TITAN');t.state='CHARGE';t.actionTimer=.35;t.dashTargetAngle=.8;const titan=getBossAttackVisualState(t);const p=new Enemy(250,250,'BOSS_PRISM');p.actionTimer=.4;p.aimAngle=-.5;const prism=getBossAttackVisualState(p);return JSON.stringify({titan,prism,timer:t.actionTimer,aim:p.aimAngle});})()"));
+  assert.equal(r.titan.kind,'charge');
+  assert.equal(r.titan.angle,.8);
+  assert.equal(r.prism.kind,'aim');
+  assert.equal(r.prism.angle,-.5);
+  assert.equal(r.timer,.35);
+  assert.equal(r.aim,-.5);
+});
+test('M4.3.2.2 three simultaneous telegraphs render without creating damage', () => {
+  const {run}=setup();
+  const r=JSON.parse(run("(()=>{startNewGame();const bosses=['BOSS_DESTROYER','BOSS_TITAN','BOSS_VOID'].map(t=>new Enemy(300,300,t));activeBosses=bosses;bosses.forEach((b,i)=>{b.bossSpecial={angle:i*.8,phase:3,delay:i*2,timer:1.35};b.bossPhaseFlash=.7;});const original=JSON.stringify(bosses.map(b=>({hp:b.hp,phase:b.bossPhase,delay:b.bossSpecial.delay,timer:b.bossSpecial.timer})));const shots=enemyProjectiles.length;drawBossArenaPresence(ctx);drawBossAttackTelegraphs(ctx);return JSON.stringify({same:original===JSON.stringify(bosses.map(b=>({hp:b.hp,phase:b.bossPhase,delay:b.bossSpecial.delay,timer:b.bossSpecial.timer}))),shotsBefore:shots,shotsAfter:enemyProjectiles.length});})()"));
+  assert.equal(r.same,true);
+  assert.equal(r.shotsAfter,r.shotsBefore);
+});
+test('M4.3.2.2 phase resonance expires while original boss attack scheduling remains intact', () => {
+  const {run}=setup();
+  const r=JSON.parse(run("(()=>{startNewGame();const b=new Enemy(100,100,'BOSS_DESTROYER');b.hp=b.maxHp*.68;b.updateBossPhases(.01,100,0);const special=b.bossSpecial;const first=b.bossPhaseFlash;for(let i=0;i<15;i++){b.bossPhaseFlash=Math.max(0,b.bossPhaseFlash-.05);}return JSON.stringify({phase:b.bossPhase,first,end:b.bossPhaseFlash,same:special===b.bossSpecial,timer:b.bossSpecial.timer});})()"));
+  assert.equal(r.phase,2);
+  assert.equal(r.first,.7);
+  assert.equal(r.end,0);
+  assert.equal(r.same,true);
+  assert.ok(Math.abs(r.timer-1.14)<1e-9);
+});
