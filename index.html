@@ -5605,6 +5605,7 @@
                 this.stats = {
                     spawned: 0, eliteSpawned: 0, eliteKills: 0, bossKills: 0,
                     encounters: 0, specialEncounters: 0, specialUnits: 0, specialCancelled: 0,
+                    specialByKind:{},bossByPattern:{},
                     bossSpecialAttacks: 0, bossAttacksDeferred: 0,
                     arenaOffered: 0, arenaCompleted: 0, arenaExpired: 0, arenaCancelled: 0,
                     arenaByKind:{},
@@ -5725,12 +5726,27 @@
                 }
             }
 
+            recordBossPattern(id){
+                this.stats.bossByPattern[id]=(this.stats.bossByPattern[id]||0)+1;
+            }
+            trackSpecialOffer(plan){
+                if(!this.stats.specialByKind[plan.type]){
+                    this.stats.specialByKind[plan.type]={
+                        offered:0,resolved:0,cancelled:0,units:0,tokensSpent:0};
+                }
+                this.stats.specialByKind[plan.type].offered++;
+            }
+            trackSpecialCancellation(plan){
+                const bucket=this.stats.specialByKind[plan?.type];
+                if(bucket) bucket.cancelled++;
+            }
             updateSpecialEncounter(dt) {
                 const inCombat = this.profile.phase === 'PRESSURE' || this.profile.phase === 'CRISIS';
                 const bossImminent = activeBosses.length > 0 || nextBossTime - totalTime < 7;
                 if (this.pendingEncounter) {
                     if (bossImminent || this.profile.phase === 'RECOVERY' || this.profile.phase === 'WARNING' ||
                         this.profile.phase === 'BOSS') {
+                        this.trackSpecialCancellation(this.pendingEncounter);
                         this.pendingEncounter = null;
                         this.stats.specialCancelled++;
                         return;
@@ -5743,6 +5759,7 @@
                     enemies.length > this.profile.cap - 12 || this.tokens < 8) return;
                 const side = Math.floor(Math.random() * 4);
                 this.pendingEncounter = getSpecialEncounterPlan(wave, this.profile.theme, side, this.encounterIndex);
+                this.trackSpecialOffer(this.pendingEncounter);
                 audio.playThreatCue('raid');
                 this.encounterIndex++;
                 this.lastEncounterAt = totalTime;
@@ -5756,15 +5773,23 @@
                 this.pendingEncounter = null;
                 if (!plan || activeBosses.length > 0) return 0;
                 let spawned = 0;
+                let tokensSpent=0;
                 for (const unit of plan.units) {
                     const cost = ENEMY_THREAT_COST[unit.type];
                     if (this.tokens < cost || enemies.length >= Math.min(MAX_ACTIVE_ENEMIES, this.profile.cap)) break;
                     const pos = formationEdgePoint(unit.side, unit.slot, unit.count);
                     if (spawnEnemy(false, unit.type, false, pos)) {
                         this.tokens -= cost;
+                        tokensSpent+=cost;
                         this.stats.spawned++;
                         spawned++;
                     }
+                }
+                const bucket=this.stats.specialByKind[plan.type];
+                if(bucket){
+                    bucket.resolved++;
+                    bucket.units+=spawned;
+                    bucket.tokensSpent=Math.round((bucket.tokensSpent+tokensSpent)*10)/10;
                 }
                 if (spawned) {
                     this.stats.specialEncounters++;
@@ -5794,6 +5819,7 @@
                 this.bossAttackNextAt = -Infinity;
                 this.nextBossPhaseWindowAt = -Infinity;
                 if (this.pendingEncounter) {
+                    this.trackSpecialCancellation(this.pendingEncounter);
                     this.pendingEncounter = null;
                     this.stats.specialCancelled++;
                 }
@@ -5897,6 +5923,10 @@
                     ...this.stats,
                     arenaByKind:Object.fromEntries(Object.entries(this.stats.arenaByKind)
                         .map(([kind,entry])=>[kind,{...entry}])),
+                    specialByKind:Object.fromEntries(Object.entries(this.stats.specialByKind)
+                        .map(([kind,entry])=>[kind,{...entry}])),
+                    bossByPattern:{...this.stats.bossByPattern},
+                    upcomingBossPattern:getBossEncounterPlan(bossEncounterCount+1).id,
                     chestDrops:{...this.stats.chestDrops},
                     chestDenied:{...this.stats.chestDenied},
                     chestOpened:{...this.stats.chestOpened},
@@ -6387,7 +6417,7 @@
             ctx.lineWidth = 4;
             ctx.setLineDash([14, 9]);
             ctx.globalAlpha = 0.35 + 0.45 * (1 - progress);
-            ctx.strokeStyle = '#ffbf58';
+            ctx.strokeStyle = plan.color||'#ffbf58';
             ctx.fillStyle = 'rgba(255, 180, 0, 0.04)';
             const band = Math.min(70, Math.min(worldWidth, worldHeight) * 0.13);
             for (const side of sides) {
@@ -6415,6 +6445,10 @@
                 else if (side === 2) ctx.fillRect(worldWidth/2-20,worldHeight-12-mark,40,mark);
                 else ctx.fillRect(12,worldHeight/2-20,mark,40);
             }
+            ctx.font="bold 13px 'Orbitron',sans-serif";
+            ctx.textAlign='center';
+            ctx.fillStyle=plan.color||'#ffdb75';
+            ctx.fillText(plan.label,worldWidth/2,Math.min(98,worldHeight*.19));
             ctx.restore();
         }
 
