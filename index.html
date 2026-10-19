@@ -6978,6 +6978,7 @@
         }
 
         function startNewGame() {
+            clearGameplayInput();
             audio.init();
             resizeCanvas();
             player = new Player(worldWidth / 2, worldHeight / 2);
@@ -7235,6 +7236,7 @@
 
         function togglePause() {
             if (gameState === 'PLAYING') {
+                clearGameplayInput();
                 gameState = 'PAUSED';
                 const modal = document.getElementById('pauseModal');
                 modal.classList.remove('hidden');
@@ -7776,18 +7778,43 @@
             setTimeout(resizeCanvas, 50);
         });
 
+        // M6.1.1: only PLAYING can latch movement keys; modals must not leave keys held.
+        const MOVEMENT_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD',
+            'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+        function clearGameplayInput() {
+            for (const code of Object.keys(keys)) delete keys[code];
+            mouse.active = false;
+        }
+        function isInteractiveKeyTarget(target) {
+            return !!(target && typeof target.closest === 'function' &&
+                target.closest('button, a, input, textarea, select, summary, [role="button"]'));
+        }
+        function pauseForLostFocus() {
+            clearGameplayInput();
+            if (gameState === 'PLAYING') togglePause();
+        }
+        window.addEventListener('blur', pauseForLostFocus);
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) pauseForLostFocus();
+        });
+
         window.addEventListener('keydown', (e) => {
+            if (gameState === 'PLAYING' && MOVEMENT_KEYS.has(e.code)) keys[e.code] = true;
+            // Native key repeat may otherwise buy multiple rerolls or toggle PAUSE repeatedly.
+            if (e.repeat) return;
             if (e.code === 'F3') {
                 e.preventDefault();
                 togglePerformanceOverlay();
                 return;
             }
-            keys[e.code] = true;
             if (e.code === 'KeyF') {
                 toggleFullscreen();
+                return;
             }
             if (gameState === 'PLAYING') {
                 if (e.code === 'Space') {
+                    // Space on a focused HUD button should activate that button, not dash twice.
+                    if (isInteractiveKeyTarget(e.target)) return;
                     e.preventDefault();
                     player.triggerDash();
                 } else if (e.code === 'KeyE') {
@@ -7795,19 +7822,27 @@
                 } else if (e.code === 'KeyM') {
                     toggleControlMode();
                 } else if (e.code === 'Escape' || e.code === 'KeyP') {
+                    e.preventDefault();
                     togglePause();
                 }
             } else if (gameState === 'LEVEL_UP') {
                 if (e.code === 'Digit1' || e.code === 'Numpad1') selectUpgradeOption(0);
                 else if (e.code === 'Digit2' || e.code === 'Numpad2') selectUpgradeOption(1);
                 else if (e.code === 'Digit3' || e.code === 'Numpad3') selectUpgradeOption(2);
-                else if (e.code === 'KeyR') document.getElementById('rerollUpgradesBtn').click();
+                else if (e.code === 'KeyR') {
+                    if (isInteractiveKeyTarget(e.target)) return;
+                    e.preventDefault();
+                    document.getElementById('rerollUpgradesBtn').click();
+                }
             } else if (gameState === 'REVIVE_PROMPT') {
                 if (e.code === 'Space' || e.code === 'Enter') {
+                    // Preserve native keyboard activation, especially "end run" button.
+                    if (isInteractiveKeyTarget(e.target)) return;
                     e.preventDefault();
                     executePlayerRevive();
                 }
             } else if (gameState === 'PAUSED' && (e.code === 'Escape' || e.code === 'KeyP')) {
+                e.preventDefault();
                 togglePause();
             }
         });
@@ -7817,6 +7852,7 @@
         });
 
         canvas.addEventListener('mousemove', (e) => {
+            if (gameState !== 'PLAYING' || e.sourceCapabilities?.firesTouchEvents) return;
             mouse.x = e.clientX / viewScale;
             mouse.y = e.clientY / viewScale;
             mouse.active = true;
@@ -7833,21 +7869,23 @@
 
         window.addEventListener('contextmenu', (e) => e.preventDefault());
 
-        canvas.addEventListener('touchstart', (e) => {
-            if (e.touches.length > 0) {
-                mouse.x = e.touches[0].clientX / viewScale;
-                mouse.y = e.touches[0].clientY / viewScale;
-                mouse.active = true;
+        function updateTouchMovementTarget(touches) {
+            if (gameState !== 'PLAYING' || !touches || touches.length === 0) {
+                mouse.active = false;
+                return;
             }
-        }, { passive: true });
-
-        canvas.addEventListener('touchmove', (e) => {
-            if (e.touches.length > 0) {
-                mouse.x = e.touches[0].clientX / viewScale;
-                mouse.y = e.touches[0].clientY / viewScale;
-                mouse.active = true;
-            }
-        }, { passive: true });
+            mouse.x = touches[0].clientX / viewScale;
+            mouse.y = touches[0].clientY / viewScale;
+            mouse.active = true;
+        }
+        canvas.addEventListener('touchstart', e => updateTouchMovementTarget(e.touches),
+            { passive: true });
+        canvas.addEventListener('touchmove', e => updateTouchMovementTarget(e.touches),
+            { passive: true });
+        canvas.addEventListener('touchend', e => updateTouchMovementTarget(e.touches),
+            { passive: true });
+        canvas.addEventListener('touchcancel', () => { mouse.active = false; },
+            { passive: true });
 
         function toggleControlMode() {
             controlMode = controlMode === 'HYBRID' ? 'KEYBOARD' : 'HYBRID';
