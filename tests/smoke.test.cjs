@@ -3111,3 +3111,170 @@ test('M5.4 5/10/20/30-minute fixed-interval plan stress respects enemy/boss budg
  }
  console.log('M5.4 fixed-interval plan stress, not real playtime: '+JSON.stringify(x));
 });
+
+
+test('M5.5 new full-screen debrief has accessible responsive tabs and retained safe actions',()=>{
+ assert.match(html,/id="gameOverModal"[^>]+role="dialog" aria-modal="true"/);
+ for(const [key,name] of [['Summary','summary'],['Combat','combat'],['Build','build'],['Economy','economy'],['Objectives','objectives']]){
+  assert.match(html,new RegExp('id="reportTab'+key+'"[^>]*data-report-tab="'+name+'"'));
+  assert.match(html,new RegExp('id="report'+key+'Content"[^>]*role="tabpanel"'));
+ }
+ for(const id of ['restartBtn','backToMenuBtn','openShopFromOverBtn','finalScoreText','finalWaveText','finalTimeText','finalKillsText','finalGoldEarnedText','newRecordBadge']){
+  assert.match(html,new RegExp('id="'+id+'"'));
+ }
+ assert.match(html,/#gameOverModal\{overflow-y:auto/);
+ assert.match(html,/@media\(max-width:720px\)/);
+ assert.match(html,/@media\(prefers-reduced-motion:reduce\)/);
+});
+
+test('M5.5.1 final report does not exist before first actual game over',()=>{
+ const {run}=setup();
+ assert.equal(run("window.getNeonFinalReport()"),null);
+ run("startNewGame()");
+ assert.equal(run("window.getNeonFinalReport()"),null);
+ assert.equal(run("gameState"),'PLAYING');
+});
+
+test('M5.5.1 report records run at death and captures true score, duration, balance and first record',()=>{
+ const {run}=setup();
+ const r=JSON.parse(run("(()=>{startNewGame();score=12750;wave=9;totalTime=243.5;kills=135;sessionGold=188;totalGold=266;triggerGameOver();return JSON.stringify(window.getNeonFinalReport());})()"));
+ assert.equal(r.version,1);assert.equal(r.reason,'CORE_DEPLETED');
+ assert.equal(r.newRecord,true);
+ assert.equal(r.result.score,12750);assert.equal(r.result.wave,9);
+ assert.equal(r.result.durationSeconds,243.5);assert.equal(r.result.kills,135);
+ assert.equal(r.result.goldEarned,188);assert.equal(r.result.totalGoldBalance,266);
+ assert.equal(run('gameState'),'GAME_OVER');
+ assert.equal(run('savedHighScore'),12750);
+});
+
+test('M5.5.1 ending twice never changes frozen report or awards duplicate record',()=>{
+ const {run}=setup();
+ const value=JSON.parse(run("(()=>{startNewGame();score=123;triggerGameOver();const first=window.getNeonFinalReport();score=222;sessionGold=111;totalTime=900;combatDirector.stats.bossKills=20;triggerGameOver('REVIVE_DECLINED');return JSON.stringify({before:first,after:window.getNeonFinalReport(),score:savedHighScore});})()"));
+ assert.deepEqual(value.after,value.before);
+ assert.equal(value.before.result.score,123);
+ assert.equal(value.before.combat.bossKills,0);
+ assert.equal(value.score,123);
+});
+
+test('M5.5.1 final report getter copies arrays and nested counters defensively',()=>{
+ const {run}=setup();
+ const data=JSON.parse(run("(()=>{startNewGame();wave=8;player.upgradeCounts={firerate:3};player.refreshBuildTraits();questStats.byType.NO_HIT=2;combatDirector.stats.goldBySource.quests=35;combatDirector.stats.arenaByKind.RELAY={offered:2,completed:1,expired:1,cancelled:0};triggerGameOver();const copy=window.getNeonFinalReport();copy.missions.byType.NO_HIT=900;copy.economy.goldBySource.quests=900;copy.arena.byKind.RELAY.completed=900;copy.build.modules[0].tier=900;return JSON.stringify(window.getNeonFinalReport());})()"));
+ assert.equal(data.missions.byType.NO_HIT,2);
+ assert.equal(data.economy.goldBySource.quests,35);
+ assert.equal(data.arena.byKind.RELAY.completed,1);
+ assert.equal(data.build.modules[0].tier,3);
+});
+
+test('M5.5.1 damage and shield reporting count only real lost HP',()=>{
+ const {run}=setup();
+ const r=JSON.parse(run("(()=>{startNewGame();player.hasShield=true;player.shieldActive=true;player.invulnTimer=0;player.takeDamage(30);const blockHp=player.hp;player.invulnTimer=0;player.shieldActive=false;player.takeDamage(13);const after=player.hp;player.takeDamage(20);const blockedByIframes=player.hp;triggerGameOver();return JSON.stringify({blockHp,after,blockedByIframes,report:window.getNeonFinalReport().combat});})()"));
+ assert.ok(r.blockHp>r.after);assert.equal(r.after,r.blockedByIframes);
+ assert.equal(r.report.shieldBlocks,1);
+ assert.equal(r.report.hitsTaken,1);
+ assert.equal(r.report.damageTaken,13);
+});
+
+test('M5.5.1 peak combo captures actual kill streak before it resets',()=>{
+ const {run}=setup();
+ const r=JSON.parse(run("(()=>{startNewGame();wave=2;for(let i=0;i<7;i++){const e=new Enemy(100,100,'SWARM');e.die();}const peak=combo;combo=1;triggerGameOver();return JSON.stringify({peak,reported:window.getNeonFinalReport().combat.peakCombo,killCount:window.getNeonFinalReport().result.kills});})()"));
+ assert.equal(r.peak,8);assert.equal(r.reported,8);assert.equal(r.killCount,7);
+});
+
+test('M5.5.1 paid revives log actual gold cost and do not invent run income',()=>{
+ const {run}=setup();
+ const r=JSON.parse(run("(()=>{startNewGame();player.freeRevives=0;totalGold=200;gameState='REVIVE_PROMPT';executePlayerRevive();gameState='REVIVE_PROMPT';executePlayerRevive();triggerGameOver();return JSON.stringify({report:window.getNeonFinalReport(),gold:totalGold});})()"));
+ assert.equal(r.report.combat.paidRevivesUsed,2);
+ assert.equal(r.report.combat.freeRevivesUsed,0);
+ assert.equal(r.report.combat.paidReviveGoldSpent,95);
+ assert.equal(r.gold,105);
+ assert.equal(r.report.result.goldEarned,0);
+ assert.equal(r.report.result.totalGoldBalance,105);
+});
+
+test('M5.5.1 free revive and rejected second revive preserve explicit end reason',()=>{
+ const {run}=setup();
+ const r=JSON.parse(run("(()=>{startNewGame();gameState='REVIVE_PROMPT';executePlayerRevive();gameState='REVIVE_PROMPT';triggerGameOver('REVIVE_DECLINED');return JSON.stringify(window.getNeonFinalReport());})()"));
+ assert.equal(r.reason,'REVIVE_DECLINED');
+ assert.equal(r.combat.freeRevivesUsed,1);
+ assert.equal(r.combat.paidRevivesUsed,0);
+ assert.equal(run("document.getElementById('reportRunStatus').textContent"),'DİRİLİŞ REDDEDİLDİ');
+});
+
+test('M5.5.3 report aggregates gold sources and chest rewards without altering ledger',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();const d=combatDirector.stats;Object.assign(d.goldBySource,{orbs:28,quests:36,arena:41,chests:75});Object.assign(d.chestDrops,{elite:3,boss:2});Object.assign(d.chestOpened,{goldHeal:2,overdriveXp:1,bulletNova:1});d.chestRewards.elite.opened=3;d.chestRewards.elite.gold=60;d.chestRewards.boss.opened=1;d.chestRewards.boss.gold=15;sessionGold=180;triggerGameOver();return JSON.stringify({report:window.getNeonFinalReport(),html:document.getElementById('reportEconomyContent').innerHTML});})()"));
+ assert.deepEqual(a.report.economy.goldBySource,{orbs:28,quests:36,arena:41,chests:75});
+ assert.equal(a.report.result.goldEarned,180);
+ assert.equal(a.report.economy.chestDrops.elite,3);
+ assert.equal(a.report.economy.chestRewards.elite.gold,60);
+ assert.match(a.html,/Altın küreler/);
+ assert.match(a.html,/Sandık ödülleri/);
+ assert.match(a.html,/SANDIK ÖDÜL DETAYI/);
+});
+
+test('M5.5.3 report shows exact build module tiers, evolution and synergy names',()=>{
+ const {run}=setup();
+ const r=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts={firerate:3,multishot:2};player.refreshBuildTraits();triggerGameOver();return JSON.stringify({model:window.getNeonFinalReport().build,html:document.getElementById('reportBuildContent').innerHTML});})()"));
+ assert.equal(r.model.modules.find(m=>m.id==='firerate').tier,3);
+ assert.equal(r.model.totalTiers,5);
+ assert.ok(r.model.evolutions.length>0);
+ assert.ok(r.model.synergies.length>=0);
+ assert.match(r.html,/MODÜL YÜKLERİ/);
+ assert.match(r.html,/AKTİF EVRİMLER/);
+ assert.match(r.html,/K3/);
+});
+
+test('M5.5.3 mission, arena and boss reports preserve exact completed/denied breakdown',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();questStats.offered=7;questStats.completed=4;questStats.byType.KILLS=3;questStats.byType.DEFEND=1;const d=combatDirector.stats;d.arenaOffered=3;d.arenaCompleted=1;d.arenaExpired=1;d.arenaCancelled=1;d.arenaByKind.STORM={offered:3,completed:1,expired:1,cancelled:1};d.bossByPattern.ARMOR_PRISM=2;triggerGameOver();return JSON.stringify({report:window.getNeonFinalReport(),html:document.getElementById('reportObjectivesContent').innerHTML});})()"));
+ assert.equal(a.report.missions.completed,4);
+ assert.equal(a.report.arena.completed,1);
+ assert.equal(a.report.arena.byKind.STORM.cancelled,1);
+ assert.equal(a.report.encounters.bossByPattern.ARMOR_PRISM,2);
+ assert.match(a.html,/57%/);
+ assert.match(a.html,/ENERJİ FIRTINASI/);
+ assert.match(a.html,/ARMOR PRISM/);
+});
+
+test('M5.5.4 tab navigation accepts known tabs, sets ARIA and never mutates the report',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();triggerGameOver();const original=JSON.stringify(window.getNeonFinalReport());const first=showRunReportTab('build'),selected=document.getElementById('reportTabBuild')._attrs['aria-selected'],other=document.getElementById('reportTabSummary')._attrs['aria-selected'];const invalid=showRunReportTab('wat');const final=JSON.stringify(window.getNeonFinalReport());return JSON.stringify({first,selected,other,invalid,activeReportTab,same:original===final});})()"));
+ assert.equal(a.first,true);assert.equal(a.selected,'true');assert.equal(a.other,'false');
+ assert.equal(a.invalid,false);assert.equal(a.activeReportTab,'build');assert.equal(a.same,true);
+});
+
+test('M5.5.4 empty run has clear messages rather than invented DPS or nonexistent arena data',()=>{
+ const {run}=setup();
+ const d=JSON.parse(run("(()=>{startNewGame();triggerGameOver();return JSON.stringify({summary:document.getElementById('reportSummaryContent').innerHTML,combat:document.getElementById('reportCombatContent').innerHTML,build:document.getElementById('reportBuildContent').innerHTML,objectives:document.getElementById('reportObjectivesContent').innerHTML});})()"));
+ assert.match(d.summary,/DPS takibi henüz bulunmuyor/);
+ assert.match(d.combat,/ayrı bir gelişmiş silah etkisi tetiklenmedi/);
+ assert.match(d.build,/yükseltme modülü seçilmedi/);
+ assert.match(d.objectives,/henüz tamamlanan görev yok/);
+ assert.match(d.objectives,/arena etkinliği henüz sunulmadı/);
+});
+
+test('M5.5.4 HTML escaping prevents untrusted snapshot labels from injecting markup',()=>{
+ const {run}=setup();
+ const sanitized=run("reportEscape('<img src=x onerror=alert(1)>&\\\"')");
+ assert.equal(sanitized,'&lt;img src=x onerror=alert(1)&gt;&amp;&quot;');
+ const built=run("reportPair('<script>','5&6')");
+ assert.match(built,/&lt;script&gt;/);
+ assert.doesNotMatch(built,/<script>/);
+});
+
+test('M5.5.4 switching menu and shop keeps report frozen until the next run resets',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();score=999;triggerGameOver();openShop('GAME_OVER');closeShop();const saved=window.getNeonFinalReport().result.score;returnToMainMenu();const inMenu=window.getNeonFinalReport().result.score;startNewGame();return JSON.stringify({saved,inMenu,next:window.getNeonFinalReport(),state:gameState});})()"));
+ assert.equal(a.saved,999);assert.equal(a.inMenu,999);
+ assert.equal(a.next,null);assert.equal(a.state,'PLAYING');
+});
+
+test('M5.5.4 short/long run numeric formatting, meters and insights stay bounded',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();const m=reportMeter('Sınır',1000,4);const n=reportNumber(123456);const i=getRunReportInsights({missions:{offered:8,completed:1},arena:{offered:3,completed:0},economy:{goldBySource:{chests:80,quests:20}},combat:{bossKills:1,hitsTaken:12},build:{evolutions:['A','B']},result:{bossEncounters:2}});return JSON.stringify({m,n,i});})()"));
+ assert.match(a.m,/width:100\.0%/);
+ assert.match(a.n,/123/);
+ assert.ok(a.i.length<=3);
+ assert.ok(a.i.some(x=>x.title==='EN GÜÇLÜ GELİR KAYNAĞI'));
+});
+

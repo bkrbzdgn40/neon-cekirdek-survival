@@ -765,6 +765,113 @@
             #startMenuShell > footer, #menuRunSteps {display:none;}
         }
 
+
+        /* M5.5 / Battle debrief: typography first, saturated accents only for meaning. */
+        #gameOverModal{overflow-y:auto;overscroll-behavior:contain;color:#e9f6ff;}
+        .report-shell{width:min(1120px,100%);min-height:100dvh;margin:auto;background:
+            radial-gradient(ellipse at 82% -8%,rgba(247,57,125,.12),transparent 48%),
+            radial-gradient(ellipse at 4% 32%,rgba(24,206,242,.09),transparent 45%),
+            #080f1e;border-inline:1px solid #243550;box-shadow:0 0 90px #000e;
+            display:flex;flex-direction:column;}
+        .report-hero{padding:clamp(20px,4vw,38px) clamp(16px,4vw,42px) 22px;}
+        .report-hero-top,.report-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;}
+        .report-hero-top{margin-bottom:26px;}
+        .report-kicker,.report-eyebrow{font:700 10px 'Orbitron',sans-serif;letter-spacing:.17em;color:#6ce3f2;}
+        .report-kicker i{margin-right:6px}
+        .report-eyebrow{color:#9fb9c7;margin-bottom:10px}
+        .report-status{font:700 10px 'Orbitron',sans-serif;letter-spacing:.09em;color:#ffb5ca;
+            border:1px solid #a24c77;padding:8px 11px;border-radius:999px;background:#351526;}
+        .report-title{font:900 clamp(25px,4.8vw,53px) 'Orbitron',sans-serif;line-height:1.1;
+            letter-spacing:-.055em;color:#fff;text-shadow:0 0 33px #f8487052}
+        .report-title-dot{color:#fb6697}
+        .report-subtitle{font-size:13px;line-height:1.65;color:#aabbd2;margin-top:12px;max-width:570px}
+        .report-wave-medallion{width:120px;height:120px;border-radius:50%;flex:none;
+            background:radial-gradient(circle,#1f3554,#090f20 74%);border:2px solid #4979a0;
+            display:flex;align-items:center;justify-content:center;flex-direction:column;
+            box-shadow:0 0 36px #00cffe1b,inset 0 0 25px #00dfff0e}
+        .report-wave-medallion span{font:700 9px 'Orbitron',sans-serif;color:#a7dce8;letter-spacing:.09em;}
+        .report-wave-medallion strong{font:900 49px 'Orbitron',sans-serif;color:#b9f5ff;line-height:1.2}
+        .report-record{margin-top:14px;display:inline-flex;gap:8px;align-items:center;background:#4b3b171c;
+            border:1px solid #d3ab4e;color:#ffe0a0;font:700 11px 'Orbitron',sans-serif;
+            padding:8px 12px;border-radius:8px;}
+        .report-record.hidden{display:none}
+        .report-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:27px;}
+        .report-kpi{background:#101d31;border:1px solid #2e4057;border-radius:12px;padding:16px 17px;
+            min-width:0;display:flex;flex-direction:column;gap:7px;}
+        .report-kpi>span{font:700 9px 'Orbitron',sans-serif;letter-spacing:.07em;color:#9db5ca}
+        .report-kpi strong{font:800 clamp(18px,2.3vw,30px) 'Orbitron',sans-serif;overflow-wrap:anywhere;color:#e8f4ff}
+        .report-kpi small{color:#839db6;font-size:11px;}
+        .report-kpi-primary{border-color:#247e9a;background:linear-gradient(145deg,#123349,#0d192e)}
+        .report-kpi-primary strong{color:#79edff}
+        .report-kpi-gold strong{color:#ffe3a0}
+        .report-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin;padding:10px clamp(16px,4vw,42px);
+            background:#0a1425;border-block:1px solid #27374c;position:sticky;top:0;z-index:2;}
+        .report-tab{flex:0 0 auto;min-height:43px;padding:0 15px;border:1px solid transparent;border-radius:8px;
+            color:#a5b9cf;font:700 10px 'Orbitron',sans-serif;letter-spacing:.03em;
+            white-space:nowrap;cursor:pointer;transition:background .16s,color .16s;}
+        .report-tab:hover{background:#1b2940;color:#fff}
+        .report-tab.is-active{background:#11354c;border-color:#32bbd5;color:#bbf4ff;box-shadow:inset 0 -2px #32bbd5}
+        .report-tab:focus-visible{outline:2px solid #d1fcff;outline-offset:2px;}
+        .report-main{flex:1;padding:26px clamp(16px,4vw,42px) 40px;min-height:260px;}
+        .report-panel.hidden{display:none}
+        .report-section-title{font:800 13px 'Orbitron',sans-serif;color:#e6f7ff;letter-spacing:.05em;margin:0 0 14px}
+        .report-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+        .report-block{min-width:0;padding:20px;border:1px solid #263c55;border-radius:13px;background:#111c2f;}
+        .report-block.wide{grid-column:1/-1}
+        .report-block-head{display:flex;align-items:center;gap:9px;margin-bottom:15px;color:#80ddeb;
+            font:800 12px 'Orbitron',sans-serif;}
+        .report-block-head i{width:18px}
+        .report-pair{display:flex;justify-content:space-between;align-items:baseline;gap:15px;padding:10px 0;
+            border-bottom:1px solid #27384b;font-size:13px;}
+        .report-pair:last-child{border-bottom:0}
+        .report-pair span{color:#a9bdd1}.report-pair strong{font-family:'Orbitron',sans-serif;text-align:right;
+            color:#f3fbff;font-size:12px;overflow-wrap:anywhere;}
+        .report-empty{color:#93aac1;font-size:12px;line-height:1.65;padding:8px 0}
+        .report-insight{padding:16px 18px;border-left:3px solid #44bace;
+            background:#112b40;border-radius:0 9px 9px 0;margin-bottom:10px}
+        .report-insight strong{font:800 11px 'Orbitron',sans-serif;color:#a9f4ff;display:block;margin-bottom:7px}
+        .report-insight p{font-size:12px;line-height:1.65;color:#d2e2f2}
+        .report-chip-list{display:flex;flex-wrap:wrap;gap:8px}
+        .report-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid #3f5b77;
+            border-radius:8px;padding:9px 11px;background:#0b192c;color:#ebf8ff;font-size:12px;line-height:1.4}
+        .report-chip strong{color:#c3fcff}
+        .report-meter{display:flex;align-items:center;gap:13px;padding:10px 0}
+        .report-meter-label{min-width:116px;max-width:155px;color:#b7cce2;font-size:11px;line-height:1.3}
+        .report-meter-track{height:8px;border-radius:30px;background:#253c52;flex:1;overflow:hidden}
+        .report-meter-fill{height:100%;border-radius:30px;background:#56cde6}
+        .report-meter-value{width:74px;text-align:right;color:#eef8ff;font:700 11px 'Orbitron',sans-serif}
+        .report-micro{color:#92a9be;font-size:11px;line-height:1.65;margin-top:12px}
+        .report-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:18px clamp(16px,4vw,42px);
+            border-top:1px solid #284159;background:rgba(7,16,31,.98);position:sticky;bottom:0;z-index:3;}
+        .report-actions button{min-height:47px;padding:12px 20px;border-radius:9px;font:800 11px 'Orbitron',sans-serif;
+            letter-spacing:.02em;cursor:pointer;white-space:normal;text-align:center;}
+        .report-action-primary{background:linear-gradient(105deg,#c32476,#316caf);color:#fff;border:1px solid #ef86bf;flex:1.4}
+        .report-action-secondary{background:#1a2638;color:#ffdc8b;border:1px solid #9b7e49;flex:1.1}
+        .report-action-quiet{background:transparent;color:#b0c6dc;border:1px solid #3d546b;flex:.7}
+        #gameOverModal button:focus-visible{outline:2px solid #defbff;outline-offset:3px}
+        @media(max-width:720px){
+            .report-hero-top{margin-bottom:18px;align-items:start}
+            .report-kicker{font-size:9px;line-height:1.7}
+            .report-status{font-size:8px}
+            .report-wave-medallion{width:83px;height:83px}
+            .report-wave-medallion strong{font-size:30px}
+            .report-wave-medallion span{font-size:7px}
+            .report-heading{gap:10px}
+            .report-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+            .report-grid{grid-template-columns:1fr}
+            .report-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+            .report-action-primary{grid-column:1/-1}
+            .report-actions button{font-size:10px;min-height:44px;padding:11px}
+            .report-main{padding-block:20px 30px}
+        }
+        @media(max-width:365px){
+            .report-wave-medallion{width:68px;height:68px}
+            .report-wave-medallion strong{font-size:24px}
+            .report-title{font-size:22px}
+            .report-kpi{padding:11px}
+            .report-kpi strong{font-size:17px}
+        }
+        @media(prefers-reduced-motion:reduce){.report-tab{transition:none}}
     </style>
 </head>
 <body class="relative w-screen h-screen overflow-hidden select-none">
@@ -1325,51 +1432,54 @@
         </div>
     </div>
 
-    <!-- GAME OVER MODAL -->
-    <div id="gameOverModal" class="fixed inset-0 z-30 hidden items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-        <div class="max-w-md w-full bg-gray-950 border border-pink-500/80 rounded-2xl p-6 sm:p-8 text-center box-glow-pink">
-            <div class="w-16 h-16 rounded-full bg-pink-500/20 border border-pink-500 flex items-center justify-center mx-auto mb-3 text-pink-500 text-3xl">
-                <i class="fa-solid fa-skull-crossbones"></i>
-            </div>
-            <h2 class="font-cyber text-3xl font-black text-white text-glow-pink mb-1">ÇEKİRDEK ÇÖKTÜ</h2>
-            <p id="newRecordBadge" class="hidden text-xs font-cyber font-bold text-yellow-300 bg-yellow-500/20 border border-yellow-400 px-3 py-1 rounded-full mx-auto w-max mb-3">
-                ★ YENİ REKOR SKOR! ★
-            </p>
+    <!-- M5.5: Report-first, scrollable end-of-run analysis -->
+    <div id="gameOverModal" class="fixed inset-0 z-30 hidden items-start justify-center bg-black/90 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+        <div class="report-shell" id="reportShell">
+            <header class="report-hero">
+                <div class="report-hero-top">
+                    <span class="report-kicker"><i class="fa-solid fa-satellite-dish" aria-hidden="true"></i> OPERASYON KAYDI / M5.5</span>
+                    <span id="reportRunStatus" class="report-status">SİNYAL KESİLDİ</span>
+                </div>
+                <div class="report-heading">
+                    <div>
+                        <p class="report-eyebrow">SONUÇ DEĞERLENDİRMESİ</p>
+                        <h2 id="reportTitle" class="report-title">ÇEKİRDEK ÇÖKTÜ<span class="report-title-dot">.</span></h2>
+                        <p id="reportSubtitle" class="report-subtitle">Operasyon verileri kaydedildi. Bir sonraki koşu için neyin işe yaradığını incele.</p>
+                    </div>
+                    <div class="report-wave-medallion" aria-label="Ulaşılan dalga">
+                        <span>SON DALGA</span><strong id="finalWaveText">1</strong>
+                    </div>
+                </div>
+                <div id="newRecordBadge" class="report-record hidden"><i class="fa-solid fa-trophy" aria-hidden="true"></i> YENİ KİŞİSEL REKOR</div>
+                <div class="report-kpi-grid" aria-label="Koşu özeti">
+                    <div class="report-kpi report-kpi-primary"><span>TOPLAM SKOR</span><strong id="finalScoreText">0</strong><small id="reportScoreDetail">Kapanış skoru</small></div>
+                    <div class="report-kpi"><span>HAYATTA KALMA</span><strong id="finalTimeText">00:00</strong><small id="reportTimeDetail">Koşu süresi</small></div>
+                    <div class="report-kpi"><span>DÜŞMAN İMHASI</span><strong id="finalKillsText">0</strong><small id="reportKillDetail">Savaş verisi</small></div>
+                    <div class="report-kpi report-kpi-gold"><span>KAZANILAN ALTIN</span><strong id="finalGoldEarnedText">+0</strong><small id="reportGoldDetail">Bu koşuda</small></div>
+                </div>
+            </header>
 
-            <div class="bg-gray-900/90 border border-gray-800 rounded-xl p-4 my-5 space-y-2.5 text-sm">
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-400">Toplam Skor:</span>
-                    <span id="finalScoreText" class="font-cyber font-black text-lg text-cyan-400">0</span>
-                </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-400">Ulaşılan Dalga:</span>
-                    <span id="finalWaveText" class="font-cyber font-bold text-purple-400">1</span>
-                </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-400">Hayatta Kalma Süresi:</span>
-                    <span id="finalTimeText" class="font-cyber font-bold text-white">00:00</span>
-                </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-400">İmha Edilen Düşman:</span>
-                    <span id="finalKillsText" class="font-cyber font-bold text-pink-400">0</span>
-                </div>
-                <div class="flex justify-between items-center pt-2 border-t border-gray-800">
-                    <span class="text-yellow-300 font-semibold">Bu Tur Kazanılan Altın:</span>
-                    <span id="finalGoldEarnedText" class="font-cyber font-black text-yellow-400">+0</span>
-                </div>
-            </div>
+            <nav class="report-tabs" id="reportTabs" role="tablist" aria-label="Koşu raporu bölümleri">
+                <button id="reportTabSummary" type="button" class="report-tab is-active" data-report-tab="summary" role="tab" aria-controls="reportSummaryContent" aria-selected="true">ÖZET</button>
+                <button id="reportTabCombat" type="button" class="report-tab" data-report-tab="combat" role="tab" aria-controls="reportCombatContent" aria-selected="false">SAVAŞ</button>
+                <button id="reportTabBuild" type="button" class="report-tab" data-report-tab="build" role="tab" aria-controls="reportBuildContent" aria-selected="false">BUILD</button>
+                <button id="reportTabEconomy" type="button" class="report-tab" data-report-tab="economy" role="tab" aria-controls="reportEconomyContent" aria-selected="false">EKONOMİ</button>
+                <button id="reportTabObjectives" type="button" class="report-tab" data-report-tab="objectives" role="tab" aria-controls="reportObjectivesContent" aria-selected="false">GÖREV / ARENA</button>
+            </nav>
 
-            <div class="flex flex-col gap-3">
-                <button id="openShopFromOverBtn" type="button" class="cyber-btn w-full py-3 rounded-xl bg-gray-900 hover:bg-gray-800 font-cyber font-bold text-sm text-yellow-300 border border-yellow-400 cursor-pointer flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-coins"></i> SİBER LABORATUVAR
-                </button>
-                <button id="restartBtn" type="button" class="cyber-btn w-full py-4 rounded-xl bg-gradient-to-r from-pink-600 via-purple-600 to-cyan-500 font-cyber font-black text-base tracking-wider text-white border border-pink-400 cursor-pointer">
-                    TEKRAR DENE <i class="fa-solid fa-rotate-right ml-1"></i>
-                </button>
-                <button id="backToMenuBtn" type="button" class="cyber-btn w-full py-2.5 rounded-xl bg-gray-950 hover:bg-gray-900 font-cyber font-bold text-xs text-gray-400 border border-gray-800 cursor-pointer">
-                    ANA MENÜ
-                </button>
-            </div>
+            <main class="report-main" id="reportMain">
+                <section id="reportSummaryContent" class="report-panel" role="tabpanel" aria-labelledby="reportTabSummary"></section>
+                <section id="reportCombatContent" class="report-panel hidden" role="tabpanel" aria-labelledby="reportTabCombat"></section>
+                <section id="reportBuildContent" class="report-panel hidden" role="tabpanel" aria-labelledby="reportTabBuild"></section>
+                <section id="reportEconomyContent" class="report-panel hidden" role="tabpanel" aria-labelledby="reportTabEconomy"></section>
+                <section id="reportObjectivesContent" class="report-panel hidden" role="tabpanel" aria-labelledby="reportTabObjectives"></section>
+            </main>
+
+            <footer class="report-actions" aria-label="Koşu sonrası işlemler">
+                <button id="restartBtn" type="button" class="report-action-primary cyber-btn"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i> YENİ KOŞU</button>
+                <button id="openShopFromOverBtn" type="button" class="report-action-secondary cyber-btn"><i class="fa-solid fa-flask" aria-hidden="true"></i> SİBER LABORATUVAR</button>
+                <button id="backToMenuBtn" type="button" class="report-action-quiet cyber-btn">ANA MENÜ</button>
+            </footer>
         </div>
     </div>
 
@@ -1880,6 +1990,11 @@
         let dyingSequenceTimer = 0;
         let reviveCountUsed = 0;
         let paidRevivesUsed = 0;
+        // Run-only metrics are counted at the actual event, not inferred afterward.
+        let runMetrics={peakCombo:1,damageTaken:0,hitsTaken:0,shieldBlocks:0,
+            freeRevivesUsed:0,paidReviveGoldSpent:0,paidRevivesUsed:0};
+        let finalRunReport=null;
+        let activeReportTab='summary';
         let gridOffset = { x: 0, y: 0 };
 
         let menuDemoNodes = [];
@@ -2542,6 +2657,7 @@
 
                 if (this.hasShield && this.shieldActive) {
                     this.shieldActive = false;
+                    runMetrics.shieldBlocks++;
                     this.shieldCooldown = this.shieldMaxCooldown;
                     this.invulnTimer = 0.8;
                     audio.playExplosion(false);
@@ -2574,7 +2690,13 @@
                     return;
                 }
 
+                const hpBefore=this.hp;
                 this.hp = Math.max(0, this.hp - amount);
+                const damageLost=hpBefore-this.hp;
+                if(damageLost>0){
+                    runMetrics.damageTaken+=damageLost;
+                    runMetrics.hitsTaken++;
+                }
                 resetFlawlessQuest();
                 this.invulnTimer = 0.65;
                 screenShake = 14;
@@ -3996,6 +4118,7 @@
                 if(this.isElite) advanceQuest('ELITE_HUNT',1);
 
                 combo = Math.min(99, combo + 1);
+                runMetrics.peakCombo=Math.max(runMetrics.peakCombo,combo);
                 comboTimer = COMBO_MAX_TIME;
                 advanceQuest('COMBO', combo);
 
@@ -6898,6 +7021,10 @@
             dyingSequenceTimer = 0;
             reviveCountUsed = 0;
             paidRevivesUsed = 0;
+            runMetrics={peakCombo:1,damageTaken:0,hitsTaken:0,shieldBlocks:0,
+                freeRevivesUsed:0,paidReviveGoldSpent:0,paidRevivesUsed:0};
+            finalRunReport=null;
+            activeReportTab='summary';
             questHistory=[];
             questStats={offered:0,completed:0,byType:{},hitsReset:0};
             questHudPrevious='';
@@ -7161,8 +7288,11 @@
             const goldReviveCost = 30 + paidRevivesUsed * 35;
             if (player.freeRevives > 0) {
                 player.freeRevives--;
+                runMetrics.freeRevivesUsed++;
             } else if (paidRevivesUsed < 2 && totalGold >= goldReviveCost) {
                 totalGold -= goldReviveCost;
+                runMetrics.paidRevivesUsed++;
+                runMetrics.paidReviveGoldSpent+=goldReviveCost;
                 paidRevivesUsed++;
                 saveMetaProgress();
             } else {
@@ -7199,7 +7329,308 @@
             updateHUD();
         }
 
-        function triggerGameOver() {
+        const RUN_REPORT_VERSION=1;
+        function snapshotEndOfRun(reason='CORE_DEPLETED',isNewRecord=false){
+            if(finalRunReport) return finalRunReport;
+            const economy=combatDirector?combatDirector.getEconomySnapshot():null;
+            const director=combatDirector?combatDirector.getDiagnostics():null;
+            const guide=player?getBuildGuideModel(player):null;
+            const modules=player?Object.entries(player.upgradeCounts).map(([id,tier])=>{
+                const definition=UPGRADES_POOL.find(u=>u.id===id);
+                return {id,name:definition?.name||id,icon:definition?.icon||'fa-solid fa-cube',
+                    color:definition?.color||'#a5eaff',tier};
+            }).sort((a,b)=>b.tier-a.tier||a.name.localeCompare(b.name,'tr')):[];
+            const data={
+                version:RUN_REPORT_VERSION,reason,newRecord:!!isNewRecord,
+                result:{score,wave,durationSeconds:totalTime,kills,goldEarned:sessionGold,
+                    totalGoldBalance:totalGold,bossEncounters:bossEncounterCount},
+                chassis:player?.chassis||selectedChassis,
+                combat:{...runMetrics,eliteKills:director?.eliteKills||0,
+                    bossKills:director?.bossKills||0,
+                    bossAttacksDeferred:director?.bossAttacksDeferred||0,
+                    specialEncounters:director?.specialEncounters||0},
+                build:{level:player?.level||1,modules,
+                    evolutions:guide?.evolutions||[],synergies:guide?.synergies||[],
+                    totalTiers:guide?.totalTiers||0,
+                    effects:{...(player?.buildStats||{})},
+                    stats:player?{damage:player.damage,critChance:player.critChance,
+                        fireDelay:player.fireDelay,maxHp:player.maxHp,speed:player.speed}:null},
+                economy:economy||{goldBySource:{},chestDrops:{},chestOpened:{},chestRewards:{}},
+                missions:{offered:questStats.offered,completed:questStats.completed,
+                    byType:{...questStats.byType},hitsReset:questStats.hitsReset},
+                arena:director?{offered:director.arenaOffered,completed:director.arenaCompleted,
+                    expired:director.arenaExpired,cancelled:director.arenaCancelled,
+                    byKind:director.arenaByKind}:{offered:0,completed:0,expired:0,cancelled:0,byKind:{}},
+                encounters:director?{bossByPattern:director.bossByPattern,
+                    specialByKind:director.specialByKind}:{bossByPattern:{},specialByKind:{}}
+            };
+            // A serialization boundary prevents later game mutations and UI references
+            // from ever modifying the finished run. Reports remain in this session only.
+            finalRunReport=JSON.parse(JSON.stringify(data));
+            return finalRunReport;
+        }
+        window.getNeonFinalReport=()=>finalRunReport?
+            JSON.parse(JSON.stringify(finalRunReport)):null;
+
+        const REPORT_TABS=Object.freeze(['summary','combat','build','economy','objectives']);
+        const REPORT_TAB_IDS=Object.freeze({
+            summary:'reportSummaryContent',combat:'reportCombatContent',
+            build:'reportBuildContent',economy:'reportEconomyContent',
+            objectives:'reportObjectivesContent'
+        });
+        const REPORT_EFFECT_NAMES=Object.freeze({
+            railShots:'Ray atışı',clusterBursts:'Küme patlaması',
+            arcSurges:'Elektrik sıçraması',orbitalPulses:'Uydu darbesi',
+            aegisPulses:'Aegis atımı',prismBounces:'Prizma sekmesi',
+            reactorBursts:'Reaktör salvosu',overdriveDischarges:'Cinnet deşarjı',
+            weakpointMarks:'Zayıf nokta işareti',bloodReactorHeals:'Kan reaktörü iyileşmesi',
+            aegisDeflections:'Kalkan karşı atışı',kineticVortices:'Kinetik girdap'
+        });
+        const REPORT_GOLD_NAMES=Object.freeze({
+            orbs:'Altın küreler',quests:'Görev ödülleri',
+            arena:'Arena etkinlikleri',chests:'Sandık ödülleri'
+        });
+        const REPORT_CHEST_NAMES=Object.freeze({
+            goldHeal:'Altın / İyileşme',overdriveXp:'Cinnet / XP',bulletNova:'Mermi Novası'
+        });
+        const REPORT_CHASSIS_NAMES=Object.freeze({
+            VANGUARD:'ÖNCÜ',PHANTOM:'HAYALET',TITAN:'TİTAN'
+        });
+        const reportNumber=n=>Math.round(Number.isFinite(n)?n:0).toLocaleString('tr-TR');
+        const reportEscape=v=>String(v??'').replace(/[&<>"']/g,ch=>({
+            '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        })[ch]);
+        function reportBlock(title,icon,body,wide=false){
+            return '<article class="report-block'+(wide?' wide':'')+'">'+
+                '<h3 class="report-block-head"><i class="fa-solid '+icon+
+                '" aria-hidden="true"></i>'+reportEscape(title)+'</h3>'+body+'</article>';
+        }
+        function reportPair(label,value){
+            return '<div class="report-pair"><span>'+reportEscape(label)+'</span><strong>'+
+                reportEscape(value)+'</strong></div>';
+        }
+        function reportMeter(label,value,total,color='#56cde6',suffix=''){
+            const pct=total>0?Math.max(0,Math.min(100,100*value/total)):0;
+            return '<div class="report-meter"><span class="report-meter-label">'+
+                reportEscape(label)+'</span><span class="report-meter-track"><span class="report-meter-fill" style="display:block;width:'+
+                pct.toFixed(1)+'%;background:'+color+'"></span></span><strong class="report-meter-value">'+
+                reportEscape(reportNumber(value)+suffix)+'</strong></div>';
+        }
+        function reportEmpty(message){
+            return '<p class="report-empty">'+reportEscape(message)+'</p>';
+        }
+        function getRunReportInsights(r){
+            const notes=[];
+            const quests=r.missions;
+            const arena=r.arena;
+            const income=r.economy.goldBySource||{};
+            const entries=Object.entries(income).filter(([,amount])=>amount>0)
+                .sort((a,b)=>b[1]-a[1]);
+            if(entries.length){
+                const source=entries[0][0];
+                notes.push({title:'EN GÜÇLÜ GELİR KAYNAĞI',
+                    detail:'Bu koşuda en çok altını '+(REPORT_GOLD_NAMES[source]||source)+
+                    ' üzerinden kazandın ('+reportNumber(entries[0][1])+' altın).'});
+            }
+            if(quests.offered>=3){
+                const ratio=quests.completed/quests.offered;
+                notes.push(ratio>=.6?
+                    {title:'GÖREV VERİMLİLİĞİ',detail:'Sunulan görevlerin önemli bölümünü tamamladın ('+
+                        reportNumber(quests.completed)+'/'+reportNumber(quests.offered)+').'}:
+                    {title:'GÖREV FIRSATI',detail:'Görev tamamlama oranı '+
+                        Math.round(ratio*100)+'%. Daha erişilebilir hedeflere odaklanmak ek altın ve Cinnet sağlayabilir.'});
+            }
+            if(arena.offered>=2){
+                notes.push(arena.completed?{
+                    title:'ARENA KARARLARI',detail:'Sunulan '+reportNumber(arena.offered)+
+                        ' arena olayının '+reportNumber(arena.completed)+' tanesini tamamladın.'
+                }:{title:'ARENA FIRSATI',detail:'Bu koşuda sunulan '+reportNumber(arena.offered)+
+                        ' arena etkinliğini tamamlamadın. İsteğe bağlı risk/ödülleri değerlendirebilirsin.'});
+            }
+            if(r.combat.bossKills){
+                notes.push({title:'BOSS KARŞILAŞMALARI',detail:reportNumber(r.combat.bossKills)+
+                    ' boss imha ettin; '+reportNumber(r.result.bossEncounters)+
+                    ' boss karşılaşmasına girdin.'});
+            }
+            if(r.combat.hitsTaken>=5){
+                notes.push({title:'SAVUNMA DENGESİ',
+                    detail:reportNumber(r.combat.hitsTaken)+' can kaybettiren isabet aldın. '+
+                    'Dash ve koruyucu yetenekleri daha sık kullanmak yardımcı olabilir.'});
+            }
+            if(r.build.evolutions.length>=2){
+                notes.push({title:'BUILD GELİŞİMİ',detail:reportNumber(r.build.evolutions.length)+
+                    ' modül evrimine ulaştın. Sinerji uyumunu Build sekmesinden inceleyebilirsin.'});
+            }
+            if(!notes.length)notes.push({title:'İLK ADIM',
+                detail:'Bu koşu temel savaş verilerini topladı. Bir sonraki koşuda daha fazla görev, modül ve arena olayını keşfedebilirsin.'});
+            return notes.slice(0,3);
+        }
+        function renderRunReport(r=finalRunReport){
+            if(!r) return false;
+            const el=id=>document.getElementById(id);
+            const income=r.economy.goldBySource||{};
+            const goldTotal=Object.values(income).reduce((s,n)=>s+(Number(n)||0),0);
+            const opened=r.economy.chestOpened||{};
+            const drops=r.economy.chestDrops||{};
+            const openedTotal=Object.values(opened).reduce((s,n)=>s+(Number(n)||0),0);
+            const missionRatio=r.missions.offered?
+                Math.round(100*r.missions.completed/r.missions.offered):0;
+            el('reportSubtitle').textContent=r.reason==='REVIVE_DECLINED'?
+                'Dirilişi reddederek operasyonu sonlandırdın. Bir sonraki koşu için kararlarını incele.':
+                'Çekirdek bütünlüğü tükendi. Bir sonraki koşu için kararlarını incele.';
+            el('reportRunStatus').textContent=r.reason==='REVIVE_DECLINED'?
+                'DİRİLİŞ REDDEDİLDİ':'SİNYAL KESİLDİ';
+            el('reportKillDetail').textContent=reportNumber(r.combat.eliteKills)+
+                ' elit · '+reportNumber(r.combat.bossKills)+' boss';
+            el('reportGoldDetail').textContent='Kazanç · mevcut bakiye '+
+                reportNumber(r.result.totalGoldBalance);
+            el('reportTimeDetail').textContent=REPORT_CHASSIS_NAMES[r.chassis]||r.chassis;
+            el('reportScoreDetail').textContent=r.newRecord?'Yeni rekor':'Operasyon skoru';
+
+            const insights=getRunReportInsights(r).map(note=>
+                '<div class="report-insight"><strong>'+reportEscape(note.title)+'</strong>'+
+                '<p>'+reportEscape(note.detail)+'</p></div>').join('');
+            const summary=
+                reportBlock('OPERASYONUN ÖZÜ','fa-chart-simple',
+                    reportPair('Şasi',REPORT_CHASSIS_NAMES[r.chassis]||r.chassis)+
+                    reportPair('Ulaşılan seviye',reportNumber(r.build.level))+
+                    reportPair('Zirve kombo','x'+reportNumber(r.combat.peakCombo))+
+                    reportPair('Boss karşılaşmaları',reportNumber(r.result.bossEncounters))+
+                    reportPair('Kullanılan diriliş',reportNumber(r.combat.freeRevivesUsed+r.combat.paidRevivesUsed)))+
+                reportBlock('KOŞU İÇGÖRÜLERİ','fa-lightbulb',insights)+
+                reportBlock('BİR SONRAKİ ADIM','fa-arrow-trend-up',
+                    '<p class="report-empty">Savaşta ne kadar dayandığını, build tercihlerini, altın kaynaklarını ve görev verimliliğini yukarıdaki sekmelerden incele. '+
+                    'Yalnızca ölçülmüş olaylar raporlanır; silah başına gerçek hasar/DPS takibi henüz bulunmuyor.</p>',true);
+            el('reportSummaryContent').innerHTML='<div class="report-grid">'+summary+'</div>';
+
+            const combat=
+                reportBlock('SALDIRI PERFORMANSI','fa-crosshairs',
+                    reportPair('Toplam düşman',reportNumber(r.result.kills))+
+                    reportPair('Elit imha',reportNumber(r.combat.eliteKills))+
+                    reportPair('Boss imha',reportNumber(r.combat.bossKills))+
+                    reportPair('Zirve kombo','x'+reportNumber(r.combat.peakCombo))+
+                    reportPair('Tamamlanan özel baskın',reportNumber(r.combat.specialEncounters))+
+                    reportPair('Çakışma önlenen boss saldırısı',reportNumber(r.combat.bossAttacksDeferred)))+
+                reportBlock('HAYATTA KALMA','fa-shield-heart',
+                    reportPair('Gerçek HP kaybı',reportNumber(r.combat.damageTaken))+
+                    reportPair('HP azaltan isabet',reportNumber(r.combat.hitsTaken))+
+                    reportPair('Kalkanla blok',reportNumber(r.combat.shieldBlocks))+
+                    reportPair('Ücretsiz diriliş',reportNumber(r.combat.freeRevivesUsed))+
+                    reportPair('Altınla diriliş',reportNumber(r.combat.paidRevivesUsed))+
+                    reportPair('Diriliş harcaması',reportNumber(r.combat.paidReviveGoldSpent)+' altın'))+
+                reportBlock('BUILD ETKİNLİĞİ','fa-bolt-lightning',
+                    Object.entries(r.build.effects||{}).filter(([,n])=>n>0).length?
+                        Object.entries(r.build.effects).filter(([,n])=>n>0)
+                            .map(([name,n])=>reportPair(REPORT_EFFECT_NAMES[name]||name,reportNumber(n))).join(''):
+                        reportEmpty('Bu koşuda ayrı bir gelişmiş silah etkisi tetiklenmedi.'),true);
+            el('reportCombatContent').innerHTML='<div class="report-grid">'+combat+'</div>';
+
+            const mods=r.build.modules||[];
+            const chips=mods.length?mods.map(m=>
+                '<span class="report-chip"><i class="'+reportEscape(m.icon)+
+                '" aria-hidden="true" style="color:'+reportEscape(m.color)+'"></i>'+
+                reportEscape(m.name)+' <strong>K'+reportNumber(m.tier)+'</strong></span>').join(''):
+                reportEmpty('Bu koşuda yükseltme modülü seçilmedi.');
+            const traits=(list,empty)=>list.length?
+                '<div class="report-chip-list">'+list.map(n=>'<span class="report-chip">'+
+                    reportEscape(n)+'</span>').join('')+'</div>':reportEmpty(empty);
+            const build=
+                reportBlock('MODÜL YÜKLERİ','fa-microchip',
+                    '<p class="report-micro">Toplam '+reportNumber(r.build.totalTiers)+
+                    ' modül kademesi · '+reportNumber(mods.length)+' farklı modül</p>'+
+                    '<div class="report-chip-list" style="margin-top:14px">'+chips+'</div>',true)+
+                reportBlock('AKTİF EVRİMLER','fa-dna',
+                    traits(r.build.evolutions||[],'Bu koşuda modül evrimi tamamlanmadı.'))+
+                reportBlock('AKTİF SİNERJİLER','fa-link',
+                    traits(r.build.synergies||[],'Bu koşuda aktif sinerji açılmadı.'))+
+                reportBlock('SON DURUM İSTATİSTİKLERİ','fa-gauge-high',
+                    r.build.stats?
+                        reportPair('Hasar',reportNumber(r.build.stats.damage))+
+                        reportPair('Kritik şansı',Math.round(r.build.stats.critChance*100)+'%')+
+                        reportPair('Ateş aralığı',r.build.stats.fireDelay.toFixed(2)+' sn')+
+                        reportPair('Maksimum can',reportNumber(r.build.stats.maxHp))+
+                        reportPair('Hareket hızı',reportNumber(r.build.stats.speed)):
+                        reportEmpty('Build istatistiği bulunamadı.'),true);
+            el('reportBuildContent').innerHTML='<div class="report-grid">'+build+'</div>';
+
+            const sources=Object.entries(REPORT_GOLD_NAMES).map(([key,label],index)=>
+                reportMeter(label,income[key]||0,Math.max(1,goldTotal),
+                    ['#55d2ed','#c7a5ff','#7be8be','#ffe09a'][index],'')).join('');
+            const rewards=r.economy.chestRewards||{};
+            const allRewards=Object.values(rewards);
+            const rewardSum=k=>allRewards.reduce((n,b)=>n+(Number(b[k])||0),0);
+            const economy=
+                reportBlock('ALTIN GELİRİ','fa-coins',
+                    sources+reportPair('İzlenen toplam',reportNumber(goldTotal))+
+                    reportPair('Koşu boyunca kazanılan',reportNumber(r.result.goldEarned))+
+                    '<p class="report-micro">Kaynakların toplamı ile toplam kazanç farklıysa, fark ayrı bir kaynağın kayda girmediğini gösterir; toplam değerler sessizce düzeltilmez.</p>',true)+
+                reportBlock('SANDIK EKONOMİSİ','fa-box-open',
+                    reportPair('Elit sandığı düştü',reportNumber(drops.elite||0))+
+                    reportPair('Boss sandığı düştü',reportNumber(drops.boss||0))+
+                    reportPair('Toplam açılan',reportNumber(openedTotal))+
+                    reportPair('Sandık / dakika',String(r.economy.totalChestsPerMinute||0))+
+                    Object.entries(REPORT_CHEST_NAMES).map(([key,label])=>
+                        reportPair(label,reportNumber(opened[key]||0))).join(''))+
+                reportBlock('SANDIK ÖDÜL DETAYI','fa-gift',
+                    reportPair('Altın',reportNumber(rewardSum('gold')))+
+                    reportPair('İyileştirilen can',reportNumber(rewardSum('heal')))+
+                    reportPair('Kazanılan XP',reportNumber(rewardSum('xp')))+
+                    reportPair('Cinnet',reportNumber(rewardSum('charge')))+
+                    reportPair('Nova mermisi',reportNumber(rewardSum('shots'))));
+            el('reportEconomyContent').innerHTML='<div class="report-grid">'+economy+'</div>';
+
+            const quests=Object.entries(r.missions.byType||{});
+            const questBars=quests.length?quests.sort((a,b)=>b[1]-a[1])
+                .map(([type,n])=>reportMeter(QUEST_LABELS[type]||type,n,
+                    Math.max(1,r.missions.completed),'#b4a1ff')).join(''):
+                reportEmpty('Bu koşuda henüz tamamlanan görev yok.');
+            const arenaEntries=Object.entries(r.arena.byKind||{});
+            const arenaBars=arenaEntries.length?arenaEntries
+                .map(([kind,stat])=>reportPair(
+                    ARENA_EVENT_SPECS[kind]?.label||kind,
+                    reportNumber(stat.completed||0)+' / '+reportNumber(stat.offered||0)))
+                .join(''):reportEmpty('Bu koşuda arena etkinliği henüz sunulmadı.');
+            const objectives=
+                reportBlock('GÖREV PERFORMANSI','fa-list-check',
+                    reportPair('Sunulan',reportNumber(r.missions.offered))+
+                    reportPair('Tamamlanan',reportNumber(r.missions.completed))+
+                    reportPair('Tamamlama oranı',missionRatio+'%')+
+                    reportPair('Hasarsız görev sıfırlaması',reportNumber(r.missions.hitsReset)))+
+                reportBlock('TAMAMLANAN GÖREV TÜRLERİ','fa-medal',questBars)+
+                reportBlock('ARENA ETKİNLİKLERİ','fa-map-location-dot',
+                    reportPair('Sunulan',reportNumber(r.arena.offered))+
+                    reportPair('Tamamlanan',reportNumber(r.arena.completed))+
+                    reportPair('Süresi dolan',reportNumber(r.arena.expired))+
+                    reportPair('İptal edilen',reportNumber(r.arena.cancelled)))+
+                reportBlock('ARENA TÜRÜNE GÖRE SONUÇ','fa-bullseye',arenaBars)+
+                reportBlock('KARŞILAŞMA ÇEŞİTLİLİĞİ','fa-skull',
+                    Object.keys(r.encounters.bossByPattern||{}).length?
+                        Object.entries(r.encounters.bossByPattern).map(([id,n])=>
+                            reportPair(id.replaceAll('_',' '),reportNumber(n))).join(''):
+                        reportEmpty('Bu koşuda henüz boss karşılaşması kaydedilmedi.'),true);
+            el('reportObjectivesContent').innerHTML='<div class="report-grid">'+objectives+'</div>';
+            showRunReportTab('summary');
+            return true;
+        }
+        function showRunReportTab(name){
+            if(!finalRunReport||!REPORT_TABS.includes(name)) return false;
+            activeReportTab=name;
+            for(const tab of REPORT_TABS){
+                const selected=tab===name;
+                const panel=document.getElementById(REPORT_TAB_IDS[tab]);
+                panel.classList.toggle('hidden',!selected);
+                panel.setAttribute('aria-hidden',String(!selected));
+                const btn=document.getElementById('reportTab'+
+                    tab.charAt(0).toUpperCase()+tab.slice(1));
+                btn.classList.toggle('is-active',selected);
+                btn.setAttribute('aria-selected',String(selected));
+                btn.setAttribute('tabindex',selected?'0':'-1');
+            }
+            return true;
+        }
+
+        function triggerGameOver(reason='CORE_DEPLETED') {
+            if(gameState==='GAME_OVER') return;
             gameState = 'GAME_OVER';
             document.getElementById('reviveModal').classList.add('hidden');
             document.getElementById('reviveModal').classList.remove('flex');
@@ -7215,13 +7646,15 @@
                 savedMaxWave = wave;
             }
             saveMetaProgress();
+            snapshotEndOfRun(reason,isNewRecord);
 
             document.getElementById('newRecordBadge').classList.toggle('hidden', !isNewRecord);
             document.getElementById('finalScoreText').textContent = score.toLocaleString('tr-TR');
             document.getElementById('finalWaveText').textContent = wave;
             document.getElementById('finalTimeText').textContent = formatTime(totalTime);
             document.getElementById('finalKillsText').textContent = kills;
-            document.getElementById('finalGoldEarnedText').textContent = `+${sessionGold}`;
+            document.getElementById('finalGoldEarnedText').textContent = `+${sessionGold.toLocaleString('tr-TR')}`;
+            renderRunReport(finalRunReport);
 
             const modal = document.getElementById('gameOverModal');
             modal.classList.remove('hidden');
@@ -7454,8 +7887,23 @@
         document.getElementById('openShopFromOverBtn').addEventListener('click', () => openShop('GAME_OVER'));
         document.getElementById('closeShopBtn').addEventListener('click', closeShop);
 
+        // Tabs are presentation only: switching never changes the frozen snapshot.
+        for(const button of document.querySelectorAll('[data-report-tab]')){
+            button.addEventListener('click',()=>showRunReportTab(button.getAttribute('data-report-tab')));
+            button.addEventListener('keydown',event=>{
+                if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+                event.preventDefault();
+                const current=REPORT_TABS.indexOf(button.getAttribute('data-report-tab'));
+                const index=event.key==='Home'?0:event.key==='End'?
+                    REPORT_TABS.length-1:
+                    (current+(event.key==='ArrowRight'?1:-1)+REPORT_TABS.length)%REPORT_TABS.length;
+                showRunReportTab(REPORT_TABS[index]);
+                document.getElementById('reportTab'+REPORT_TABS[index].charAt(0).toUpperCase()+
+                    REPORT_TABS[index].slice(1)).focus();
+            });
+        }
         document.getElementById('confirmReviveBtn').addEventListener('click', executePlayerRevive);
-        document.getElementById('declineReviveBtn').addEventListener('click', triggerGameOver);
+        document.getElementById('declineReviveBtn').addEventListener('click', () => triggerGameOver('REVIVE_DECLINED'));
 
         document.querySelectorAll('.chassis-card').forEach((card) => {
             card.addEventListener('click', () => {
