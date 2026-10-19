@@ -5344,7 +5344,7 @@
         const ARENA_EVENT_SPECS=Object.freeze({
             RELAY:Object.freeze({minWave:4,label:'VERİ AKTARIMI · XP / CİNNET',color:'#00f3ff',duration:3.0,cost:0}),
             VAULT:Object.freeze({minWave:4,label:'RİSKLİ KASA · -12 CAN / ALTIN',color:'#ffe600',duration:4.1,cost:12}),
-            STORM:Object.freeze({minWave:6,label:'ENERJİ FIRTINASI · MOMENTUM / XP',color:'#a5b4fc',duration:3.5,cost:0}),
+            STORM:Object.freeze({minWave:6,label:'ENERJİ FIRTINASI · MOMENTUM HARCА / XP',color:'#a5b4fc',duration:3.5,cost:0}),
             REACTOR:Object.freeze({minWave:7,label:'HASARLI REAKTÖR · -10 CAN / GÜÇ',color:'#fb923c',duration:3.7,cost:10}),
             CORRIDOR:Object.freeze({minWave:9,label:'GÜVENLİ KORİDOR · SIĞIN / CİNNET',color:'#6ee7b7',duration:4.0,cost:0}),
             ANOMALY:Object.freeze({minWave:11,label:'AKI ANOMALİSİ · HALKADA KAL',color:'#e879f9',duration:4.0,cost:0})
@@ -5396,7 +5396,7 @@
                 }
                 const inside=isInsideArenaEvent(this,player.x,player.y,player.radius);
                 if (inside && !this.committed) {
-                    if (this.cost && player.hp <= this.cost + 14) return;
+                    if (this.cost && player.hp <= this.cost + (this.kind==='VAULT'?10:14)) return;
                     this.committed = true;
                     if (this.cost) {
                         player.hp -= this.cost;
@@ -5460,7 +5460,7 @@
                     } else if(this.kind==='ANOMALY'){
                         player.invulnTimer=Math.max(player.invulnTimer,2.2);
                         player.addOverdrive(24);
-                        createFloatingText(this.x,this.y-28,'ANOMALİ ÇÖZÜLDÜ · KALKAN + CİNNET',
+                        createFloatingText(this.x,this.y-28,'ANOMALİ ÇÖZÜLDÜ · KORUMA + CİNNET',
                             this.color,16);
                     }
                     audio.playJackpot();
@@ -5668,7 +5668,10 @@
                 const fallbackX = Math.max(minX, Math.min(worldWidth - minX, player.x + (player.x < worldWidth / 2 ? 190 : -190)));
                 const fallbackY = Math.max(minY, Math.min(worldHeight - minY, player.y + (player.y < worldHeight / 2 ? 150 : -150)));
                 const farEnough = Math.hypot(x - player.x, y - player.y) >= 160;
-                this.activeArenaEvent = new ArenaEvent(kind, farEnough ? x : fallbackX, farEnough ? y : fallbackY);
+                // Wide corridor lanes must stay visible, including near arena edges.
+                const eventX=farEnough?x:fallbackX,eventY=farEnough?y:fallbackY;
+                const finalX=kind==='CORRIDOR'?Math.max(154,Math.min(worldWidth-154,eventX)):eventX;
+                this.activeArenaEvent=new ArenaEvent(kind,finalX,eventY);
                 audio.playThreatCue('event');
                 this.arenaEventIndex++;
                 this.nextArenaAt = totalTime + ARENA_EVENT_GAP;
