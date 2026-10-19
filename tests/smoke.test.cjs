@@ -2086,3 +2086,41 @@ test('M4.3.1.1 new run resets arc and impact visuals with no persistent state', 
   assert.deepEqual(x.before,{arcs:1,impacts:1,seed:1});
   assert.deepEqual(x.after,{arcs:0,impacts:0,seed:0});
 });
+
+
+test('M4.3.2.1 has four non-overlapping boss visual identities', () => {
+  const {run}=setup();
+  const profiles=JSON.parse(run('JSON.stringify(BOSS_ARCHETYPES.map(x=>BOSS_VISUALS[x.type]))'));
+  assert.equal(profiles.length,4);
+  assert.equal(new Set(profiles.map(p=>p.silhouette)).size,4);
+  assert.equal(new Set(profiles.map(p=>p.color)).size,4);
+});
+test('M4.3.2.1 boss silhouettes render for all phases without modifying radius', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();const values=[];for(const a of BOSS_ARCHETYPES){const b=new Enemy(200,200,a.type);const radius=b.radius;for(let p=1;p<=3;p++){b.bossPhase=p;b.bossHitFlash=1;b.bossEntranceAge=.35;b.draw(ctx);}values.push(b.radius===radius);}return JSON.stringify(values);})()"));
+  assert.deepEqual(x,[true,true,true,true]);
+});
+test('M4.3.2.1 boss collapse VFX has a cap, expires and resets across runs', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();for(let i=0;i<6;i++){const b=new Enemy(200,200,'BOSS_VOID');b.hp=1;b.die();}const cap=bossDeathVfx.length;for(let i=0;i<12;i++)updateGame(.1);const expiry=bossDeathVfx.length;const b=new Enemy(150,150,'BOSS_TITAN');b.die();startNewGame();return JSON.stringify({cap,expiry,reset:bossDeathVfx.length});})()"));
+  assert.deepEqual(x,{cap:3,expiry:0,reset:0});
+});
+test('M4.3.2.1 multi boss HUD keeps aggregate HP and individual phase chips', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();const a=new Enemy(100,100,'BOSS_DESTROYER'),b=new Enemy(200,200,'BOSS_PRISM');a.hp=a.maxHp*.5;b.hp=b.maxHp*.25;a.bossPhase=2;b.bossPhase=3;activeBosses=[a,b];updateHUD();return JSON.stringify({name:document.getElementById('bossNameText').textContent,phase:document.getElementById('bossPhaseText').textContent,chips:document.getElementById('bossIdentityStrip').innerHTML,percent:parseFloat(document.getElementById('bossHpBar').style.width),hp:document.getElementById('bossHpText').textContent});})()"));
+  assert.match(x.name,/ÇOKLU BOSS/);
+  assert.equal(x.phase,'FAZLAR AYRI');
+  assert.match(x.chips,/YIKICI · F2/);
+  assert.match(x.chips,/PRİZMA · F3/);
+  assert.ok(x.percent>0 && x.percent<100);
+  assert.match(x.hp,/ \/ /);
+});
+test('M4.3.2.1 boss kill effects do not delay score or director recovery', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();spawnBossEncounter();const b=activeBosses[0];b.hp=1;b.takeDamage(10000,0,0,false,false);return JSON.stringify({dead:b.dead,alive:activeBosses.length,fx:bossDeathVfx.length,kills:combatDirector.stats.bossKills,after:nextBossTime>totalTime});})()"));
+  assert.equal(x.dead,true);
+  assert.equal(x.alive,0);
+  assert.equal(x.fx,1);
+  assert.equal(x.kills,1);
+  assert.equal(x.after,true);
+});
