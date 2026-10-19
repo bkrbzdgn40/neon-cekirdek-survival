@@ -2713,3 +2713,115 @@ test('M5.1.1 boss HP/speed values and one guaranteed boss reward stay unchanged'
   assert.equal(a.first,true);
   assert.equal(a.second,false);
 });
+
+
+test('M5.2 candidates unlock with waves and only include chain when equipped',()=>{
+  const {run}=setup();
+  const groups=JSON.parse(run("JSON.stringify([getQuestCandidates(1,false),getQuestCandidates(2,false),getQuestCandidates(3,false),getQuestCandidates(4,false),getQuestCandidates(4,true)])"));
+  assert.deepEqual(groups[0],['KILLS','ORBS','COMBO']);
+  assert.deepEqual(groups[1],['KILLS','ORBS','COMBO','NO_HIT','RESCUE']);
+  assert.ok(groups[2].includes('DEFEND'));
+  assert.ok(groups[3].includes('ELITE_HUNT'));
+  assert.equal(groups[3].includes('CHAIN'),false);
+  assert.ok(groups[4].includes('CHAIN'));
+});
+
+test('M5.2 chooser avoids repeating the last two missions and uses bounded random index',()=>{
+  const {run}=setup();
+  const data=JSON.parse(run("JSON.stringify([chooseQuestType(['KILLS','ORBS','COMBO','DEFEND'],['KILLS','ORBS'],0),chooseQuestType(['KILLS','ORBS','COMBO','DEFEND'],['KILLS','ORBS'],.99),chooseQuestType(['KILLS'],['KILLS'],1)])"));
+  assert.deepEqual(data,['COMBO','DEFEND','KILLS']);
+});
+
+test('M5.2 rewards and quest history reset between runs and never double-count gold',()=>{
+  const {run}=setup();
+  const a=JSON.parse(run("(()=>{startNewGame();const initial=window.getNeonQuestSnapshot();wave=6;generateNextQuest('KILLS');const gold=totalGold;const expected=activeQuest.rewardGold;advanceQuest('KILLS',activeQuest.target);const completed=window.getNeonQuestSnapshot(),ledger=combatDirector.getEconomySnapshot();startNewGame();const fresh=window.getNeonQuestSnapshot();return JSON.stringify({initial,expected,earned:totalGold-gold,completed,ledger:ledger.goldBySource.quests,fresh});})()"));
+  assert.equal(a.initial.stats.offered,1);
+  assert.equal(a.earned,a.expected);
+  assert.equal(a.ledger,a.expected);
+  assert.equal(a.completed.stats.completed,1);
+  assert.equal(a.completed.stats.byType.KILLS,1);
+  assert.equal(a.fresh.stats.completed,0);
+  assert.equal(a.fresh.stats.offered,1);
+  assert.equal(a.fresh.history.length,1);
+});
+
+test('M5.2 elite hunt completes only on actual elite enemy death',()=>{
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();wave=4;generateNextQuest('ELITE_HUNT');const regular=new Enemy(player.x+180,player.y,'SWARM',false);regular.die();const before=activeQuest.progress;const elite=new Enemy(player.x+180,player.y,'SWARM',true);elite.die();return JSON.stringify({before,complete:questStats.byType.ELITE_HUNT||0,kills,eliteKills:combatDirector.stats.eliteKills});})()"));
+  assert.equal(x.before,0);
+  assert.equal(x.complete,1);
+  assert.equal(x.kills,2);
+  assert.equal(x.eliteKills,1);
+});
+
+test('M5.2 chain mission unlocks only after chain trait and requires a real jump',()=>{
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();wave=6;player.chainLightning=1;player.evolutions.add('lightning');generateNextQuest('CHAIN');const a=new Enemy(200,200,'TANK'),b=new Enemy(310,200,'TANK');enemies=[a,b];a.takeDamage(5,0,0,true,true);const first=activeQuest.progress;const hp=b.hp;a.takeDamage(5,0,0,false,false);return JSON.stringify({first,second:activeQuest.progress,hit:hp<b.maxHp,complete:questStats.byType.CHAIN||0});})()"));
+  assert.equal(x.first,1);
+  assert.equal(x.second,1);
+  assert.equal(x.hit,true);
+  assert.equal(x.complete,0);
+});
+
+test('M5.2 no-hit mission advances only during active play and resets on real HP loss',()=>{
+  const {run}=setup();
+  const data=JSON.parse(run("(()=>{startNewGame();wave=2;generateNextQuest('NO_HIT');updateQuest(4);const safe=activeQuest.progress;gameState='PAUSED';updateQuest(7);const paused=activeQuest.progress;gameState='PLAYING';player.hasShield=true;player.shieldActive=true;player.invulnTimer=0;player.takeDamage(9);const shielded=activeQuest.progress;player.shieldActive=false;player.invulnTimer=0;player.takeDamage(9);return JSON.stringify({safe,paused,shielded,after:activeQuest.progress,hits:questStats.hitsReset});})()"));
+  assert.equal(data.safe,4);
+  assert.equal(data.paused,4);
+  assert.equal(data.shielded,4);
+  assert.equal(data.after,0);
+  assert.equal(data.hits,1);
+});
+
+test('M5.2 flawless timer pays once at target without auto-finishing an idle mission',()=>{
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();wave=2;generateNextQuest('NO_HIT');const target=activeQuest.target;gameState='PAUSED';updateQuest(target+2);const before=questStats.completed;gameState='PLAYING';for(let i=0;i<target*2;i++)updateQuest(.5);return JSON.stringify({before,after:questStats.completed,awarded:questStats.byType.NO_HIT||0,target});})()"));
+  assert.equal(x.before,0);
+  assert.equal(x.after,1);
+  assert.equal(x.awarded,1);
+});
+
+test('M5.2 defense requires position and live enemy presence and loses progress outside',()=>{
+  const {run}=setup();
+  const d=JSON.parse(run("(()=>{startNewGame();wave=3;generateNextQuest('DEFEND');const q=activeQuest,old={x:player.x,y:player.y};player.x=q.point.x;player.y=q.point.y;updateQuest(2);const alone=q.progress;enemies=[{x:q.point.x+500,y:q.point.y+500,dead:false,isBoss:false}];updateQuest(2);const far=q.progress;enemies=[{x:q.point.x+35,y:q.point.y+30,dead:false,isBoss:false}];updateQuest(2);const inside=q.progress;player.x=old.x+500;player.y=old.y+500;updateQuest(1);const outside=q.progress;player.x=q.point.x;player.y=q.point.y;for(let i=0;i<20;i++)updateQuest(.25);return JSON.stringify({alone,far,inside,outside,completed:questStats.byType.DEFEND||0,point:q.point});})()"));
+  assert.equal(d.alone,0);
+  assert.equal(d.far,0);
+  assert.equal(d.inside,2);
+  assert.ok(d.outside<d.inside);
+  assert.equal(d.completed,1);
+  assert.ok(d.point.x>=65 && d.point.y>=65);
+});
+
+test('M5.2 rescue capsules require two distinct physical pickups and no double reward',()=>{
+  const {run}=setup();
+  const d=JSON.parse(run("(()=>{startNewGame();wave=2;generateNextQuest('RESCUE');const q=activeQuest,start={...q.point};player.x=start.x;player.y=start.y;updateQuest(.016);const mid={progress:q.progress,next:{...q.point}};updateQuest(.016);const still=q.progress;player.x=q.point.x;player.y=q.point.y;updateQuest(.016);return JSON.stringify({mid,still,complete:questStats.byType.RESCUE||0,stats:questStats.completed});})()"));
+  assert.equal(d.mid.progress,1);
+  assert.notDeepEqual(d.mid.next,undefined);
+  assert.equal(d.still,1);
+  assert.equal(d.complete,1);
+  assert.equal(d.stats,1);
+});
+
+test('M5.2 quest world marker renders safely and stays absent outside active game',()=>{
+  const {run}=setup();
+  const a=JSON.parse(run("(()=>{startNewGame();wave=3;generateNextQuest('DEFEND');const ctx={save(){},restore(){},setLineDash(){},beginPath(){},arc(){},fill(){},stroke(){},fillText(){}};drawQuestObjective(ctx);const live=activeQuest.point!=null;gameState='PAUSED';drawQuestObjective(ctx);return JSON.stringify({live,mobile:document.getElementById('questMobileText').textContent,description:document.getElementById('questMobileText').title});})()"));
+  assert.equal(a.live,true);
+  assert.match(a.mobile,/^SAVUN · 0\/5 · \+\d+$/);
+  assert.match(a.description,/SİNYAL NOKTASINI SAVUN/);
+});
+
+test('M5.2 keeps original orb stack quest semantics and exposes defensive snapshot',()=>{
+  const {run}=setup();
+  const d=JSON.parse(run("(()=>{startNewGame();wave=2;generateNextQuest('ORBS');const q=activeQuest;advanceOrbQuestStacks(8);const actual=q.progress,s=window.getNeonQuestSnapshot();s.history[0]='INVALID';s.stats.completed=999;if(s.point)s.point.x=-10;return JSON.stringify({actual,after:activeQuest.progress,history:questHistory[0],stats:questStats.completed});})()"));
+  assert.equal(d.actual,8);
+  assert.equal(d.after,8);
+  assert.notEqual(d.history,'INVALID');
+  assert.equal(d.stats,0);
+});
+
+test('M5.2 second boss pre-warning now uses actual encounter count helper',()=>{
+  assert.match(html,/const upcomingCount=getBossCountForEncounter\(bossEncounterCount\+1\);/);
+  assert.match(html,/function getBossCountForEncounter/);
+  const {run}=setup();
+  assert.deepEqual(JSON.parse(run("JSON.stringify([1,2,3,4,5].map(getBossCountForEncounter))")),[1,1,2,2,3]);
+});
