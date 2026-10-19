@@ -2530,19 +2530,68 @@
             }
             ctx.closePath();
         }
+
+        // Zero new particle arrays: quality tiers are based on existing combat load.
+        // Telegraphs deliberately ignore this tier and remain visible at all loads.
+        function getBossFxQuality() {
+            if (PREFERS_REDUCED_VFX_MOTION) return 0;
+            const pressure=bullets.length+enemyProjectiles.length+particles.length*.55;
+            if (pressure>=210 || (activeBosses.length>=3 && pressure>=135)) return 0;
+            if (pressure>=105 || activeBosses.length>=3) return 1;
+            return 2;
+        }
+        function isBossFxInView(x,y,margin=105) {
+            return x>=-margin && x<=worldWidth+margin &&
+                y>=-margin && y<=worldHeight+margin;
+        }
+
+        // Impact direction and intensity live on the existing boss object: no per-hit allocations.
+        function drawBossImpactAccent(ctx,boss,r,quality) {
+            if (!(boss.bossHitAccentAge>0)) return;
+            const strength=Math.min(1,boss.bossHitAccentAge/.22);
+            ctx.save();
+            ctx.rotate(boss.bossHitAngle||0);
+            ctx.globalAlpha=(boss.bossHitAccentCrit?.92:.67)*strength;
+            ctx.lineWidth=boss.bossHitAccentCrit?3.3:2;
+            ctx.strokeStyle=boss.bossHitAccentCrit?'#fff5aa':'#ebfcff';
+            ctx.shadowBlur=quality===2?7:0;
+            ctx.shadowColor=boss.color;
+            const spokes=quality===0?1:boss.bossHitAccentCrit?4:3;
+            for(let i=0;i<spokes;i++) {
+                const lateral=(i-(spokes-1)/2)*7;
+                ctx.beginPath();
+                if(boss.type==='BOSS_TITAN') {
+                    ctx.moveTo(r*.68,lateral-5);ctx.lineTo(r*1.02,lateral);
+                    ctx.lineTo(r*1.16,lateral+3);
+                } else if(boss.type==='BOSS_VOID') {
+                    ctx.moveTo(r*.57,lateral);ctx.lineTo(r*.76,lateral-5);
+                    ctx.lineTo(r*.94,lateral+5);ctx.lineTo(r*1.17,lateral-2);
+                } else if(boss.type==='BOSS_PRISM') {
+                    ctx.moveTo(r*.58,lateral-4);ctx.lineTo(r*.96,lateral);
+                    ctx.lineTo(r*.7,lateral+7);
+                } else {
+                    ctx.moveTo(r*.69,lateral);ctx.lineTo(r*1.03,lateral-3);
+                    ctx.lineTo(r*1.18,lateral+2);
+                }
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
         function drawBossIdentity(ctx, boss) {
             const r=boss.radius, phase=boss.bossPhase, hit=boss.bossHitFlash||0;
-            const clock=PREFERS_REDUCED_VFX_MOTION ? 0 : totalTime;
+            const quality=getBossFxQuality();
+            const clock=quality===0 ? 0 : totalTime;
             const breath=PREFERS_REDUCED_VFX_MOTION ? 0 : Math.sin(clock*(2+phase*.5)+boss.id*.3);
             const entry=Math.min(1,boss.bossEntranceAge/.8);
             ctx.save();
             ctx.scale(.67+.33*entry,.67+.33*entry);
             ctx.lineJoin='bevel';
             ctx.shadowColor=boss.color;
-            ctx.shadowBlur=9+phase*2+hit*5;
+            ctx.shadowBlur=quality===0?0:Math.min(17,7+phase*2+hit*3);
             // Restrained aura, bounded to the boss; hazard beams remain visible.
             ctx.save();
-            ctx.globalAlpha=.16+phase*.045+Math.max(0,breath)*.04;
+            ctx.globalAlpha=quality===0?.12:.16+phase*.045+Math.max(0,breath)*.04;
             ctx.strokeStyle=boss.color; ctx.lineWidth=2;
             ctx.beginPath();ctx.arc(0,0,r*(1.16+phase*.04),0,Math.PI*2);ctx.stroke();
             ctx.restore();
@@ -2552,15 +2601,19 @@
                 bossPolygon(ctx,8,r*.88,Math.PI/8);ctx.fill();ctx.stroke();
                 for(let i=0;i<4;i++){
                     ctx.save();ctx.rotate(i*Math.PI/2);
-                    const extension=(phase-1)*2.5;
+                    const extension=(phase-1)*2.5+
+                        (quality===0?0:Math.sin(clock*(phase===3?4.4:2.3)+i*1.57)*(phase===3?2.3:1.1))-
+                        (boss.bossVolleyRecoil||0)*4;
                     ctx.fillStyle='#440b24';ctx.strokeStyle='#ff4977';
                     ctx.beginPath();
                     ctx.moveTo(r*.52,-r*.23);ctx.lineTo(r*.92,-r*.19);
                     ctx.lineTo(r*1.22+extension,-r*.10);ctx.lineTo(r*1.22+extension,r*.10);
                     ctx.lineTo(r*.92,r*.19);ctx.lineTo(r*.52,r*.23);ctx.closePath();
                     ctx.fill();ctx.stroke();
-                    ctx.strokeStyle='#ffc0d5';ctx.lineWidth=1.6;
-                    ctx.beginPath();ctx.moveTo(r*.79,0);ctx.lineTo(r*1.21+extension,0);ctx.stroke();
+                    if(quality>=1) {
+                        ctx.strokeStyle='#ffc0d5';ctx.lineWidth=1.6;
+                        ctx.beginPath();ctx.moveTo(r*.79,0);ctx.lineTo(r*1.21+extension,0);ctx.stroke();
+                    }
                     ctx.restore();
                 }
                 ctx.strokeStyle='#ffacc9';bossPolygon(ctx,8,r*.55,Math.PI/8);ctx.stroke();
@@ -2575,7 +2628,7 @@
                     ctx.lineTo(r*1.12,-r*.10);ctx.lineTo(r*1.12,r*.10);
                     ctx.lineTo(r*.96,r*.25);ctx.lineTo(r*.56,r*.29);ctx.closePath();
                     ctx.fill();ctx.stroke();
-                    ctx.strokeStyle='#ff8b25';ctx.lineWidth=3;
+                    ctx.strokeStyle='#ff8b25';ctx.lineWidth=3+(quality>=1?Math.max(0,breath)*1.4:0);
                     ctx.beginPath();ctx.moveTo(r*.75,0);ctx.lineTo(r*(.96+.035*phase),0);ctx.stroke();
                     ctx.restore();
                 }
@@ -2584,7 +2637,7 @@
                 // Six disconnected jointed legs: silhouette reads as a void spider.
                 ctx.strokeStyle='#cd7dff';ctx.lineWidth=3.5;
                 for(let i=0;i<6;i++){
-                    const a=i*Math.PI/3, sway=PREFERS_REDUCED_VFX_MOTION?0:Math.sin(clock*1.6+i)*2;
+                    const a=i*Math.PI/3, sway=quality===0?0:Math.sin(clock*(phase===3?2.2:1.6)+i)*2;
                     ctx.beginPath();
                     ctx.moveTo(Math.cos(a)*r*.34,Math.sin(a)*r*.34);
                     ctx.lineTo(Math.cos(a+.2)*r*.79,Math.sin(a+.2)*r*.79);
@@ -2595,10 +2648,12 @@
                 }
                 ctx.fillStyle='#10051d';ctx.strokeStyle=boss.color;ctx.lineWidth=3;
                 bossPolygon(ctx,6,r*.55,Math.PI/6);ctx.fill();ctx.stroke();
-                ctx.save();ctx.rotate(clock*.31);ctx.strokeStyle='#c7a1ff';ctx.lineWidth=1.8;
-                for(let i=0;i<3;i++){
-                    const a=i*Math.PI*2/3;ctx.beginPath();ctx.arc(0,0,r*.73,a,a+.53);ctx.stroke();
-                }ctx.restore();
+                if(quality>=1) {
+                    ctx.save();ctx.rotate(clock*.31);ctx.strokeStyle='#c7a1ff';ctx.lineWidth=1.8;
+                    for(let i=0;i<(quality===2?3:1);i++){
+                        const a=i*Math.PI*2/3;ctx.beginPath();ctx.arc(0,0,r*.73,a,a+.53);ctx.stroke();
+                    }ctx.restore();
+                }
             } else if(boss.type==='BOSS_PRISM') {
                 // Four long crystal spears with independently rotating diamond core.
                 for(let i=0;i<4;i++){
@@ -2607,15 +2662,19 @@
                     ctx.beginPath();ctx.moveTo(r*.21,-r*.33);ctx.lineTo(r*.7,-r*.24);
                     ctx.lineTo(r*1.3,0);ctx.lineTo(r*.7,r*.24);
                     ctx.lineTo(r*.21,r*.33);ctx.closePath();ctx.fill();ctx.stroke();
-                    ctx.strokeStyle='#00f3ff';ctx.lineWidth=1.5;
-                    ctx.beginPath();ctx.moveTo(r*.4,0);ctx.lineTo(r*1.22,0);ctx.stroke();
+                    if(quality>=1) {
+                        ctx.strokeStyle='#00f3ff';ctx.lineWidth=1.5;
+                        ctx.beginPath();ctx.moveTo(r*.4,0);ctx.lineTo(r*1.22,0);ctx.stroke();
+                    }
                     ctx.restore();
                 }
-                ctx.save();ctx.rotate(Math.PI/4+clock*.32);
-                ctx.strokeStyle='#bdffff';ctx.lineWidth=2;
-                bossPolygon(ctx,4,r*.64);ctx.stroke();ctx.restore();
+                if(quality>=1) {
+                    ctx.save();ctx.rotate(Math.PI/4+clock*(phase===3?.54:.32));
+                    ctx.strokeStyle='#bdffff';ctx.lineWidth=2;
+                    bossPolygon(ctx,4,r*.64);ctx.stroke();ctx.restore();
+                }
             }
-            ctx.fillStyle='#f0fcff';ctx.shadowBlur=12+phase*3;
+            ctx.fillStyle='#f0fcff';ctx.shadowBlur=quality===0?0:Math.min(19,10+phase*2);
             bossPolygon(ctx,boss.type==='BOSS_VOID'?6:4,
                 r*(.15+.015*phase+Math.max(0,breath)*.012),Math.PI/4);ctx.fill();
             ctx.strokeStyle=boss.color;ctx.lineWidth=2.5;
@@ -2625,6 +2684,23 @@
                 ctx.globalAlpha=hit*.6;ctx.strokeStyle='#ffffff';ctx.lineWidth=3;
                 bossPolygon(ctx,8,r*.47);ctx.stroke();
             }
+            // Near-death cracks are controlled by existing HP; there is no new damage state.
+            if(quality>=1 && boss.hp<boss.maxHp*.35) {
+                ctx.save();
+                ctx.shadowBlur=0;
+                ctx.strokeStyle=boss.color;ctx.lineWidth=1.5;
+                ctx.globalAlpha=.33+.13*Math.max(0,breath);
+                for(let i=0;i<(quality===2?4:2);i++){
+                    const a=i*Math.PI/2+.22;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.cos(a)*r*.37,Math.sin(a)*r*.37);
+                    ctx.lineTo(Math.cos(a+.19)*r*.52,Math.sin(a+.19)*r*.52);
+                    ctx.lineTo(Math.cos(a-.10)*r*.69,Math.sin(a-.10)*r*.69);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+            drawBossImpactAccent(ctx,boss,r,quality);
             if(entry<1){
                 // Arrival geometry follows the archetype, never stops simulation.
                 ctx.globalAlpha=(1-entry)*.7;ctx.strokeStyle=boss.color;
@@ -2637,21 +2713,46 @@
         const MAX_BOSS_DEATH_VFX=3;
         let bossDeathVfx=[];
         function drawBossDeathVfx(ctx,v) {
+            if(!isBossFxInView(v.x,v.y,v.radius*2.7)) return;
+            const quality=getBossFxQuality();
             const progress=Math.min(1,v.age/v.duration);
-            const travel=PREFERS_REDUCED_VFX_MOTION?.5:progress;
+            const travel=PREFERS_REDUCED_VFX_MOTION?.55:progress;
+            const r=v.radius;
             ctx.save();ctx.translate(v.x,v.y);
-            ctx.globalAlpha=(1-progress)*.72;ctx.strokeStyle=v.color;
-            ctx.shadowColor=v.color;ctx.shadowBlur=PREFERS_REDUCED_VFX_MOTION?0:8;
-            ctx.lineWidth=3;
-            bossPolygon(ctx,v.type==='BOSS_DESTROYER'?8:v.type==='BOSS_PRISM'?4:6,
-                v.radius*(.86+travel*.8),progress*.4);ctx.stroke();
-            for(let i=0;i<8;i++){
-                const a=i*Math.PI/4+(v.type==='BOSS_PRISM'?Math.PI/4:0);
-                const d=v.radius*(.4+travel*1.15);
-                ctx.save();ctx.translate(Math.cos(a)*d,Math.sin(a)*d);ctx.rotate(a+progress);
-                ctx.fillStyle=i%2?'#e8faff':v.color;
-                ctx.beginPath();ctx.moveTo(-5,-4);ctx.lineTo(7,0);
-                ctx.lineTo(-5,4);ctx.closePath();ctx.fill();ctx.restore();
+            ctx.globalAlpha=(1-progress)*.78;ctx.strokeStyle=v.color;
+            ctx.shadowColor=v.color;ctx.shadowBlur=quality===2?8:0;
+            ctx.lineWidth=v.type==='BOSS_TITAN'?5:2.8;
+            // No persistent particle objects: these are transient procedural silhouettes.
+            if(v.type==='BOSS_VOID') {
+                for(let i=0;i<3;i++){
+                    const a=i*Math.PI*2/3+progress;
+                    ctx.beginPath();ctx.arc(0,0,r*(1.18-travel*.8),a,a+.64);ctx.stroke();
+                }
+            } else if(v.type==='BOSS_PRISM') {
+                bossPolygon(ctx,4,r*(.86+travel*.85),Math.PI/4+progress*.33);ctx.stroke();
+            } else {
+                bossPolygon(ctx,v.type==='BOSS_DESTROYER'?8:6,r*(.86+travel*.85),progress*.28);
+                ctx.stroke();
+            }
+            const count=quality===0?2:v.type==='BOSS_TITAN'?6:
+                v.type==='BOSS_VOID'?6:v.type==='BOSS_PRISM'?4:8;
+            for(let i=0;i<count;i++){
+                const a=i*Math.PI*2/count+(v.type==='BOSS_PRISM'?Math.PI/4:0);
+                const d=v.type==='BOSS_VOID'?r*(1.10-travel*.9):r*(.38+travel*1.26);
+                ctx.save();ctx.translate(Math.cos(a)*d,Math.sin(a)*d);
+                ctx.rotate(a+progress*(v.type==='BOSS_TITAN'?.24:1.12));
+                ctx.fillStyle=i%2?'#e6faff':v.color;
+                ctx.beginPath();
+                if(v.type==='BOSS_TITAN') {
+                    ctx.moveTo(-9,-6);ctx.lineTo(10,-5);ctx.lineTo(13,5);ctx.lineTo(-9,6);
+                } else if(v.type==='BOSS_VOID') {
+                    ctx.moveTo(-3,-11);ctx.lineTo(3,-2);ctx.lineTo(1,12);
+                } else if(v.type==='BOSS_PRISM') {
+                    ctx.moveTo(-5,-5);ctx.lineTo(18,0);ctx.lineTo(-5,5);
+                } else {
+                    ctx.moveTo(-6,-7);ctx.lineTo(12,-2);ctx.lineTo(13,3);ctx.lineTo(-6,7);
+                }
+                ctx.closePath();ctx.fill();ctx.restore();
             }
             ctx.restore();
         }
@@ -2795,6 +2896,11 @@
                     this.bossEntranceAge = 0;
                     this.bossHitFlash = 0;
                     this.bossPhaseFlash = 0;
+                    this.bossHitAccentAge = 0;
+                    this.bossHitAngle = 0;
+                    this.bossHitAccentCrit = false;
+                    this.bossNextAccentAt = -Infinity;
+                    this.bossVolleyRecoil = 0;
                     this.radius = arch.radius;
                     this.speed = arch.speed * Math.min(1.7, 1 + (wave - 1) * 0.038);
                     this.maxHp = 2100 * waveMult * arch.hpMult * (1 + Math.min(2, bossEncounterCount) * 0.25);
@@ -2823,6 +2929,8 @@
                     this.bossEntranceAge = Math.min(.8, this.bossEntranceAge + dt);
                     this.bossHitFlash = Math.max(0, this.bossHitFlash - dt*3.8);
                     this.bossPhaseFlash = Math.max(0, this.bossPhaseFlash - dt);
+                    this.bossHitAccentAge = Math.max(0, this.bossHitAccentAge - dt);
+                    this.bossVolleyRecoil = Math.max(0, this.bossVolleyRecoil - dt*3);
                 }
                 this.orbitalHitCooldown = Math.max(0, this.orbitalHitCooldown - dt);
                 if (this.stunTimer > 0) {
@@ -3114,7 +3222,17 @@
                 }
 
                 this.hp -= finalDmg;
-                if (this.isBoss) this.bossHitFlash = 1;
+                if (this.isBoss) {
+                    this.bossHitFlash = 1;
+                    if (totalTime >= this.bossNextAccentAt) {
+                        const aimX=Math.abs(knockVx)+Math.abs(knockVy)>0.01?knockVx:player.x-this.x;
+                        const aimY=Math.abs(knockVx)+Math.abs(knockVy)>0.01?knockVy:player.y-this.y;
+                        this.bossHitAngle = Math.atan2(aimY,aimX)-this.rotation;
+                        this.bossHitAccentCrit = !!isCrit;
+                        this.bossHitAccentAge = .22;
+                        this.bossNextAccentAt = totalTime+.12;
+                    }
+                }
                 this.pushVx += knockVx * (this.isBoss ? 0.08 : 1);
                 this.pushVy += knockVy * (this.isBoss ? 0.08 : 1);
 
@@ -3287,6 +3405,8 @@
             }
 
             draw(ctx) {
+                // Offscreen sprite culling never touches gameplay or floor attack telegraphs.
+                if (this.isBoss && !isBossFxInView(this.x,this.y,this.radius*1.8)) return;
                 ctx.save();
 
                 if (this.type === 'DASHER' && this.state === 'CHARGE') {
@@ -4305,8 +4425,10 @@
             if (gameState!=='PLAYING' || !activeBosses.length) return;
             const tm=PREFERS_REDUCED_VFX_MOTION?0:totalTime;
             // Subdued, local-only floor motifs. No fullscreen overlays over projectiles.
+            const quality=getBossFxQuality();
+            if(quality===0) return;
             for (const boss of activeBosses) {
-                if (boss.dead) continue;
+                if (boss.dead || !isBossFxInView(boss.x,boss.y,190)) continue;
                 const r=boss.radius;
                 ctx.save();
                 ctx.translate(boss.x,boss.y);
@@ -4314,12 +4436,12 @@
                 ctx.globalAlpha=.10+.018*boss.bossPhase;
                 ctx.lineWidth=1.4;
                 if(boss.type==='BOSS_DESTROYER') {
-                    for(let i=0;i<4;i++){
+                    for(let i=0;i<(quality===2?4:2);i++){
                         ctx.save();ctx.rotate(i*Math.PI/2);
                         ctx.strokeRect(r*1.6,-5,r*.75,10);ctx.restore();
                     }
                 } else if(boss.type==='BOSS_TITAN'){
-                    for(let i=0;i<6;i++){
+                    for(let i=0;i<(quality===2?6:3);i++){
                         const a=i*Math.PI/3+Math.PI/6;
                         ctx.beginPath();ctx.arc(Math.cos(a)*r*1.7,Math.sin(a)*r*1.7,
                             7,a-.6,a+.6);ctx.stroke();
@@ -4330,7 +4452,7 @@
                     ctx.setLineDash([]);
                 } else if(boss.type==='BOSS_PRISM') {
                     ctx.rotate(Math.PI/4);ctx.strokeRect(-r*1.3,-r*1.3,r*2.6,r*2.6);
-                    ctx.strokeRect(-r*1.6,-r*1.6,r*3.2,r*3.2);
+                    if(quality===2)ctx.strokeRect(-r*1.6,-r*1.6,r*3.2,r*3.2);
                 }
                 ctx.restore();
             }
@@ -4344,14 +4466,24 @@
             const r=boss.radius;
             const alphaBase=activeBosses.length>1?.55:.76;
             // Pure presentation: phase-change resonance expires independently of attack scheduling.
-            if (boss.bossPhaseFlash>0) {
+            if (boss.bossPhaseFlash>0 && isBossFxInView(boss.x,boss.y)) {
                 ctx.save();ctx.translate(boss.x,boss.y);
                 ctx.globalAlpha=Math.min(.52,boss.bossPhaseFlash*.58);
                 ctx.strokeStyle=boss.color;ctx.lineWidth=3;
                 const grow=reduced?1:1+(1-boss.bossPhaseFlash/.7)*.46;
                 bossPolygon(ctx,boss.type==='BOSS_PRISM'?4:
                     boss.type==='BOSS_DESTROYER'?8:6,r*grow,clock*.16);
-                ctx.stroke();ctx.restore();
+                ctx.stroke();
+                // Phase transition: brief segmented energy locks, no broad screen flash.
+                if(getBossFxQuality()>=1) {
+                    ctx.globalAlpha=Math.min(.32,boss.bossPhaseFlash*.43);
+                    ctx.lineWidth=1.5;ctx.strokeStyle='#f5ffff';
+                    for(let i=0;i<3;i++) {
+                        const a=i*Math.PI*2/3+clock*.3;
+                        ctx.beginPath();ctx.arc(0,0,r*1.48,a,a+.36);ctx.stroke();
+                    }
+                }
+                ctx.restore();
             }
             // Void gravity exists throughout the encounter. The ring is the actual pull radius.
             if (boss.type==='BOSS_VOID') {
@@ -4460,6 +4592,7 @@
                 enemyProjectiles.push(new EnemyProjectile(boss.x, boss.y,
                     Math.cos(a) * baseSpeed, Math.sin(a) * baseSpeed, 7, damage, config.color));
             }
+            boss.bossVolleyRecoil = .25; // visual recoil only, after the existing volley fires
             audio.playExplosion(false);
             return count;
         }
@@ -6390,7 +6523,7 @@
                 if (performanceSampleMs >= 1000) {
                     const fps = Math.round(performanceSampleFrames * 1000 / performanceSampleMs);
                     document.getElementById('perfOverlay').textContent =
-                        `FPS ${fps} | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length} | Küre ${orbs.length}/${orbs.reduce((sum, orb) => sum + orb.count, 0)} | Efekt ${particles.length} | Sandık ${lootChests.length} | ${combatDirector ? combatDirector.profile.label + '/' + combatDirector.profile.theme : '-'} | Baskın ${combatDirector?.pendingEncounter?.type || '-'} | Etkinlik ${combatDirector?.activeArenaEvent?.kind || '-'} | Sandık/dk ${combatDirector ? combatDirector.getDiagnostics().chestsPerMinute : 0}`;
+                        `FPS ${fps} | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length} | Küre ${orbs.length}/${orbs.reduce((sum, orb) => sum + orb.count, 0)} | Efekt ${particles.length} | Boss FX ${getBossFxQuality()} | Sandık ${lootChests.length} | ${combatDirector ? combatDirector.profile.label + '/' + combatDirector.profile.theme : '-'} | Baskın ${combatDirector?.pendingEncounter?.type || '-'} | Etkinlik ${combatDirector?.activeArenaEvent?.kind || '-'} | Sandık/dk ${combatDirector ? combatDirector.getDiagnostics().chestsPerMinute : 0}`;
                     performanceSampleFrames = 0;
                     performanceSampleMs = 0;
                 }
