@@ -5864,12 +5864,12 @@
                     pendingEncounter: this.pendingEncounter ? this.pendingEncounter.type : null,
                     warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
                     arenaEvent: this.activeArenaEvent ? this.activeArenaEvent.kind : null,
-                    arenaByKind:Object.fromEntries(Object.entries(this.stats.arenaByKind)
-                        .map(([kind,entry])=>[kind,{...entry}])),
                     arenaTimeLeft: this.activeArenaEvent ? Math.round(this.activeArenaEvent.timeLeft) : 0,
                     arenaProgress: this.activeArenaEvent ?
                         Math.round(100 * this.activeArenaEvent.progress / this.activeArenaEvent.required) : 0,
                     ...this.stats,
+                    arenaByKind:Object.fromEntries(Object.entries(this.stats.arenaByKind)
+                        .map(([kind,entry])=>[kind,{...entry}])),
                     chestDrops:{...this.stats.chestDrops},
                     chestDenied:{...this.stats.chestDenied},
                     chestOpened:{...this.stats.chestOpened},

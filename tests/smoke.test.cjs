@@ -2889,8 +2889,8 @@ test('M5.3 corridor blocks a bounded number of shots only inside its lane',()=>{
 
 test('M5.3 corridor offers one bounded Cinnet and momentum reward',()=>{
  const {run}=setup();
- const a=JSON.parse(run("(()=>{startNewGame();wave=10;totalTime=150;player.momentum=10;const e=new ArenaEvent('CORRIDOR',player.x,player.y);combatDirector.activeArenaEvent=e;const before=player.overdrive;e.update(4.2);const after=player.overdrive;e.update(1);return JSON.stringify({dead:e.dead,before,after,again:player.overdrive,momentum:player.momentum,done:combatDirector.stats.arenaCompleted});})()"));
- assert.equal(a.dead,true);assert.equal(a.after-a.before,38);
+ const a=JSON.parse(run("(()=>{startNewGame();wave=10;totalTime=150;player.momentum=10;const e=new ArenaEvent('CORRIDOR',player.x,player.y);combatDirector.activeArenaEvent=e;const before=player.overdrive;e.update(4.2);const after=player.overdrive;e.update(1);return JSON.stringify({dead:e.dead,before,after,gainMult:player.overdriveGainMult,again:player.overdrive,momentum:player.momentum,done:combatDirector.stats.arenaCompleted});})()"));
+ assert.equal(a.dead,true);assert.equal(a.after-a.before,38*a.gainMult);
  assert.equal(a.again,a.after);assert.equal(a.momentum,30);assert.equal(a.done,1);
 });
 
