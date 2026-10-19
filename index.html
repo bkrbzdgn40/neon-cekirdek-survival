@@ -844,6 +844,10 @@
                         <i class="fa-solid fa-trophy text-green-400 text-xs"></i>
                         <span id="questHudText" class="text-xs font-bold text-green-300">AV · 0/15</span>
                     </div>
+                    <div class="flex xl:hidden items-center gap-1.5 bg-gray-950/85 border border-green-500/40 px-2 py-1.5 rounded-lg" aria-label="Aktif görev">
+                        <i class="fa-solid fa-crosshairs text-green-300 text-[10px]" aria-hidden="true"></i>
+                        <span id="questMobileText" class="text-[10px] sm:text-xs font-bold text-green-300">AV · 0/15</span>
+                    </div>
                 </div>
 
                 <!-- Wave, timer and Combat Director phase -->
@@ -1895,64 +1899,170 @@
             }
         }
 
-        let activeQuest = {
-            type: 'KILLS',
-            target: 15,
-            progress: 0,
-            rewardGold: 20,
-            desc: '15 Düşman İmha Et'
-        };
 
-        function generateNextQuest() {
-            const types = ['KILLS', 'ORBS', 'COMBO'];
-            const pick = types[Math.floor(Math.random() * types.length)];
-            if (pick === 'KILLS') {
-                const target = 15 + wave * 6;
-                activeQuest = { type: 'KILLS', target, progress: 0, rewardGold: 18 + wave * 4, desc: `${target} Düşman İmha Et` };
-            } else if (pick === 'ORBS') {
-                const target = 20 + wave * 5;
-                activeQuest = { type: 'ORBS', target, progress: 0, rewardGold: 16 + wave * 4, desc: `${target} Enerji Küresi Topla` };
-            } else {
-                const target = Math.min(45, 12 + wave * 4);
-                activeQuest = { type: 'COMBO', target, progress: combo, rewardGold: 22 + wave * 5, desc: `x${target} Kombo Serisine Ulaş` };
+        // M5.2 tactical missions: objectives are selected only if the run can satisfy them.
+        const QUEST_LABELS=Object.freeze({
+            KILLS:'AV',ORBS:'KÜRE',COMBO:'KOMBO',ELITE_HUNT:'ELİT AV',
+            CHAIN:'ZİNCİR',NO_HIT:'HASARSIZ',DEFEND:'SAVUN',RESCUE:'KURTAR'
+        });
+        const QUEST_COLORS=Object.freeze({
+            KILLS:'#75f7ac',ORBS:'#74e5ff',COMBO:'#ffc36b',
+            ELITE_HUNT:'#ffe08a',CHAIN:'#9fc4ff',NO_HIT:'#d4b3ff',
+            DEFEND:'#65f7dc',RESCUE:'#ffacb8'
+        });
+        let activeQuest={type:'KILLS',target:15,progress:0,rewardGold:20,desc:'15 Düşman İmha Et'};
+        let questHistory=[];
+        let questStats={offered:0,completed:0,byType:{},hitsReset:0};
+        let questHudPrevious='';
+
+        function getQuestCandidates(currentWave=wave,hasChain=!!player?.chainLightning){
+            const options=['KILLS','ORBS','COMBO'];
+            if(currentWave>=2) options.push('NO_HIT','RESCUE');
+            if(currentWave>=3) options.push('DEFEND');
+            if(currentWave>=4) options.push('ELITE_HUNT');
+            if(currentWave>=3&&hasChain) options.push('CHAIN');
+            return options;
+        }
+        function chooseQuestType(available,history=questHistory,roll=Math.random()){
+            const fresh=available.filter(type=>!history.slice(-2).includes(type));
+            const pool=fresh.length?fresh:available;
+            return pool[Math.min(pool.length-1,Math.floor(Math.max(0,roll)*pool.length))];
+        }
+        function getQuestPoint(fromX=player?.x||worldWidth/2,fromY=player?.y||worldHeight/2){
+            const angle=Math.random()*Math.PI*2;
+            const distance=140+Math.random()*80;
+            return {
+                x:Math.max(65,Math.min(worldWidth-65,fromX+Math.cos(angle)*distance)),
+                y:Math.max(65,Math.min(worldHeight-65,fromY+Math.sin(angle)*distance))
+            };
+        }
+        function createQuest(type,currentWave=wave){
+            let target=1,desc='',progress=0;
+            const advanced=['ELITE_HUNT','CHAIN','NO_HIT','DEFEND','RESCUE'].includes(type);
+            if(type==='KILLS'){target=Math.min(125,14+currentWave*4);desc=target+' DÜŞMAN İMHA';}
+            else if(type==='ORBS'){target=Math.min(130,18+currentWave*4);desc=target+' XP KÜRESİ TOPLA';}
+            else if(type==='COMBO'){target=Math.min(45,10+currentWave*3);desc='x'+target+' KOMBOYA ULAŞ';progress=combo;}
+            else if(type==='ELITE_HUNT'){target=currentWave<9?1:2;desc=target+' ELİT HEDEFİ AVLA';}
+            else if(type==='CHAIN'){target=Math.min(10,3+Math.floor(currentWave/3));desc=target+' ZİNCİR SIÇRAMASI';}
+            else if(type==='NO_HIT'){target=Math.min(24,12+Math.floor(currentWave/2));desc=target+' SN HASAR ALMA';}
+            else if(type==='DEFEND'){target=5;desc='SİNYAL NOKTASINI SAVUN';}
+            else if(type==='RESCUE'){target=2;desc='2 VERİ KAPSÜLÜNÜ KURTAR';}
+            const quest={type,target,progress,rewardGold:Math.min(180,
+                advanced?30+currentWave*5:18+currentWave*4),desc};
+            if(type==='DEFEND'||type==='RESCUE') quest.point=getQuestPoint();
+            if(type==='DEFEND') quest.radius=105;
+            return quest;
+        }
+        function generateNextQuest(forcedType=null){
+            const candidates=getQuestCandidates();
+            const type=forcedType&&candidates.includes(forcedType)?forcedType:
+                chooseQuestType(candidates);
+            activeQuest=createQuest(type);
+            questHistory.push(type);
+            if(questHistory.length>3) questHistory.shift();
+            questStats.offered++;
+            questHudPrevious='';
+            updateQuestHud();
+            return activeQuest;
+        }
+        function completeQuest(){
+            if(!activeQuest) return;
+            const {type,rewardGold:goldWon}=activeQuest;
+            questStats.completed++;
+            questStats.byType[type]=(questStats.byType[type]||0)+1;
+            totalGold+=goldWon;
+            sessionGold+=goldWon;
+            if(combatDirector) combatDirector.onGoldGranted('quests',goldWon);
+            saveMetaProgress();
+            audio.playJackpot();
+            if(player){
+                player.addOverdrive(25);
+                createFloatingText(player.x,player.y-45,
+                    'GÖREV TAMAMLANDI · +'+goldWon+' ALTIN',QUEST_COLORS[type],17);
             }
+            showDopamineBanner('GÖREV · +'+goldWon+' ALTIN',QUEST_COLORS[type]);
+            generateNextQuest();
+        }
+        function advanceQuest(type,amount=1){
+            if(!activeQuest||activeQuest.type!==type||!Number.isFinite(amount)||amount<=0) return;
+            if(type==='COMBO') activeQuest.progress=Math.max(activeQuest.progress,amount);
+            else activeQuest.progress=Math.min(activeQuest.target,activeQuest.progress+amount);
+            if(activeQuest.progress>=activeQuest.target) completeQuest();
+            else updateQuestHud();
+        }
+        function resetFlawlessQuest(){
+            if(activeQuest?.type!=='NO_HIT') return;
+            activeQuest.progress=0;
+            questStats.hitsReset++;
             updateQuestHud();
         }
-
-        function advanceQuest(type, amount = 1) {
-            if (!activeQuest) return;
-            if (activeQuest.type === type) {
-                if (type === 'COMBO') {
-                    activeQuest.progress = Math.max(activeQuest.progress, amount);
-                } else {
-                    activeQuest.progress += amount;
-                }
-                if (activeQuest.progress >= activeQuest.target) {
-                    const goldWon = activeQuest.rewardGold;
-                    totalGold += goldWon;
-                    sessionGold += goldWon;
-                    if(combatDirector) combatDirector.onGoldGranted('quests',goldWon);
-                    saveMetaProgress();
-                    audio.playJackpot();
-                    if (player) {
-                        player.addOverdrive(25);
-                        createFloatingText(player.x, player.y - 45, `🏆 GÖREV TAMAMLANDI! +${goldWon} ALTIN`, '#00ff66', 18);
-                    }
-                    showDopamineBanner(`GÖREV · +${goldWon} ALTIN`, '#00ff66');
-                    generateNextQuest();
-                } else {
-                    updateQuestHud();
+        function updateQuest(dt){
+            if(!activeQuest||!player||gameState!=='PLAYING'||dt<=0) return;
+            const current=activeQuest;
+            if(current.type==='NO_HIT') advanceQuest('NO_HIT',dt);
+            else if(current.type==='DEFEND'&&current.point){
+                const dist=Math.hypot(player.x-current.point.x,player.y-current.point.y);
+                // Only an enemy contesting this zone counts as a real defense.
+                const defending=dist<=current.radius &&
+                    enemies.some(enemy=>!enemy.dead&&!enemy.isBoss &&
+                        Number.isFinite(enemy.x)&&Number.isFinite(enemy.y) &&
+                        Math.hypot(enemy.x-current.point.x,
+                            enemy.y-current.point.y)<=current.radius+170);
+                const value=Math.max(0,Math.min(current.target,current.progress+
+                    (defending?dt:-dt*.65)));
+                current.progress=value;
+                if(value>=current.target) completeQuest();
+                else updateQuestHud();
+            } else if(current.type==='RESCUE'&&current.point){
+                if(Math.hypot(player.x-current.point.x,player.y-current.point.y)<player.radius+23){
+                    advanceQuest('RESCUE',1);
+                    if(activeQuest===current) current.point=getQuestPoint(player.x,player.y);
                 }
             }
         }
-
-        function updateQuestHud() {
-            const el = document.getElementById('questHudText');
-            if (el && activeQuest) {
-                const shortType = {KILLS:'AV', ORBS:'KÜRE', COMBO:'KOMBO'}[activeQuest.type] || 'GÖREV';
-                el.textContent = `${shortType} · ${activeQuest.progress}/${activeQuest.target} · +${activeQuest.rewardGold}`;
+        function updateQuestHud(){
+            if(!activeQuest) return;
+            const q=activeQuest;
+            const shown=Math.floor(q.progress);
+            const content=QUEST_LABELS[q.type]+' · '+shown+'/'+q.target+' · +'+q.rewardGold;
+            if(content===questHudPrevious) return;
+            questHudPrevious=content;
+            for(const id of ['questHudText','questMobileText']){
+                const el=document.getElementById(id);
+                if(el){el.textContent=content;el.title=q.desc;
+                    el.style.color=QUEST_COLORS[q.type];}
             }
         }
+        function drawQuestObjective(ctx){
+            const q=activeQuest;
+            if(!q?.point||gameState!=='PLAYING') return;
+            const zone=q.type==='DEFEND',radius=zone?q.radius:23;
+            ctx.save();ctx.globalAlpha=.85;
+            ctx.strokeStyle=QUEST_COLORS[q.type];
+            ctx.fillStyle=zone?'rgba(55,225,195,.10)':'rgba(255,125,155,.17)';
+            ctx.lineWidth=zone?3:2;
+            ctx.setLineDash(zone?[12,7]:[5,4]);
+            ctx.beginPath();ctx.arc(q.point.x,q.point.y,radius,0,Math.PI*2);
+            ctx.fill();ctx.stroke();ctx.setLineDash([]);
+            if(zone){
+                ctx.beginPath();
+                ctx.arc(q.point.x,q.point.y,radius+7,-Math.PI/2,
+                    -Math.PI/2+2*Math.PI*q.progress/q.target);
+                ctx.lineWidth=4;ctx.stroke();
+            }
+            ctx.font="bold 12px 'Orbitron',sans-serif";
+            ctx.textAlign='center';ctx.fillStyle=QUEST_COLORS[q.type];
+            ctx.fillText(zone?'SAVUN':'KURTAR',q.point.x,q.point.y-radius-13);
+            ctx.restore();
+        }
+        window.getNeonQuestSnapshot=()=>activeQuest?{
+            type:activeQuest.type,description:activeQuest.desc,
+            progress:Math.round(activeQuest.progress*10)/10,target:activeQuest.target,
+            rewardGold:activeQuest.rewardGold,
+            point:activeQuest.point?{...activeQuest.point}:null,
+            eligible:getQuestCandidates(),history:[...questHistory],
+            stats:{...questStats,byType:{...questStats.byType}}
+        }:null;
 
         function showDopamineBanner(text, borderColor = '#ffe600') {
             const banner = document.getElementById('killstreakBanner');
@@ -2465,6 +2575,7 @@
                 }
 
                 this.hp = Math.max(0, this.hp - amount);
+                resetFlawlessQuest();
                 this.invulnTimer = 0.65;
                 screenShake = 14;
                 combo = 1;
@@ -3857,6 +3968,7 @@
                             emitLightningArc(lastTarget.x, lastTarget.y,
                                 nextTarget.x, nextTarget.y, isCrit || evolvedArc);
                             if(lastTarget===this) audio.playWeaponHit('arc',isCrit,false);
+                            advanceQuest('CHAIN',1);
                             nextTarget.takeDamage(finalDmg * 0.55, 0, 0, false, false);
                             lastTarget = nextTarget;
                             jumps--;
@@ -3874,7 +3986,8 @@
             die() {
                 this.dead = true;
                 kills++;
-                advanceQuest('KILLS', 1);
+                advanceQuest('KILLS',1);
+                if(this.isElite) advanceQuest('ELITE_HUNT',1);
 
                 combo = Math.min(99, combo + 1);
                 comboTimer = COMBO_MAX_TIME;
@@ -5765,7 +5878,7 @@
                 }
                 const warnBanner = document.getElementById('bossWarningBanner');
                 const warnText = document.getElementById('bossWarningText');
-                const upcomingCount = (bossEncounterCount + 1) === 1 ? 1 : ((bossEncounterCount + 1) >= 3 && (bossEncounterCount + 1) % 2 === 1 ? 3 : 2);
+                const upcomingCount=getBossCountForEncounter(bossEncounterCount+1);
                 if (warnText) {
                     warnText.textContent = upcomingCount > 1
                         ? `${upcomingCount} BOSS YAKLAŞIYOR`
@@ -5948,6 +6061,7 @@
                 if (weaponImpacts[i].life <= 0) weaponImpacts.splice(i, 1);
             }
 
+            updateQuest(dt);
             for (let i = floatingTexts.length - 1; i >= 0; i--) {
                 const ft = floatingTexts[i];
                 ft.y -= 38 * dt;
@@ -6239,6 +6353,7 @@
                 }
             }
 
+            drawQuestObjective(ctx);
             for (const cz of conduitZones) cz.draw(ctx);
             if (combatDirector?.activeArenaEvent) combatDirector.activeArenaEvent.draw(ctx);
             for (const sw of shockwaves) sw.draw(ctx);
@@ -6589,6 +6704,9 @@
             dyingSequenceTimer = 0;
             reviveCountUsed = 0;
             paidRevivesUsed = 0;
+            questHistory=[];
+            questStats={offered:0,completed:0,byType:{},hitsReset:0};
+            questHudPrevious='';
             generateNextQuest();
 
             document.getElementById('overdriveOverlay').classList.add('hidden');
