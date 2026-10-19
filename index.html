@@ -1385,6 +1385,41 @@
             return 'NORMAL';
         }
 
+
+        // Each procedural one-shot is bounded and filtered, without external audio files.
+        const WEAPON_SFX=Object.freeze({
+            plasma:{wave:'triangle',start:620,end:190,length:.08,gain:.044,lowpass:920},
+            prism:{wave:'sine',start:800,end:400,length:.095,gain:.047,lowpass:950},
+            reactor:{wave:'triangle',start:440,end:720,length:.09,gain:.044,lowpass:920},
+            rail:{wave:'sawtooth',start:260,end:85,length:.16,gain:.054,lowpass:550},
+            missile:{wave:'sawtooth',start:205,end:100,length:.135,gain:.05,lowpass:480},
+            cluster:{wave:'triangle',start:340,end:160,length:.1,gain:.037,lowpass:650},
+            arc:{wave:'triangle',start:670,end:370,length:.08,gain:.032,lowpass:970}
+        });
+        const HIT_SFX=Object.freeze({
+            plasma:{wave:'triangle',start:310,end:110,length:.06,gain:.031,lowpass:750},
+            prism:{wave:'sine',start:720,end:390,length:.084,gain:.035,lowpass:900},
+            reactor:{wave:'triangle',start:410,end:610,length:.075,gain:.033,lowpass:810},
+            rail:{wave:'sawtooth',start:190,end:75,length:.14,gain:.047,lowpass:490},
+            missile:{wave:'sawtooth',start:160,end:65,length:.14,gain:.048,lowpass:460},
+            cluster:{wave:'triangle',start:380,end:135,length:.085,gain:.031,lowpass:680},
+            arc:{wave:'triangle',start:810,end:420,length:.09,gain:.036,lowpass:980}
+        });
+        const BOSS_DEATH_SFX=Object.freeze({
+            BOSS_DESTROYER:{wave:'sawtooth',start:265,end:65,length:.48,gain:.076,lowpass:630},
+            BOSS_TITAN:{wave:'sawtooth',start:160,end:55,length:.55,gain:.084,lowpass:440},
+            BOSS_VOID:{wave:'sine',start:410,end:90,length:.62,gain:.073,lowpass:690},
+            BOSS_PRISM:{wave:'triangle',start:690,end:135,length:.50,gain:.073,lowpass:820}
+        });
+        function getWeaponSoundFamily(b) {
+            if (b.evoRail) return 'rail';
+            if (b.reactorPulse) return 'reactor';
+            if (b.clusterFragment) return 'cluster';
+            if (b.isHoming) return b.clusterPayload?'cluster':'missile';
+            if (b.prismEvolved) return 'prism';
+            return 'plasma';
+        }
+
         class SoundEngine {
             constructor() {
                 this.ctx = null;
@@ -1514,12 +1549,56 @@
                         osc.type = kind === 'boss' ? 'sawtooth' : 'triangle';
                         osc.frequency.setValueAtTime(freq,now);
                         osc.frequency.exponentialRampToValueAtTime(freq*.92,now+.11);
-                        gain.gain.setValueAtTime(kind==='boss' ? .075 : .045,now);
+                        gain.gain.setValueAtTime(kind==='boss' ? .061 : .036,now);
                         gain.gain.exponentialRampToValueAtTime(.001,now+.12);
                         osc.connect(gain);gain.connect(this.ctx.destination);
                         osc.start(now);osc.stop(now+.12);
                     });
                 } catch(e) {}
+            }
+
+
+            // One synthesized voice per accepted event, filtered below 1 kHz.
+            synthSfx(recipe,pitch=1,delay=0) {
+                if (!this.ctx || this.ctx.state === 'suspended') return;
+                try {
+                    const now=this.ctx.currentTime+delay;
+                    const osc=this.ctx.createOscillator();
+                    const amp=this.ctx.createGain();
+                    const filter=this.ctx.createBiquadFilter?.();
+                    osc.type=recipe.wave;
+                    osc.frequency.setValueAtTime(Math.min(1000,Math.max(45,recipe.start*pitch)),now);
+                    osc.frequency.exponentialRampToValueAtTime(
+                        Math.min(1000,Math.max(45,recipe.end*pitch)),now+recipe.length*.86);
+                    amp.gain.setValueAtTime(Math.min(.09,recipe.gain),now);
+                    amp.gain.exponentialRampToValueAtTime(.001,now+recipe.length);
+                    if(filter) {
+                        filter.type='lowpass';
+                        filter.frequency.setValueAtTime(recipe.lowpass,now);
+                        osc.connect(filter);filter.connect(amp);
+                    } else osc.connect(amp);
+                    amp.connect(this.ctx.destination);
+                    osc.start(now);osc.stop(now+recipe.length);
+                }catch(e){}
+            }
+            playWeaponFire(family='plasma',crit=false) {
+                if (!this.enabled || !this.allowSfx('weapon-fire',.035,!!crit)) return;
+                this.synthSfx(WEAPON_SFX[family]||WEAPON_SFX.plasma,crit?1.08:1);
+            }
+            playWeaponHit(family='plasma',crit=false,boss=false) {
+                const arc=family==='arc';
+                if (!this.enabled || !this.allowSfx(arc?'arc-hit':'weapon-hit',
+                        arc?.14:.055,!!boss&&!!crit)) return;
+                this.synthSfx(HIT_SFX[family]||HIT_SFX.plasma,boss?.87:crit?1.11:1);
+            }
+            playBossDeath(archetype) {
+                if (!this.enabled || !this.allowSfx('boss-death',.32,true)) return;
+                this.synthSfx(BOSS_DEATH_SFX[archetype]||BOSS_DEATH_SFX.BOSS_DESTROYER);
+            }
+            playRevive() {
+                if (!this.enabled || !this.allowSfx('revive',.5,true)) return;
+                this.synthSfx({wave:'sine',start:240,end:520,length:.29,gain:.07,lowpass:720});
+                this.synthSfx({wave:'triangle',start:350,end:680,length:.36,gain:.049,lowpass:850},1,.14);
             }
 
             playLaser(isCrit = false) {
@@ -1532,7 +1611,7 @@
                     osc.frequency.setValueAtTime(isCrit ? 920 : 680, now);
                     osc.frequency.exponentialRampToValueAtTime(140, now + 0.08);
 
-                    gain.gain.setValueAtTime(isCrit ? 0.09 : 0.06, now);
+                    gain.gain.setValueAtTime(isCrit ? 0.068 : 0.044, now);
                     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
                     osc.connect(gain);
@@ -1552,7 +1631,7 @@
                     osc.frequency.setValueAtTime(isBig ? 140 : 210, now);
                     osc.frequency.exponentialRampToValueAtTime(28, now + (isBig ? 0.35 : 0.16));
 
-                    gain.gain.setValueAtTime(isBig ? 0.16 : 0.09, now);
+                    gain.gain.setValueAtTime(isBig ? 0.102 : 0.065, now);
                     gain.gain.exponentialRampToValueAtTime(0.001, now + (isBig ? 0.35 : 0.16));
 
                     osc.connect(gain);
@@ -1573,7 +1652,7 @@
                     osc.frequency.setValueAtTime(baseFreq, now);
                     osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, now + 0.07);
 
-                    gain.gain.setValueAtTime(0.06, now);
+                    gain.gain.setValueAtTime(0.044, now);
                     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
 
                     osc.connect(gain);
@@ -1593,7 +1672,7 @@
                     osc.frequency.setValueAtTime(220, now);
                     osc.frequency.exponentialRampToValueAtTime(760, now + 0.14);
 
-                    gain.gain.setValueAtTime(0.11, now);
+                    gain.gain.setValueAtTime(0.072, now);
                     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
 
                     osc.connect(gain);
@@ -1614,7 +1693,7 @@
                         osc.type = 'triangle';
                         osc.frequency.setValueAtTime(freq, now);
 
-                        gain.gain.setValueAtTime(0.11, now);
+                        gain.gain.setValueAtTime(0.073, now);
                         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
 
                         osc.connect(gain);
@@ -1636,7 +1715,7 @@
                         osc.type = 'sawtooth';
                         osc.frequency.setValueAtTime(freq, now);
 
-                        gain.gain.setValueAtTime(0.09, now);
+                        gain.gain.setValueAtTime(0.06, now);
                         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
 
                         osc.connect(gain);
@@ -2223,6 +2302,8 @@
                 if (!closest || minDist > 540) return;
 
                 this.shotCounter++;
+                // One sound per fired salvo even if multiple weapon modules fire.
+                let shotSoundFamily=this.evolutions.has('pierce_ricochet')?'prism':'plasma';
                 const baseAngle = Math.atan2(closest.y - this.y, closest.x - this.x);
                 this.aimAngle = baseAngle;
                 this.muzzleFlash = 1.0;
@@ -2264,6 +2345,7 @@
                         bullets.push(pulse);
                     }
                     this.buildStats.reactorBursts++;
+                    shotSoundFamily='reactor';
                 }
 
                 if (this.evolutions.has('multishot') && this.shotCounter % 4 === 0 &&
@@ -2276,6 +2358,7 @@
                     rail.evoRail = true;
                     bullets.push(rail);
                     this.buildStats.railShots++;
+                    shotSoundFamily='rail';
                 }
 
                 const missileInterval = this.synergies.has('swarm_guidance') ? 2 : 3;
@@ -2295,10 +2378,11 @@
                         missile.clusterPayload = this.evolutions.has('homing');
                         missile.forceChain = this.synergies.has('ionic_guidance');
                         bullets.push(missile);
+                        if(shotSoundFamily!=='rail') shotSoundFamily='missile';
                     }
                 }
 
-                audio.playLaser(isCrit);
+                audio.playWeaponFire(shotSoundFamily,isCrit);
             }
 
             triggerDash() {
@@ -3771,6 +3855,7 @@
                             visited.add(nextTarget.id);
                             emitLightningArc(lastTarget.x, lastTarget.y,
                                 nextTarget.x, nextTarget.y, isCrit || evolvedArc);
+                            if(lastTarget===this) audio.playWeaponHit('arc',isCrit,false);
                             nextTarget.takeDamage(finalDmg * 0.55, 0, 0, false, false);
                             lastTarget = nextTarget;
                             jumps--;
@@ -3855,6 +3940,7 @@
                 }
 
                 if (this.isBoss) {
+                    audio.playBossDeath(this.type);
                     // Visual snapshot only; loot, scoring and Director finish this same tick.
                     if (bossDeathVfx.length >= MAX_BOSS_DEATH_VFX) bossDeathVfx.shift();
                     bossDeathVfx.push({x:this.x,y:this.y,type:this.type,color:this.color,
@@ -3905,7 +3991,8 @@
                     }
                 }
 
-                audio.playExplosion(this.type === 'TANK' || this.isBoss || this.isElite);
+                // Avoid layering a generic explosion on top of the boss death signature.
+                if(!this.isBoss) audio.playExplosion(this.type === 'TANK' || this.isElite);
             }
 
             draw(ctx) {
@@ -5667,6 +5754,7 @@
                         e.takeDamage(b.damage, Math.cos(kAngle) * 140, Math.sin(kAngle) * 140,
                             b.isCrit, true, b.forceChain);
                         emitWeaponImpact(b, e);
+                        audio.playWeaponHit(getWeaponSoundFamily(b),b.isCrit,e.isBoss);
                         spawnClusterFragments(b, e);
                         if (b.pierce <= 0) {
                             b.dead = true;
@@ -6678,7 +6766,7 @@
                 }
             }
 
-            audio.playJackpot();
+            audio.playRevive();
             screenShake = 18;
             shockwaves.push(new Shockwave(player.x, player.y, 380, '#10b981', 0.6));
             showDopamineBanner('⚡ DİRİLİŞ · 3,5s KORUMA ⚡', '#10b981');
