@@ -11,11 +11,24 @@ const gameCode = scripts.at(-1)?.[1];
 function setup(stored = {}) {
   const nodes = new Map();
   const noop = () => {};
+  const windowListeners = new Map();
+  const documentListeners = new Map();
+  const on = (map, type, fn) => {
+    if (!map.has(type)) map.set(type, []);
+    map.get(type).push(fn);
+  };
+  const emit = (map, type, event = {}) => {
+    for (const fn of map.get(type) || []) fn({ preventDefault: noop, ...event });
+  };
   function element() {
+    const elementListeners = new Map();
     return {
       classList: { add: noop, remove: noop, toggle: noop },
       style: {}, textContent: '', innerHTML: '',
-      addEventListener: noop, appendChild: noop,
+      addEventListener(type, fn) { on(elementListeners, type, fn); },
+      dispatch(type, event = {}) { emit(elementListeners, type, event); },
+      click() { emit(elementListeners, 'click', { target: this }); },
+      appendChild: noop,
        _attrs: {}, setAttribute(key, value) { this._attrs[key] = value; },
       getContext: () => new Proxy({}, { get: () => noop }),
       querySelector: () => element(),
@@ -30,9 +43,10 @@ function setup(stored = {}) {
     },
     querySelectorAll: () => [],
     createElement: element,
-    addEventListener: noop,
+    addEventListener(type, fn) { on(documentListeners, type, fn); },
   };
-  const window = { innerWidth: 1280, innerHeight: 720, devicePixelRatio: 1, addEventListener: noop };
+  const window = { innerWidth: 1280, innerHeight: 720, devicePixelRatio: 1,
+    addEventListener(type, fn) { on(windowListeners, type, fn); } };
   const storage = {
     getItem: (key) => stored[key] ?? null,
     setItem: (key, value) => { stored[key] = value; },
@@ -46,7 +60,12 @@ function setup(stored = {}) {
   vm.runInContext(gameCode, sandbox, { timeout: 4000 });
   sandbox.window.onload();
   const run = (script) => vm.runInContext(script, sandbox, { timeout: 4000 });
-  return { run, stored };
+  return {
+    run, stored,
+    windowEvent: (type, event) => emit(windowListeners, type, event),
+    documentEvent: (type, event) => emit(documentListeners, type, event),
+    canvasEvent: (type, event) => nodes.get('gameCanvas').dispatch(type, event),
+  };
 }
 
 test('single-file game JavaScript is syntactically valid', () => {
@@ -3278,3 +3297,96 @@ test('M5.5.4 short/long run numeric formatting, meters and insights stay bounded
  assert.ok(a.i.some(x=>x.title==='EN GÜÇLÜ GELİR KAYNAĞI'));
 });
 
+
+
+test('M6.1.1 held P/Escape cannot rapidly toggle pause; pause clears movement', () => {
+  const { run, windowEvent } = setup();
+  run('startNewGame()');
+  windowEvent('keydown', { code: 'KeyW' });
+  assert.equal(run('keys.KeyW'), true);
+  windowEvent('keydown', { code: 'KeyP' });
+  assert.equal(run('gameState'), 'PAUSED');
+  assert.equal(run('!!keys.KeyW'), false);
+  windowEvent('keydown', { code: 'KeyP', repeat: true });
+  assert.equal(run('gameState'), 'PAUSED');
+  windowEvent('keyup', { code: 'KeyP' });
+  windowEvent('keydown', { code: 'Escape' });
+  assert.equal(run('gameState'), 'PLAYING');
+});
+
+test('M6.1.1 window blur and hidden tab pause a real run without stuck keys', () => {
+  const { run, windowEvent, documentEvent } = setup();
+  run('startNewGame()');
+  windowEvent('keydown', { code: 'ArrowRight' });
+  windowEvent('blur');
+  assert.equal(run('gameState'), 'PAUSED');
+  assert.equal(run('!!keys.ArrowRight || mouse.active'), false);
+  run('togglePause()');
+  windowEvent('keydown', { code: 'KeyD' });
+  run('document.hidden=true');
+  documentEvent('visibilitychange');
+  assert.equal(run('gameState'), 'PAUSED');
+  assert.equal(run('!!keys.KeyD'), false);
+  documentEvent('visibilitychange');
+  assert.equal(run('gameState'), 'PAUSED');
+});
+
+test('M6.1.1 touch release/cancel stops movement and menu touches do not latch', () => {
+  const { run, canvasEvent } = setup();
+  run('startNewGame()');
+  canvasEvent('touchstart', { touches: [{ clientX: 350, clientY: 250 }] });
+  assert.equal(run('mouse.active'), true);
+  canvasEvent('touchend', { touches: [] });
+  assert.equal(run('mouse.active'), false);
+  canvasEvent('touchmove', { touches: [{ clientX: 420, clientY: 290 }] });
+  assert.equal(run('mouse.active'), true);
+  canvasEvent('touchcancel');
+  assert.equal(run('mouse.active'), false);
+  run("gameState='MENU'");
+  canvasEvent('touchstart', { touches: [{ clientX: 420, clientY: 290 }] });
+  assert.equal(run('mouse.active'), false);
+});
+
+test('M6.1.1 native revive decision button keeps Enter/Space, ambient Enter revives', () => {
+  const a = setup();
+  a.run('startNewGame(); showRevivePromptOrGameOver()');
+  assert.equal(a.run('gameState'), 'REVIVE_PROMPT');
+  const focusedButton = { closest: () => ({ tagName: 'BUTTON' }) };
+  a.windowEvent('keydown', { code: 'Enter', target: focusedButton });
+  a.windowEvent('keydown', { code: 'Space', target: focusedButton });
+  assert.equal(a.run('gameState'), 'REVIVE_PROMPT');
+  a.run("document.getElementById('declineReviveBtn').click()");
+  assert.equal(a.run('gameState'), 'GAME_OVER');
+  assert.equal(a.run('finalRunReport.reason'), 'REVIVE_DECLINED');
+  const b = setup();
+  b.run('startNewGame(); showRevivePromptOrGameOver()');
+  b.windowEvent('keydown', { code: 'Enter' });
+  assert.equal(b.run('gameState'), 'PLAYING');
+});
+
+test('M6.1.1 reroll executes once on keydown, not for OS key repeat', () => {
+  const { run, windowEvent } = setup();
+  run('startNewGame(); totalGold=250; triggerLevelUp()');
+  const costBefore = run('totalGold');
+  windowEvent('keydown', { code: 'KeyR', repeat: true });
+  assert.equal(run('totalGold'), costBefore);
+  windowEvent('keydown', { code: 'KeyR' });
+  assert.equal(run('totalGold'), costBefore - 15);
+  windowEvent('keydown', { code: 'KeyR', repeat: true });
+  assert.equal(run('totalGold'), costBefore - 15);
+});
+
+test('M6.1.1 new run resets held keys, mouse, and menu keyboard input', () => {
+  const { run, windowEvent, canvasEvent } = setup();
+  windowEvent('keydown', { code: 'KeyW' });
+  assert.equal(run('!!keys.KeyW'), false);
+  run('startNewGame()');
+  windowEvent('keydown', { code: 'KeyW' });
+  canvasEvent('mousemove', { clientX: 410, clientY: 310 });
+  assert.equal(run('mouse.active && keys.KeyW'), true);
+  run('startNewGame()');
+  assert.equal(run('mouse.active || !!keys.KeyW'), false);
+  canvasEvent('mousemove', { clientX: 410, clientY: 310,
+    sourceCapabilities: { firesTouchEvents: true } });
+  assert.equal(run('mouse.active'), false);
+});
