@@ -2655,13 +2655,13 @@ test('M5.1.1 deterministic 5/10/20/30-minute decaying-chance economy stress',()=
 });
 
 
-test('M5.1.1 actual first two boss encounters are solo and difficulty escalates smoothly',()=>{
+test('M5.3.1 first three boss encounters are solo with smooth escalation',()=>{
   const {run}=setup();
   const a=JSON.parse(run("(()=>{startNewGame();const counts=[],chests=[];for(let i=1;i<=6;i++){totalTime=i*100;spawnBossEncounter();counts.push(activeBosses.length);for(const b of [...activeBosses]){b.hp=1;b.takeDamage(9999,0,0,false,false);}chests.push(combatDirector.stats.chestDrops.boss);}return JSON.stringify({counts,chests,encounters:combatDirector.stats.encounters,kills:combatDirector.stats.bossKills,alive:activeBosses.length});})()"));
-  assert.deepEqual(a.counts,[1,1,2,2,3,2]);
+  assert.deepEqual(a.counts,[1,1,1,2,3,2]);
   assert.deepEqual(a.chests,[1,2,3,4,5,6]);
   assert.equal(a.encounters,6);
-  assert.equal(a.kills,11);
+  assert.equal(a.kills,10);
   assert.equal(a.alive,0);
 });
 
@@ -2709,7 +2709,7 @@ test('M5.1.1 boss HP/speed values and one guaranteed boss reward stay unchanged'
   const {run}=setup();
   const a=JSON.parse(run("(()=>{startNewGame();wave=10;const x=new Enemy(100,100,'BOSS_TITAN'),prior={hp:x.maxHp,speed:x.speed};const counts=[1,2,3,4,5,6].map(getBossCountForEncounter);combatDirector.onBossEncounter();const first=combatDirector.registerChestDrop('boss',0,0),second=combatDirector.registerChestDrop('boss',0,0);const y=new Enemy(100,100,'BOSS_TITAN');return JSON.stringify({prior,after:{hp:y.maxHp,speed:y.speed},counts,first,second});})()"));
   assert.deepEqual(a.prior,a.after);
-  assert.deepEqual(a.counts,[1,1,2,2,3,2]);
+  assert.deepEqual(a.counts,[1,1,1,2,3,2]);
   assert.equal(a.first,true);
   assert.equal(a.second,false);
 });
@@ -2823,7 +2823,7 @@ test('M5.2 second boss pre-warning now uses actual encounter count helper',()=>{
   assert.match(html,/const upcomingCount=getBossCountForEncounter\(bossEncounterCount\+1\);/);
   assert.match(html,/function getBossCountForEncounter/);
   const {run}=setup();
-  assert.deepEqual(JSON.parse(run("JSON.stringify([1,2,3,4,5].map(getBossCountForEncounter))")),[1,1,2,2,3]);
+  assert.deepEqual(JSON.parse(run("JSON.stringify([1,2,3,4,5].map(getBossCountForEncounter))")),[1,1,1,2,3]);
 });
 
 
@@ -2924,4 +2924,61 @@ test('M5.3 six optional events and offscreen hints draw with bounded visuals',()
  const {run}=setup();
  const a=JSON.parse(run("(()=>{startNewGame();const kinds=[];for(const kind of ARENA_EVENT_SEQUENCE){const e=new ArenaEvent(kind,200,200);e.progress=e.required*.45;e.draw(ctx);combatDirector.activeArenaEvent=e;drawOffscreenIndicators();kinds.push(e.kind);}return JSON.stringify(kinds);})()"));
  assert.deepEqual(a,['RELAY','VAULT','STORM','REACTOR','CORRIDOR','ANOMALY']);
+});
+
+
+test('M5.3.1 boss color identity and opening order are deterministic',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("JSON.stringify({order:OPENING_BOSS_ORDER,arch:OPENING_BOSS_ORDER.map(t=>BOSS_ARCHETYPES.find(a=>a.type===t)).map(a=>({name:a.name,color:a.color})),visuals:OPENING_BOSS_ORDER.map(t=>BOSS_VISUALS[t].silhouette)})"));
+ assert.deepEqual(s.order,['BOSS_TITAN','BOSS_DESTROYER','BOSS_VOID']);
+ assert.deepEqual(s.arch.map(x=>x.color),['#ff8800','#ff0055','#b000ff']);
+ assert.ok(s.arch[0].name.includes('BEHEMOT'));
+ assert.ok(s.arch[1].name.includes('YIKICI'));
+ assert.ok(s.arch[2].name.includes('HİÇLİK'));
+ assert.deepEqual(s.visuals,['armor','siege','spider']);
+});
+
+test('M5.3.1 first three real encounters are solo, unique and immune to RNG order',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{const results=[];for(const roll of [0,.5,.9999]){startNewGame();Math.random=()=>roll;const types=[],counts=[];for(let i=1;i<=3;i++){wave=i*3+1;totalTime=i*75;spawnBossEncounter();types.push(activeBosses[0].type);counts.push(activeBosses.length);for(const b of [...activeBosses]){b.hp=1;b.takeDamage(9000,0,0,false,false);}}results.push({types,counts,bossKills:combatDirector.stats.bossKills,chests:combatDirector.stats.chestDrops.boss});}return JSON.stringify(results);})()"));
+ for(const x of s){
+  assert.deepEqual(x.types,['BOSS_TITAN','BOSS_DESTROYER','BOSS_VOID']);
+  assert.deepEqual(x.counts,[1,1,1]);
+  assert.equal(x.bossKills,3);assert.equal(x.chests,3);
+ }
+});
+
+test('M5.3.1 boss health effective armor toughness and damage rise in natural wave examples',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();const out=[];for(const waveNum of [4,7,10]){wave=waveNum;totalTime=55+(out.length*65);spawnBossEncounter();const b=activeBosses[0];out.push({type:b.type,hp:b.maxHp,effective:b.maxHp/(b.type==='BOSS_TITAN'?.78:1),damage:b.damage});for(const x of [...activeBosses]){x.hp=1;x.takeDamage(9000,0,0,false,false);}}return JSON.stringify(out);})()"));
+ assert.deepEqual(a.map(x=>x.type),['BOSS_TITAN','BOSS_DESTROYER','BOSS_VOID']);
+ for(let i=1;i<3;i++){
+  assert.ok(a[i].hp>a[i-1].hp,'HP must increase');
+  assert.ok(a[i].effective>a[i-1].effective,'armor-adjusted effective HP must increase');
+  assert.ok(a[i].damage>a[i-1].damage,'damage must increase');
+ }
+});
+
+test('M5.3.1 later multi-boss encounters preserve diversity and cyan Prism pool',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();const pool=getBossArchetypesForEncounter(4).map(b=>b.type);bossEncounterCount=3;wave=12;spawnBossEncounter();return JSON.stringify({count:activeBosses.length,types:activeBosses.map(b=>b.type),pool,sequence:[1,2,3,4,5,6,7].map(getBossCountForEncounter)});})()"));
+ assert.deepEqual(a.sequence,[1,1,1,2,3,2,3]);
+ assert.equal(a.count,2);assert.notEqual(a.types[0],a.types[1]);
+ assert.equal(new Set(a.pool).size,4);assert.ok(a.pool.includes('BOSS_PRISM'));
+});
+
+test('M5.3.1 new game resets boss order to orange armored Behemoth',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{startNewGame();wave=4;spawnBossEncounter();const initial=activeBosses[0].type;bossEncounterCount=3;startNewGame();const reset=bossEncounterCount;wave=4;spawnBossEncounter();return JSON.stringify({initial,reset,after:activeBosses[0].type,encounter:bossEncounterCount});})()"));
+ assert.equal(a.initial,'BOSS_TITAN');assert.equal(a.reset,0);
+ assert.equal(a.after,'BOSS_TITAN');assert.equal(a.encounter,1);
+});
+
+test('M5.3.1 original boss movement and defense mechanics remain in code',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();wave=9;bossEncounterCount=2;return JSON.stringify(OPENING_BOSS_ORDER.map(type=>{const b=new Enemy(350,350,type);return {type,hp:b.maxHp,speed:b.speed,phase:b.bossPhase,timer:b.actionTimer};}));})()"));
+ assert.deepEqual(x.map(b=>b.type),['BOSS_TITAN','BOSS_DESTROYER','BOSS_VOID']);
+ assert.ok(x.every(b=>b.hp>0&&b.speed>0&&b.phase===1&&b.timer===1.8));
+ assert.match(html,/this\.type === 'BOSS_TITAN' && !isCrit/);
+ assert.match(html,/this\.secondaryTimer <= 0 && \(!combatDirector \|\| combatDirector\.canBossReposition/);
 });
