@@ -1,6 +1,6 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.2 | İlk plan: 18.10.2026 | Durum: 19.10.2026
+Sürüm: 1.3 | İlk plan: 18.10.2026 | Durum: 19.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
@@ -458,3 +458,24 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
 [AÇIK] Gerçek üç şasiyle uzun koşuda FPS, boss adaleti ve
   60 saniyelik döngülerin ödül hissi testleri. Issue #2 açık.
 [SONRAKİ] M5.2: Gelişmiş görev sistemi.
+
+
+======================================================================
+15. M5.2 — GELİŞMİŞ GÖREV SİSTEMİ
+======================================================================
+
+[UYGULANDI] AV/KÜRE/KOMBO eski üçlü görev sistemi korundu.
+[UYGULANDI] HASARSIZ, ELİT AV, ZİNCİR, SAVUN ve KURTAR görevleri.
+  Yeteneği olmayan şasi/build'e imkânsız zincir görevi verilmez.
+  İlk dalgalarda yalnız basit hedefler, yeni türler kademeli açılır.
+[UYGULANDI] Sahada görev işaretleri ve mobil görev HUD'ı; görev türüne
+  göre vurgular; önceki iki görev türünden kaçınan seçim.
+[UYGULANDI] Görev ödülü altın defterine entegre, yeni koşuda sıfırlama,
+  konsolda getNeonQuestSnapshot() tanı ve sayaçları.
+[UYUMLULUK] İkinci boss pre-warning yazısı gerçek 1/1/2/2/3
+  karşılaşma planına bağlandı.
+[OTOMATİK] Görev seçimi, gerçek isabet/ölüm, zaman, kalkan,
+  ilerleme, görsel işaret ve ekonomi regresyonları.
+[MANUEL] Gerçek uzun oyun, üç şasi, mobil cihaz ve görev
+  okunabilirliği/tempo kabulü yapılmalıdır.
+[SONRAKİ] M5.3 Arena Olayları ve yeni uzun oyun kararları.
