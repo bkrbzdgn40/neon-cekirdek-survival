@@ -2783,8 +2783,9 @@ test('M5.2 flawless timer pays once at target without auto-finishing an idle mis
 
 test('M5.2 defense requires position and live enemy presence and loses progress outside',()=>{
   const {run}=setup();
-  const d=JSON.parse(run("(()=>{startNewGame();wave=3;generateNextQuest('DEFEND');const q=activeQuest,old={x:player.x,y:player.y};player.x=q.point.x;player.y=q.point.y;updateQuest(2);const alone=q.progress;enemies=[{dead:false,isBoss:false}];updateQuest(2);const inside=q.progress;player.x=old.x+500;player.y=old.y+500;updateQuest(1);const outside=q.progress;player.x=q.point.x;player.y=q.point.y;for(let i=0;i<20;i++)updateQuest(.25);return JSON.stringify({alone,inside,outside,completed:questStats.byType.DEFEND||0,point:q.point});})()"));
+  const d=JSON.parse(run("(()=>{startNewGame();wave=3;generateNextQuest('DEFEND');const q=activeQuest,old={x:player.x,y:player.y};player.x=q.point.x;player.y=q.point.y;updateQuest(2);const alone=q.progress;enemies=[{x:q.point.x+500,y:q.point.y+500,dead:false,isBoss:false}];updateQuest(2);const far=q.progress;enemies=[{x:q.point.x+35,y:q.point.y+30,dead:false,isBoss:false}];updateQuest(2);const inside=q.progress;player.x=old.x+500;player.y=old.y+500;updateQuest(1);const outside=q.progress;player.x=q.point.x;player.y=q.point.y;for(let i=0;i<20;i++)updateQuest(.25);return JSON.stringify({alone,far,inside,outside,completed:questStats.byType.DEFEND||0,point:q.point});})()"));
   assert.equal(d.alone,0);
+  assert.equal(d.far,0);
   assert.equal(d.inside,2);
   assert.ok(d.outside<d.inside);
   assert.equal(d.completed,1);

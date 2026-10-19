@@ -2002,8 +2002,12 @@
             if(current.type==='NO_HIT') advanceQuest('NO_HIT',dt);
             else if(current.type==='DEFEND'&&current.point){
                 const dist=Math.hypot(player.x-current.point.x,player.y-current.point.y);
+                // Only an enemy contesting this zone counts as a real defense.
                 const defending=dist<=current.radius &&
-                    enemies.some(enemy=>!enemy.dead&&!enemy.isBoss);
+                    enemies.some(enemy=>!enemy.dead&&!enemy.isBoss &&
+                        Number.isFinite(enemy.x)&&Number.isFinite(enemy.y) &&
+                        Math.hypot(enemy.x-current.point.x,
+                            enemy.y-current.point.y)<=current.radius+170);
                 const value=Math.max(0,Math.min(current.target,current.progress+
                     (defending?dt:-dt*.65)));
                 current.progress=value;
