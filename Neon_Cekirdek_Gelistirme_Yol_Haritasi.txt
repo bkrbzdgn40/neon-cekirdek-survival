@@ -1,10 +1,10 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.4 | İlk plan: 18.10.2026 | Durum: 19.10.2026
+Sürüm: 1.5 | İlk plan: 18.10.2026 | Durum: 19.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: M0-M4 kod kilometre taşları uygulandı; M5.1 uzun oyun ekonomi paketi çalışılıyor.
+Durum: M0-M4 ve M5.1-M5.4 kod paketleri uygulandı; gerçek uzun oyun kabulü sürüyor.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -508,3 +508,27 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
 [OTOMATİK] Sira, renk, rastgelelikten bagimsizlik, gercek spawn,
   odul, 4. karsilasma, yeni kosu reset ve guc testleri.
 [SONRAKİ] M5.4 alternatif dusman ve boss karsilasmalari.
+
+
+======================================================================
+18. M5.4 — ALTERNATİF DÜŞMAN VE BOSS KARŞILAŞMALARI
+======================================================================
+
+[UYGULANDI] M2.2 ÇİFT YÖNLÜ KISKAÇ ve ÖNCÜ HÜCUMU korundu.
+  Dalga 8+ KESKİN NİŞANCI KORUMASI (kalkan/nişancı),
+  dalga 10+ İKİ YÖNLÜ AVCI BASKINI (çift taraflı hızlı grup),
+  dalga 13+ AĞIR HAT YARMA (tank/parçalanan/çekim) açılır.
+[UYGULANDI] Beş formasyon aynı 39 sn özel karşılaşma aralığını,
+  1.65 sn yön uyarısını, Director token maliyeti ve düşman
+  kapasitesi sınırlarını kullanır; formasyon adı uyarıda görünür.
+[UYGULANDI] İlk üç sabit solo boss korunur. Karşılaşma 4+
+  için altı ayrı ikili ve üçlü boss rol kombinasyonu dönüşümlü gelir.
+[KORUNDU] Boss sayısı 1/1/1/2/3/2..., bireysel HP/hız/hasar,
+  fazlar, saldırılar, 4 sn toparlanma, boss sandığı garantisi,
+  arena olayları, altın ekonomisi ve kayıt şeması.
+[UYGULANDI] Tür bazında baskın teklifi, gerçek spawn/maliyet,
+  boss kompozisyonu ve bir sonraki desen telemetrisi.
+[OTOMATİK] 5/10/20/30 dk sabit karşılaşma aralığı modellemesi,
+  dalga kilitleri, gerçek maliyet, boss eşleşmesi ve reset testleri.
+[AÇIK] Gerçek üç şasi ile 20-30 dk savaş/FPS/zorluk testleri.
+[SONRAKİ] M5.5 Oyun Sonu Analiz Raporu.
