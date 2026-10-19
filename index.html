@@ -7372,6 +7372,263 @@
         window.getNeonFinalReport=()=>finalRunReport?
             JSON.parse(JSON.stringify(finalRunReport)):null;
 
+        const REPORT_TABS=Object.freeze(['summary','combat','build','economy','objectives']);
+        const REPORT_TAB_IDS=Object.freeze({
+            summary:'reportSummaryContent',combat:'reportCombatContent',
+            build:'reportBuildContent',economy:'reportEconomyContent',
+            objectives:'reportObjectivesContent'
+        });
+        const REPORT_EFFECT_NAMES=Object.freeze({
+            railShots:'Ray atışı',clusterBursts:'Küme patlaması',
+            arcSurges:'Elektrik sıçraması',orbitalPulses:'Uydu darbesi',
+            aegisPulses:'Aegis atımı',prismBounces:'Prizma sekmesi',
+            reactorBursts:'Reaktör salvosu',overdriveDischarges:'Cinnet deşarjı',
+            weakpointMarks:'Zayıf nokta işareti',bloodReactorHeals:'Kan reaktörü iyileşmesi',
+            aegisDeflections:'Kalkan karşı atışı',kineticVortices:'Kinetik girdap'
+        });
+        const REPORT_GOLD_NAMES=Object.freeze({
+            orbs:'Altın küreler',quests:'Görev ödülleri',
+            arena:'Arena etkinlikleri',chests:'Sandık ödülleri'
+        });
+        const REPORT_CHEST_NAMES=Object.freeze({
+            goldHeal:'Altın / İyileşme',overdriveXp:'Cinnet / XP',bulletNova:'Mermi Novası'
+        });
+        const REPORT_CHASSIS_NAMES=Object.freeze({
+            VANGUARD:'ÖNCÜ',PHANTOM:'HAYALET',TITAN:'TİTAN'
+        });
+        const reportNumber=n=>Math.round(Number.isFinite(n)?n:0).toLocaleString('tr-TR');
+        const reportEscape=v=>String(v??'').replace(/[&<>"']/g,ch=>({
+            '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        })[ch]);
+        function reportBlock(title,icon,body,wide=false){
+            return '<article class="report-block'+(wide?' wide':'')+'">'+
+                '<h3 class="report-block-head"><i class="fa-solid '+icon+
+                '" aria-hidden="true"></i>'+reportEscape(title)+'</h3>'+body+'</article>';
+        }
+        function reportPair(label,value){
+            return '<div class="report-pair"><span>'+reportEscape(label)+'</span><strong>'+
+                reportEscape(value)+'</strong></div>';
+        }
+        function reportMeter(label,value,total,color='#56cde6',suffix=''){
+            const pct=total>0?Math.max(0,Math.min(100,100*value/total)):0;
+            return '<div class="report-meter"><span class="report-meter-label">'+
+                reportEscape(label)+'</span><span class="report-meter-track"><span class="report-meter-fill" style="display:block;width:'+
+                pct.toFixed(1)+'%;background:'+color+'"></span></span><strong class="report-meter-value">'+
+                reportEscape(reportNumber(value)+suffix)+'</strong></div>';
+        }
+        function reportEmpty(message){
+            return '<p class="report-empty">'+reportEscape(message)+'</p>';
+        }
+        function getRunReportInsights(r){
+            const notes=[];
+            const quests=r.missions;
+            const arena=r.arena;
+            const income=r.economy.goldBySource||{};
+            const entries=Object.entries(income).filter(([,amount])=>amount>0)
+                .sort((a,b)=>b[1]-a[1]);
+            if(entries.length){
+                const source=entries[0][0];
+                notes.push({title:'EN GÜÇLÜ GELİR KAYNAĞI',
+                    detail:'Bu koşuda en çok altını '+(REPORT_GOLD_NAMES[source]||source)+
+                    ' üzerinden kazandın ('+reportNumber(entries[0][1])+' altın).'});
+            }
+            if(quests.offered>=3){
+                const ratio=quests.completed/quests.offered;
+                notes.push(ratio>=.6?
+                    {title:'GÖREV VERİMLİLİĞİ',detail:'Sunulan görevlerin önemli bölümünü tamamladın ('+
+                        reportNumber(quests.completed)+'/'+reportNumber(quests.offered)+').'}:
+                    {title:'GÖREV FIRSATI',detail:'Görev tamamlama oranı '+
+                        Math.round(ratio*100)+'%. Daha erişilebilir hedeflere odaklanmak ek altın ve Cinnet sağlayabilir.'});
+            }
+            if(arena.offered>=2){
+                notes.push(arena.completed?{
+                    title:'ARENA KARARLARI',detail:'Sunulan '+reportNumber(arena.offered)+
+                        ' arena olayının '+reportNumber(arena.completed)+' tanesini tamamladın.'
+                }:{title:'ARENA FIRSATI',detail:'Bu koşuda sunulan '+reportNumber(arena.offered)+
+                        ' arena etkinliğini tamamlamadın. İsteğe bağlı risk/ödülleri değerlendirebilirsin.'});
+            }
+            if(r.combat.bossKills){
+                notes.push({title:'BOSS KARŞILAŞMALARI',detail:reportNumber(r.combat.bossKills)+
+                    ' boss imha ettin; '+reportNumber(r.result.bossEncounters)+
+                    ' boss karşılaşmasına girdin.'});
+            }
+            if(r.combat.hitsTaken>=5){
+                notes.push({title:'SAVUNMA DENGESİ',
+                    detail:reportNumber(r.combat.hitsTaken)+' can kaybettiren isabet aldın. '+
+                    'Dash ve koruyucu yetenekleri daha sık kullanmak yardımcı olabilir.'});
+            }
+            if(r.build.evolutions.length>=2){
+                notes.push({title:'BUILD GELİŞİMİ',detail:reportNumber(r.build.evolutions.length)+
+                    ' modül evrimine ulaştın. Sinerji uyumunu Build sekmesinden inceleyebilirsin.'});
+            }
+            if(!notes.length)notes.push({title:'İLK ADIM',
+                detail:'Bu koşu temel savaş verilerini topladı. Bir sonraki koşuda daha fazla görev, modül ve arena olayını keşfedebilirsin.'});
+            return notes.slice(0,3);
+        }
+        function renderRunReport(r=finalRunReport){
+            if(!r) return false;
+            const el=id=>document.getElementById(id);
+            const income=r.economy.goldBySource||{};
+            const goldTotal=Object.values(income).reduce((s,n)=>s+(Number(n)||0),0);
+            const opened=r.economy.chestOpened||{};
+            const drops=r.economy.chestDrops||{};
+            const openedTotal=Object.values(opened).reduce((s,n)=>s+(Number(n)||0),0);
+            const missionRatio=r.missions.offered?
+                Math.round(100*r.missions.completed/r.missions.offered):0;
+            el('reportSubtitle').textContent=r.reason==='REVIVE_DECLINED'?
+                'Dirilişi reddederek operasyonu sonlandırdın. Bir sonraki koşu için kararlarını incele.':
+                'Çekirdek bütünlüğü tükendi. Bir sonraki koşu için kararlarını incele.';
+            el('reportRunStatus').textContent=r.reason==='REVIVE_DECLINED'?
+                'DİRİLİŞ REDDEDİLDİ':'SİNYAL KESİLDİ';
+            el('reportKillDetail').textContent=reportNumber(r.combat.eliteKills)+
+                ' elit · '+reportNumber(r.combat.bossKills)+' boss';
+            el('reportGoldDetail').textContent='Kazanç · mevcut bakiye '+
+                reportNumber(r.result.totalGoldBalance);
+            el('reportTimeDetail').textContent=REPORT_CHASSIS_NAMES[r.chassis]||r.chassis;
+            el('reportScoreDetail').textContent=r.newRecord?'Yeni rekor':'Operasyon skoru';
+
+            const insights=getRunReportInsights(r).map(note=>
+                '<div class="report-insight"><strong>'+reportEscape(note.title)+'</strong>'+
+                '<p>'+reportEscape(note.detail)+'</p></div>').join('');
+            const summary=
+                reportBlock('OPERASYONUN ÖZÜ','fa-chart-simple',
+                    reportPair('Şasi',REPORT_CHASSIS_NAMES[r.chassis]||r.chassis)+
+                    reportPair('Ulaşılan seviye',reportNumber(r.build.level))+
+                    reportPair('Zirve kombo','x'+reportNumber(r.combat.peakCombo))+
+                    reportPair('Boss karşılaşmaları',reportNumber(r.result.bossEncounters))+
+                    reportPair('Kullanılan diriliş',reportNumber(r.combat.freeRevivesUsed+r.combat.paidRevivesUsed)))+
+                reportBlock('KOŞU İÇGÖRÜLERİ','fa-lightbulb',insights)+
+                reportBlock('BİR SONRAKİ ADIM','fa-arrow-trend-up',
+                    '<p class="report-empty">Savaşta ne kadar dayandığını, build tercihlerini, altın kaynaklarını ve görev verimliliğini yukarıdaki sekmelerden incele. '+
+                    'Yalnızca ölçülmüş olaylar raporlanır; silah başına gerçek hasar/DPS takibi henüz bulunmuyor.</p>',true);
+            el('reportSummaryContent').innerHTML='<div class="report-grid">'+summary+'</div>';
+
+            const combat=
+                reportBlock('SALDIRI PERFORMANSI','fa-crosshairs',
+                    reportPair('Toplam düşman',reportNumber(r.result.kills))+
+                    reportPair('Elit imha',reportNumber(r.combat.eliteKills))+
+                    reportPair('Boss imha',reportNumber(r.combat.bossKills))+
+                    reportPair('Zirve kombo','x'+reportNumber(r.combat.peakCombo))+
+                    reportPair('Tamamlanan özel baskın',reportNumber(r.combat.specialEncounters))+
+                    reportPair('Çakışma önlenen boss saldırısı',reportNumber(r.combat.bossAttacksDeferred)))+
+                reportBlock('HAYATTA KALMA','fa-shield-heart',
+                    reportPair('Gerçek HP kaybı',reportNumber(r.combat.damageTaken))+
+                    reportPair('HP azaltan isabet',reportNumber(r.combat.hitsTaken))+
+                    reportPair('Kalkanla blok',reportNumber(r.combat.shieldBlocks))+
+                    reportPair('Ücretsiz diriliş',reportNumber(r.combat.freeRevivesUsed))+
+                    reportPair('Altınla diriliş',reportNumber(r.combat.paidRevivesUsed))+
+                    reportPair('Diriliş harcaması',reportNumber(r.combat.paidReviveGoldSpent)+' altın'))+
+                reportBlock('BUILD ETKİNLİĞİ','fa-bolt-lightning',
+                    Object.entries(r.build.effects||{}).filter(([,n])=>n>0).length?
+                        Object.entries(r.build.effects).filter(([,n])=>n>0)
+                            .map(([name,n])=>reportPair(REPORT_EFFECT_NAMES[name]||name,reportNumber(n))).join(''):
+                        reportEmpty('Bu koşuda ayrı bir gelişmiş silah etkisi tetiklenmedi.'),true);
+            el('reportCombatContent').innerHTML='<div class="report-grid">'+combat+'</div>';
+
+            const mods=r.build.modules||[];
+            const chips=mods.length?mods.map(m=>
+                '<span class="report-chip"><i class="'+reportEscape(m.icon)+
+                '" aria-hidden="true" style="color:'+reportEscape(m.color)+'"></i>'+
+                reportEscape(m.name)+' <strong>K'+reportNumber(m.tier)+'</strong></span>').join(''):
+                reportEmpty('Bu koşuda yükseltme modülü seçilmedi.');
+            const traits=(list,empty)=>list.length?
+                '<div class="report-chip-list">'+list.map(n=>'<span class="report-chip">'+
+                    reportEscape(n)+'</span>').join('')+'</div>':reportEmpty(empty);
+            const build=
+                reportBlock('MODÜL YÜKLERİ','fa-microchip',
+                    '<p class="report-micro">Toplam '+reportNumber(r.build.totalTiers)+
+                    ' modül kademesi · '+reportNumber(mods.length)+' farklı modül</p>'+
+                    '<div class="report-chip-list" style="margin-top:14px">'+chips+'</div>',true)+
+                reportBlock('AKTİF EVRİMLER','fa-dna',
+                    traits(r.build.evolutions||[],'Bu koşuda modül evrimi tamamlanmadı.'))+
+                reportBlock('AKTİF SİNERJİLER','fa-link',
+                    traits(r.build.synergies||[],'Bu koşuda aktif sinerji açılmadı.'))+
+                reportBlock('SON DURUM İSTATİSTİKLERİ','fa-gauge-high',
+                    r.build.stats?
+                        reportPair('Hasar',reportNumber(r.build.stats.damage))+
+                        reportPair('Kritik şansı',Math.round(r.build.stats.critChance*100)+'%')+
+                        reportPair('Ateş aralığı',r.build.stats.fireDelay.toFixed(2)+' sn')+
+                        reportPair('Maksimum can',reportNumber(r.build.stats.maxHp))+
+                        reportPair('Hareket hızı',reportNumber(r.build.stats.speed)):
+                        reportEmpty('Build istatistiği bulunamadı.'),true);
+            el('reportBuildContent').innerHTML='<div class="report-grid">'+build+'</div>';
+
+            const sources=Object.entries(REPORT_GOLD_NAMES).map(([key,label],index)=>
+                reportMeter(label,income[key]||0,Math.max(1,goldTotal),
+                    ['#55d2ed','#c7a5ff','#7be8be','#ffe09a'][index],'')).join('');
+            const rewards=r.economy.chestRewards||{};
+            const allRewards=Object.values(rewards);
+            const rewardSum=k=>allRewards.reduce((n,b)=>n+(Number(b[k])||0),0);
+            const economy=
+                reportBlock('ALTIN GELİRİ','fa-coins',
+                    sources+reportPair('İzlenen toplam',reportNumber(goldTotal))+
+                    reportPair('Koşu boyunca kazanılan',reportNumber(r.result.goldEarned))+
+                    '<p class="report-micro">Kaynakların toplamı ile toplam kazanç farklıysa, fark ayrı bir kaynağın kayda girmediğini gösterir; toplam değerler sessizce düzeltilmez.</p>',true)+
+                reportBlock('SANDIK EKONOMİSİ','fa-box-open',
+                    reportPair('Elit sandığı düştü',reportNumber(drops.elite||0))+
+                    reportPair('Boss sandığı düştü',reportNumber(drops.boss||0))+
+                    reportPair('Toplam açılan',reportNumber(openedTotal))+
+                    reportPair('Sandık / dakika',String(r.economy.totalChestsPerMinute||0))+
+                    ...Object.entries(REPORT_CHEST_NAMES).map(([key,label])=>
+                        reportPair(label,reportNumber(opened[key]||0))))+
+                reportBlock('SANDIK ÖDÜL DETAYI','fa-gift',
+                    reportPair('Altın',reportNumber(rewardSum('gold')))+
+                    reportPair('İyileştirilen can',reportNumber(rewardSum('heal')))+
+                    reportPair('Kazanılan XP',reportNumber(rewardSum('xp')))+
+                    reportPair('Cinnet',reportNumber(rewardSum('charge')))+
+                    reportPair('Nova mermisi',reportNumber(rewardSum('shots'))));
+            el('reportEconomyContent').innerHTML='<div class="report-grid">'+economy+'</div>';
+
+            const quests=Object.entries(r.missions.byType||{});
+            const questBars=quests.length?quests.sort((a,b)=>b[1]-a[1])
+                .map(([type,n])=>reportMeter(QUEST_LABELS[type]||type,n,
+                    Math.max(1,r.missions.completed),'#b4a1ff')).join(''):
+                reportEmpty('Bu koşuda henüz tamamlanan görev yok.');
+            const arenaEntries=Object.entries(r.arena.byKind||{});
+            const arenaBars=arenaEntries.length?arenaEntries
+                .map(([kind,stat])=>reportPair(
+                    ARENA_EVENT_SPECS[kind]?.label||kind,
+                    reportNumber(stat.completed||0)+' / '+reportNumber(stat.offered||0)))
+                .join(''):reportEmpty('Bu koşuda arena etkinliği henüz sunulmadı.');
+            const objectives=
+                reportBlock('GÖREV PERFORMANSI','fa-list-check',
+                    reportPair('Sunulan',reportNumber(r.missions.offered))+
+                    reportPair('Tamamlanan',reportNumber(r.missions.completed))+
+                    reportPair('Tamamlama oranı',missionRatio+'%')+
+                    reportPair('Hasarsız görev sıfırlaması',reportNumber(r.missions.hitsReset)))+
+                reportBlock('TAMAMLANAN GÖREV TÜRLERİ','fa-medal',questBars)+
+                reportBlock('ARENA ETKİNLİKLERİ','fa-map-location-dot',
+                    reportPair('Sunulan',reportNumber(r.arena.offered))+
+                    reportPair('Tamamlanan',reportNumber(r.arena.completed))+
+                    reportPair('Süresi dolan',reportNumber(r.arena.expired))+
+                    reportPair('İptal edilen',reportNumber(r.arena.cancelled)))+
+                reportBlock('ARENA TÜRÜNE GÖRE SONUÇ','fa-bullseye',arenaBars)+
+                reportBlock('KARŞILAŞMA ÇEŞİTLİLİĞİ','fa-skull',
+                    Object.keys(r.encounters.bossByPattern||{}).length?
+                        Object.entries(r.encounters.bossByPattern).map(([id,n])=>
+                            reportPair(id.replaceAll('_',' '),reportNumber(n))).join(''):
+                        reportEmpty('Bu koşuda henüz boss karşılaşması kaydedilmedi.'),true);
+            el('reportObjectivesContent').innerHTML='<div class="report-grid">'+objectives+'</div>';
+            showRunReportTab('summary');
+            return true;
+        }
+        function showRunReportTab(name){
+            if(!finalRunReport||!REPORT_TABS.includes(name)) return false;
+            activeReportTab=name;
+            for(const tab of REPORT_TABS){
+                const selected=tab===name;
+                const panel=document.getElementById(REPORT_TAB_IDS[tab]);
+                panel.classList.toggle('hidden',!selected);
+                panel.setAttribute('aria-hidden',String(!selected));
+                const btn=document.getElementById('reportTab'+
+                    tab.charAt(0).toUpperCase()+tab.slice(1));
+                btn.classList.toggle('is-active',selected);
+                btn.setAttribute('aria-selected',String(selected));
+                btn.setAttribute('tabindex',selected?'0':'-1');
+            }
+            return true;
+        }
+
         function triggerGameOver(reason='CORE_DEPLETED') {
             if(gameState==='GAME_OVER') return;
             gameState = 'GAME_OVER';
@@ -7396,7 +7653,8 @@
             document.getElementById('finalWaveText').textContent = wave;
             document.getElementById('finalTimeText').textContent = formatTime(totalTime);
             document.getElementById('finalKillsText').textContent = kills;
-            document.getElementById('finalGoldEarnedText').textContent = `+${sessionGold}`;
+            document.getElementById('finalGoldEarnedText').textContent = `+${sessionGold.toLocaleString('tr-TR')}`;
+            renderRunReport(finalRunReport);
 
             const modal = document.getElementById('gameOverModal');
             modal.classList.remove('hidden');
@@ -7629,6 +7887,21 @@
         document.getElementById('openShopFromOverBtn').addEventListener('click', () => openShop('GAME_OVER'));
         document.getElementById('closeShopBtn').addEventListener('click', closeShop);
 
+        // Tabs are presentation only: switching never changes the frozen snapshot.
+        for(const button of document.querySelectorAll('[data-report-tab]')){
+            button.addEventListener('click',()=>showRunReportTab(button.getAttribute('data-report-tab')));
+            button.addEventListener('keydown',event=>{
+                if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+                event.preventDefault();
+                const current=REPORT_TABS.indexOf(button.getAttribute('data-report-tab'));
+                const index=event.key==='Home'?0:event.key==='End'?
+                    REPORT_TABS.length-1:
+                    (current+(event.key==='ArrowRight'?1:-1)+REPORT_TABS.length)%REPORT_TABS.length;
+                showRunReportTab(REPORT_TABS[index]);
+                document.getElementById('reportTab'+REPORT_TABS[index].charAt(0).toUpperCase()+
+                    REPORT_TABS[index].slice(1)).focus();
+            });
+        }
         document.getElementById('confirmReviveBtn').addEventListener('click', executePlayerRevive);
         document.getElementById('declineReviveBtn').addEventListener('click', () => triggerGameOver('REVIVE_DECLINED'));
 
