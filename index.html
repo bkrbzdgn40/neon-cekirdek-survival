@@ -4131,8 +4131,12 @@
 
         // M5.1: Elite supply drops and guaranteed boss jackpot have separate rules.
         const CHEST_ECONOMY=Object.freeze({
-            eliteCooldownSeconds:18, eliteMaxPerMinute:2,
-            elitePityKills:7, eliteRollChance:.24, eliteGroundCap:4
+            eliteCooldownSeconds:5,
+            eliteGroundCap:4,
+            resetSeconds:60,
+            // Each successful drop in this 60s window steps to the next tier.
+            // Deliberately no per-minute hard cap and no forced pity drop.
+            eliteDropChances:Object.freeze([.65,.38,.22,.12,.06])
         });
         function getChestRewardProfile(source,currentWave,xpNext,greed=1){
             const boss=source==='boss';
@@ -5318,7 +5322,7 @@
             BUILDUP: { label: 'HAZIRLIK', multiplier: 0.65, interval: 0.5, cap: 85 },
             PRESSURE: { label: 'BASKI', multiplier: 1.0, interval: 0.33, cap: 130 },
             CRISIS: { label: 'KRİZ', multiplier: 1.4, interval: 0.23, cap: 160 },
-            RECOVERY: { label: 'NEFES', multiplier: 0.28, interval: 0.8, cap: 75 },
+            RECOVERY: { label: 'NEFES', multiplier: 0.58, interval: 0.52, cap: 100 },
             WARNING: { label: 'BOSS UYARISI', multiplier: 0.15, interval: 1.0, cap: 80 },
             BOSS: { label: 'BOSS', multiplier: 0.4, interval: 0.85, cap: 105 }
         };
@@ -5363,9 +5367,9 @@
                 this.afterBossUntil = -Infinity;
                 this.lastEliteChestAt = -Infinity;
                 this.lastBossCueEncounter = 0;
-                this.elitePity = 0;
+                this.eliteChanceWindow = -1;
+                this.eliteDropsInWindow = 0;
                 this.bossChestAwarded = false;
-                this.eliteChestTimes = [];
                 this.pendingEncounter = null;
                 this.activeArenaEvent = null;
                 this.nextArenaAt = 88;
@@ -5382,7 +5386,7 @@
                     bossSpecialAttacks: 0, bossAttacksDeferred: 0,
                     arenaOffered: 0, arenaCompleted: 0, arenaExpired: 0, arenaCancelled: 0,
                     chestDrops: { elite: 0, boss: 0 },
-                    chestDenied:{cooldown:0,perMinute:0,groundCap:0,roll:0},
+                    chestDenied:{cooldown:0,groundCap:0,roll:0},
                     chestOpened: { goldHeal: 0, overdriveXp: 0, bulletNova: 0 },
                     chestRewards:{
                         elite:{opened:0,gold:0,heal:0,xp:0,charge:0,shots:0},
@@ -5562,7 +5566,17 @@
             }
 
             onBossCleared() {
-                this.afterBossUntil = totalTime + 9;
+                // Short regroup, then resume the current pressure cycle.
+                this.afterBossUntil = totalTime + 4;
+            }
+            getEliteChanceWindow() {
+                return Math.floor(Math.max(0,totalTime)/CHEST_ECONOMY.resetSeconds);
+            }
+            getNextEliteChestChance() {
+                const alreadyDropped=this.eliteChanceWindow===this.getEliteChanceWindow()?
+                    this.eliteDropsInWindow:0;
+                const tiers=CHEST_ECONOMY.eliteDropChances;
+                return tiers[Math.min(alreadyDropped,tiers.length-1)];
             }
 
             registerChestDrop(source,x,y) {
@@ -5574,24 +5588,22 @@
                     return true;
                 }
                 this.stats.eliteKills++;
-                this.elitePity++;
-                this.eliteChestTimes=this.eliteChestTimes.filter(t=>totalTime-t<60);
+                const currentWindow=this.getEliteChanceWindow();
+                if(this.eliteChanceWindow!==currentWindow){
+                    this.eliteChanceWindow=currentWindow;
+                    this.eliteDropsInWindow=0;
+                }
                 if(totalTime-this.lastEliteChestAt<CHEST_ECONOMY.eliteCooldownSeconds){
                     this.stats.chestDenied.cooldown++;return false;
                 }
-                if(this.eliteChestTimes.length>=CHEST_ECONOMY.eliteMaxPerMinute){
-                    this.stats.chestDenied.perMinute++;return false;
-                }
-                if(lootChests.length>=CHEST_ECONOMY.eliteGroundCap){
+                if(lootChests.filter(chest=>chest.source==='elite').length>=CHEST_ECONOMY.eliteGroundCap){
                     this.stats.chestDenied.groundCap++;return false;
                 }
-                if(this.elitePity<CHEST_ECONOMY.elitePityKills &&
-                    Math.random()>=CHEST_ECONOMY.eliteRollChance){
+                if(Math.random()>=this.getNextEliteChestChance()){
                     this.stats.chestDenied.roll++;return false;
                 }
                 this.lastEliteChestAt=totalTime;
-                this.eliteChestTimes.push(totalTime);
-                this.elitePity=0;
+                this.eliteDropsInWindow++;
                 this.stats.chestDrops.elite++;
                 lootChests.push(new LootChest(x,y,'elite'));
                 return true;
@@ -5624,6 +5636,13 @@
                     goldSession:sessionGold,
                     goldTracked:Object.values(this.stats.goldBySource).reduce((a,v)=>a+v,0),
                     onGround:lootChests.length,
+                    eliteChanceWindow:this.getEliteChanceWindow(),
+                    eliteDropsInWindow:this.eliteChanceWindow===this.getEliteChanceWindow()?
+                        this.eliteDropsInWindow:0,
+                    nextEliteDropChance:this.getNextEliteChestChance(),
+                    eliteCooldownRemaining:Math.max(0,
+                        Math.round((CHEST_ECONOMY.eliteCooldownSeconds-
+                            (totalTime-this.lastEliteChestAt))*10)/10),
                     eliteChestsPerMinute:totalTime>0?Math.round(600*d.elite/totalTime)/10:0,
                     totalChestsPerMinute:totalTime>0?Math.round(600*(d.elite+d.boss)/totalTime)/10:0
                 };
@@ -5654,13 +5673,18 @@
             }
         }
 
+
+        function getBossCountForEncounter(encounterNumber) {
+            if(encounterNumber<=2) return 1;
+            if(encounterNumber<=4) return 2;
+            return encounterNumber%2===1?3:2;
+        }
+
         function spawnBossEncounter() {
             bossEncounterCount++;
             if (combatDirector) combatDirector.onBossEncounter();
             nextBossTime = Number.POSITIVE_INFINITY;
-            let bossCount = 1;
-            if (bossEncounterCount === 2) bossCount = 2;
-            else if (bossEncounterCount >= 3) bossCount = (bossEncounterCount % 2 === 1 && bossEncounterCount >= 3) ? 3 : 2;
+            const bossCount = getBossCountForEncounter(bossEncounterCount);
 
             const shuffledArchetypes = [...BOSS_ARCHETYPES].sort(() => Math.random() - 0.5);
             const spawnedNames = [];

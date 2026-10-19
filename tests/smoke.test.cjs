@@ -385,22 +385,13 @@ test('director spends only available tokens and tracks actual enemy spawns', () 
   assert.ok(x.enemies <= x.max);
 });
 
-test('elite chests have cooldown, rolling per-minute ceiling and no unlimited drops', () => {
-  const { run } = setup();
-  const x = JSON.parse(run(`(() => {
-    startNewGame(); wave=20;
-    const c=combatDirector;
-    for(let t=0;t<180;t++) {
-      totalTime=t;
-      c.registerChestDrop('elite',100,100);
-      lootChests.length=0; // model the player collecting each reward
-    }
-    return JSON.stringify({ chests:c.stats.chestDrops.elite, kills:c.stats.eliteKills,
-      window:c.eliteChestTimes.length, last:c.lastEliteChestAt });
-  })()`));
-  assert.equal(x.kills,180);
-  assert.ok(x.chests >= 3 && x.chests <= 9, `Elite chests in 180 seconds: ${x.chests}`);
-  assert.ok(x.window <= 3);
+test('elite supply chests have a short anti-burst cooldown rather than a minute quota',()=>{
+  const {run}=setup();
+  const r=JSON.parse(run("(()=>{startNewGame();wave=20;Math.random=()=>0;for(let t=0;t<180;t++){totalTime=t;combatDirector.registerChestDrop('elite',100,100);lootChests.length=0;}return JSON.stringify({drops:combatDirector.stats.chestDrops.elite,kills:combatDirector.stats.eliteKills,denied:combatDirector.stats.chestDenied,next:combatDirector.getNextEliteChestChance()});})()"));
+  assert.equal(r.kills,180);
+  assert.equal(r.drops,36);
+  assert.ok(r.denied.cooldown>0);
+  assert.equal(r.next,.06);
 });
 
 test('a multi-boss encounter guarantees only one chest and triggers recovery on clear', () => {
@@ -2574,20 +2565,19 @@ test('M5.1 boss jackpot keeps original rewards while elite support uses a softer
   const data=JSON.parse(run("JSON.stringify({boss:getChestRewardProfile('boss',20,1000,1),elite:getChestRewardProfile('elite',20,1000,1),config:CHEST_ECONOMY})"));
   assert.deepEqual(data.boss,{goldHeal:{gold:142,heal:30},overdriveXp:{charge:55,xp:450},bulletNova:{shots:24,charge:30}});
   assert.deepEqual(data.elite,{goldHeal:{gold:74,heal:18},overdriveXp:{charge:32,xp:280},bulletNova:{shots:12,charge:18}});
-  assert.equal(data.config.eliteMaxPerMinute,2);
-  assert.equal(data.config.eliteCooldownSeconds,18);
-  assert.equal(data.config.elitePityKills,7);
+  assert.deepEqual(data.config.eliteDropChances,[.65,.38,.22,.12,.06]);
+  assert.equal(data.config.eliteCooldownSeconds,5);
+  assert.equal(data.config.resetSeconds,60);
 });
 
-test('M5.1 elite drops obey cooldown and rolling 60-second limit but never lose earned pity',()=>{
+test('M5.1.1 successful elite drops lower their chance without enforcing two-per-minute',()=>{
   const {run}=setup();
-  const a=JSON.parse(run("(()=>{startNewGame();const c=combatDirector;let timeline=[];Math.random=()=>0;for(let t=1;t<=180;t++){totalTime=t;c.registerChestDrop('elite',player.x,player.y);if(lootChests.length){timeline.push(t);lootChests.length=0;}}const previous=c.elitePity;return JSON.stringify({timeline,denied:c.stats.chestDenied,pity:previous,kills:c.stats.eliteKills});})()"));
+  const a=JSON.parse(run("(()=>{startNewGame();const c=combatDirector;const timeline=[];Math.random=()=>0;for(let t=1;t<=180;t++){totalTime=t;c.registerChestDrop('elite',player.x,player.y);if(lootChests.length){timeline.push(t);lootChests.length=0;}}return JSON.stringify({timeline,denied:c.stats.chestDenied,kills:c.stats.eliteKills,next:c.getNextEliteChestChance()});})()"));
   assert.equal(a.kills,180);
-  assert.ok(a.timeline.length>=4 && a.timeline.length<=6);
-  for(let i=1;i<a.timeline.length;i++) assert.ok(a.timeline[i]-a.timeline[i-1]>=18);
-  for(const at of a.timeline) assert.ok(a.timeline.filter(x=>x>at-60&&x<=at).length<=2);
-  assert.ok(a.denied.cooldown>0 && a.denied.perMinute>0);
-  assert.ok(a.pity>=0);
+  assert.equal(a.timeline.length,36);
+  for(let i=1;i<a.timeline.length;i++) assert.ok(a.timeline[i]-a.timeline[i-1]>=5);
+  assert.ok(a.denied.cooldown>0);
+  assert.equal(a.next,.65);
 });
 
 test('M5.1 no-collected elite chests cannot crowd out boss guarantee',()=>{
@@ -2641,23 +2631,85 @@ test('M5.1 diagnostics return defensive copies and reset all economy counters pe
   assert.equal(a.rewards,0);
   assert.equal(a.oldSeconds,65);
   assert.deepEqual(a.fresh.chestDrops,{elite:0,boss:0});
-  assert.deepEqual(a.fresh.chestDenied,{cooldown:0,perMinute:0,groundCap:0,roll:0});
+  assert.deepEqual(a.fresh.chestDenied,{cooldown:0,groundCap:0,roll:0});
   assert.equal(a.fresh.goldTracked,0);
 });
 
-test('M5.1 fixed-encounter deterministic 5/10/20/30-minute economy stress',()=>{
+test('M5.1.1 deterministic 5/10/20/30-minute decaying-chance economy stress',()=>{
   const {run}=setup();
-  const model=JSON.parse(run("(()=>{const horizons=[300,600,1200,1800],out=[];for(const horizon of horizons){startNewGame();let seed=731;Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);const times=[];for(let sec=1;sec<=horizon;sec++){totalTime=sec;wave=1+Math.floor(sec/16);if(sec===55||sec>55&&(sec-55)%150===0){combatDirector.onBossEncounter();combatDirector.registerChestDrop('boss',player.x,player.y);}if(sec%6===0){const before=combatDirector.stats.chestDrops.elite;combatDirector.registerChestDrop('elite',player.x,player.y);if(combatDirector.stats.chestDrops.elite>before)times.push(sec);}for(const chest of lootChests){chest.x=player.x;chest.y=player.y;chest.update(.016);}lootChests.length=0;bullets=[];}const d=window.getNeonEconomySnapshot();out.push({minutes:horizon/60,elite:d.chestDrops.elite,boss:d.chestDrops.boss,opened:Object.values(d.chestOpened).reduce((s,x)=>s+x,0),onGround:d.onGround,tracked:d.goldTracked,session:d.goldSession,goldBySource:d.goldBySource,rollingOk:times.every(t=>times.filter(v=>v>t-60&&v<=t).length<=2),minGapOk:times.every((t,i)=>i===0||t-times[i-1]>=18)});}return JSON.stringify(out);})()"));
+  const model=JSON.parse(run("(()=>{const horizons=[300,600,1200,1800],out=[];for(const horizon of horizons){startNewGame();let seed=731;Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);const times=[];for(let sec=1;sec<=horizon;sec++){totalTime=sec;wave=1+Math.floor(sec/16);if(sec===55||sec>55&&(sec-55)%150===0){combatDirector.onBossEncounter();combatDirector.registerChestDrop('boss',player.x,player.y);}if(sec%6===0){const before=combatDirector.stats.chestDrops.elite;combatDirector.registerChestDrop('elite',player.x,player.y);if(combatDirector.stats.chestDrops.elite>before)times.push(sec);}for(const chest of lootChests){chest.x=player.x;chest.y=player.y;chest.update(.016);}lootChests.length=0;bullets=[];}const d=window.getNeonEconomySnapshot();const byMinute={};for(const time of times){const k=Math.floor(time/60);byMinute[k]=(byMinute[k]||0)+1;}out.push({minutes:horizon/60,elite:d.chestDrops.elite,boss:d.chestDrops.boss,opened:Object.values(d.chestOpened).reduce((s,x)=>s+x,0),onGround:d.onGround,tracked:d.goldTracked,session:d.goldSession,goldBySource:d.goldBySource,maxWindowDrops:Math.max(0,...Object.values(byMinute)),minGapOk:times.every((t,i)=>i===0||t-times[i-1]>=5),nextChance:d.nextEliteDropChance});}return JSON.stringify(out);})()"));
   assert.deepEqual(model.map(x=>x.minutes),[5,10,20,30]);
   for(const row of model){
-    assert.ok(row.rollingOk&&row.minGapOk,row.minutes+' minute elite spacing');
-    assert.ok(row.elite<=row.minutes*2+1,row.minutes+' min elite budget');
-    assert.ok(row.elite>=Math.floor(row.minutes*.7),row.minutes+' min missing meaningful elite drops');
+    assert.ok(row.minGapOk,row.minutes+' minute spacing');
+    assert.ok(row.maxWindowDrops<=10,row.minutes+' minute eligible attempt ceiling');
+    assert.ok(row.elite>=Math.floor(row.minutes*.5),row.minutes+' minute needs meaningful rewards');
+    assert.ok(row.elite<=row.minutes*10,row.minutes+' minute impossible volume');
     assert.equal(row.boss,Math.ceil((row.minutes*60-55)/150));
     assert.equal(row.opened,row.elite+row.boss);
     assert.equal(row.onGround,0);
     assert.equal(row.tracked,row.session);
     assert.equal(row.goldBySource.chests,row.session);
+    assert.ok(row.nextChance>=.06 && row.nextChance<=.65);
   }
-  console.log('M5.1 economy stress (fixed 6s elite opportunities / 150s boss intervals): '+JSON.stringify(model));
+  console.log('M5.1.1 deterministic economy stress: '+JSON.stringify(model));
+});
+
+
+test('M5.1.1 actual first two boss encounters are solo and difficulty escalates smoothly',()=>{
+  const {run}=setup();
+  const a=JSON.parse(run("(()=>{startNewGame();const counts=[],chests=[];for(let i=1;i<=6;i++){totalTime=i*100;spawnBossEncounter();counts.push(activeBosses.length);for(const b of [...activeBosses]){b.hp=1;b.takeDamage(9999,0,0,false,false);}chests.push(combatDirector.stats.chestDrops.boss);}return JSON.stringify({counts,chests,encounters:combatDirector.stats.encounters,kills:combatDirector.stats.bossKills,alive:activeBosses.length});})()"));
+  assert.deepEqual(a.counts,[1,1,2,2,3,2]);
+  assert.deepEqual(a.chests,[1,2,3,4,5,6]);
+  assert.equal(a.encounters,6);
+  assert.equal(a.kills,11);
+  assert.equal(a.alive,0);
+});
+
+test('M5.1.1 elite drop chance decays only on success and resets on the minute',()=>{
+  const {run}=setup();
+  const data=JSON.parse(run("(()=>{startNewGame();const c=combatDirector;let roll=.64;Math.random=()=>roll;const a=[];for(const [time,r] of [[1,.64],[6,.40],[7,.37],[12,.21],[17,.11],[52,.05],[61,.64]]){totalTime=time;roll=r;const chance=c.getNextEliteChestChance();const ok=c.registerChestDrop('elite',0,0);a.push([time,chance,ok,c.getNextEliteChestChance()]);lootChests.length=0;}const d=window.getNeonEconomySnapshot();return JSON.stringify({cases:a,denied:d.chestDenied,window:d.eliteChanceWindow,count:d.eliteDropsInWindow,next:d.nextEliteDropChance});})()"));
+  assert.deepEqual(data.cases,[[1,.65,true,.38],[6,.38,false,.38],[7,.38,true,.22],[12,.22,true,.12],[17,.12,true,.06],[52,.06,true,.06],[61,.65,true,.38]]);
+  assert.equal(data.denied.roll,1);
+  assert.equal(data.window,1);
+  assert.equal(data.count,1);
+  assert.equal(data.next,.38);
+});
+
+test('M5.1.1 60-second reset is based on game time, not boss or successful loot',()=>{
+  const {run}=setup();
+  const list=JSON.parse(run("(()=>{startNewGame();const c=combatDirector;Math.random=()=>0;const result=[];for(const time of [10,16,22,61,67,120,126]){totalTime=time;const before=c.getNextEliteChestChance();const dropped=c.registerChestDrop('elite',0,0);lootChests.length=0;result.push({time,before,dropped,window:c.getEliteChanceWindow()});}return JSON.stringify(result);})()"));
+  assert.deepEqual(list.map(x=>x.before),[.65,.38,.22,.65,.38,.65,.38]);
+  assert.ok(list.every(x=>x.dropped));
+  assert.deepEqual(list.map(x=>x.window),[0,0,0,1,1,2,2]);
+});
+
+test('M5.1.1 chest inventory still limits uncollected elites, not the earned total',()=>{
+  const {run}=setup();
+  const a=JSON.parse(run("(()=>{startNewGame();Math.random=()=>0;const c=combatDirector;const results=[];for(const time of [1,7,13,19,25]){totalTime=time;results.push(c.registerChestDrop('elite',10,10));}const denied=c.stats.chestDenied.groundCap,drop=c.stats.chestDrops.elite;lootChests.length=0;totalTime=31;const restored=c.registerChestDrop('elite',10,10);return JSON.stringify({results,denied,drop,restored,window:c.eliteDropsInWindow});})()"));
+  assert.deepEqual(a.results,[true,true,true,true,false]);
+  assert.equal(a.denied,1);
+  assert.equal(a.drop,4);
+  assert.equal(a.restored,true);
+  assert.equal(a.window,5);
+});
+
+test('M5.1.1 post-boss recovery is four seconds and periodic lull stays active',()=>{
+  const {run}=setup();
+  const a=JSON.parse(run("(()=>{startNewGame();totalTime=137;combatDirector.onBossCleared();const ends=combatDirector.afterBossUntil;const near=getDirectorProfile(140,6,0,400,ends,1);const resumed=getDirectorProfile(142,6,0,400,ends,1);const periodic=getDirectorProfile(54,6,0,400,-Infinity,1);return JSON.stringify({ends,near:near.phase,resumed:resumed.phase,periodic:{phase:periodic.phase,interval:periodic.interval,cap:periodic.cap,rate:periodic.tokenRate}});})()"));
+  assert.equal(a.ends,141);
+  assert.equal(a.near,'RECOVERY');
+  assert.equal(a.resumed,'PRESSURE');
+  assert.equal(a.periodic.phase,'RECOVERY');
+  assert.equal(a.periodic.interval,.52);
+  assert.equal(a.periodic.cap,100);
+  assert.ok(a.periodic.rate>1);
+});
+
+test('M5.1.1 boss HP/speed values and one guaranteed boss reward stay unchanged',()=>{
+  const {run}=setup();
+  const a=JSON.parse(run("(()=>{startNewGame();wave=10;const x=new Enemy(100,100,'BOSS_TITAN'),prior={hp:x.maxHp,speed:x.speed};const counts=[1,2,3,4,5,6].map(getBossCountForEncounter);combatDirector.onBossEncounter();const first=combatDirector.registerChestDrop('boss',0,0),second=combatDirector.registerChestDrop('boss',0,0);const y=new Enemy(100,100,'BOSS_TITAN');return JSON.stringify({prior,after:{hp:y.maxHp,speed:y.speed},counts,first,second});})()"));
+  assert.deepEqual(a.prior,a.after);
+  assert.deepEqual(a.counts,[1,1,2,2,3,2]);
+  assert.equal(a.first,true);
+  assert.equal(a.second,false);
 });
