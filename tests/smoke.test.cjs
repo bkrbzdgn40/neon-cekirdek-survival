@@ -15,7 +15,8 @@ function setup(stored = {}) {
     return {
       classList: { add: noop, remove: noop, toggle: noop },
       style: {}, textContent: '', innerHTML: '',
-      addEventListener: noop, appendChild: noop, setAttribute: noop,
+      addEventListener: noop, appendChild: noop,
+       _attrs: {}, setAttribute(key, value) { this._attrs[key] = value; },
       getContext: () => new Proxy({}, { get: () => noop }),
       querySelector: () => element(),
       getAttribute: () => '',
@@ -2233,4 +2234,71 @@ test('M4.3.2.3 genuine phase transition renews resonance before it decays', () =
   assert.equal(x.phase,2);
   assert.equal(x.renewed,.7);
   assert.ok(x.after<.7);
+});
+
+
+test('M4.3.3 separates equipment, utility and third-tier evolution independently from rarity', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{const card=(id,tier,r)=>getUpgradeCardPresentation(UPGRADES_POOL.find(u=>u.id===id),RARITIES.find(z=>z.id===r),tier);return JSON.stringify({weapon:card('homing',1,'RARE'),module:card('vampiric',0,'COMMON'),evo:card('homing',2,'EPIC'),legendaryEvo:card('homing',2,'LEGENDARY'),all:UPGRADES_POOL.map(u=>card(u.id,0,'COMMON').role)});})()"));
+  assert.equal(x.weapon.role,'weapon');
+  assert.equal(x.module.role,'module');
+  assert.equal(x.evo.role,'evolution');
+  assert.equal(x.evo.isLegendary,false);
+  assert.equal(x.legendaryEvo.role,'evolution');
+  assert.equal(x.legendaryEvo.isLegendary,true);
+  assert.equal(x.all.length,11);
+});
+
+test('M4.3.3 reserves gold styling for legendary while orbital icon stays neutral on all other rarities', () => {
+  assert.match(html,/\.upgrade-card\[data-rarity="LEGENDARY"\]/);
+  assert.match(html,/@keyframes upgrade-legendary-glow/);
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{const u=UPGRADES_POOL.find(u=>u.id==='orbital');return JSON.stringify(RARITIES.map(r=>{const p=getUpgradeCardPresentation(u,r,0);return {id:r.id,markup:renderUpgradeCardMarkup(u,r,0,0,p,[])};}));})()"));
+  for(const card of x){
+    assert.doesNotMatch(card.markup,/#ffe600|#eab308|text-yellow|animate-bounce/);
+    assert.match(card.markup,/upgrade-weapon-scan/);
+    assert.equal(card.markup.includes('✦ EFSANEVİ'),card.id==='LEGENDARY');
+  }
+});
+
+test('M4.3.3 legendary evolution keeps purple transformation and golden rarity simultaneously', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{const u=UPGRADES_POOL.find(u=>u.id==='multishot'),v=UPGRADES_POOL.find(u=>u.id==='vampiric'),r=RARITIES[3];const e=getUpgradeCardPresentation(u,r,2),w=getUpgradeCardPresentation(u,r,0),m=getUpgradeCardPresentation(v,RARITIES[0],0);return JSON.stringify({e:renderUpgradeCardMarkup(u,r,2,0,e,[]),w:renderUpgradeCardMarkup(u,r,0,1,w,[]),m:renderUpgradeCardMarkup(v,RARITIES[0],0,2,m,[])});})()"));
+  assert.match(x.e,/upgrade-evolution-orbit/);
+  assert.match(x.e,/Odak Rayı/);
+  assert.match(x.e,/EFSANEVİ/);
+  assert.doesNotMatch(x.e,/upgrade-weapon-scan/);
+  assert.match(x.w,/upgrade-weapon-brackets/);
+  assert.match(x.w,/upgrade-weapon-scan/);
+  assert.match(x.m,/SİSTEM MODÜLÜ/);
+  assert.doesNotMatch(x.m,/upgrade-evolution-orbit/);
+});
+
+test('M4.3.3 live modal draws 3 classified choices with preserved numeric shortcuts', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();for(const u of UPGRADES_POOL)player.upgradeCounts[u.id]=3;player.upgradeCounts.homing=2;player.upgradeCounts.multishot=0;player.upgradeCounts.vampiric=0;const box=document.getElementById('upgradeCardsContainer'),cards=[];box.appendChild=c=>cards.push(c);const saved=rollRarity;let k=0;rollRarity=()=>[RARITIES[0],RARITIES[3],RARITIES[2]][k++];try{populateUpgradeCards();}finally{rollRarity=saved;}return JSON.stringify({ids:currentUpgradeChoices.map(c=>c.upg.id),cards:cards.map(c=>({role:c._attrs['data-role'],rarity:c._attrs['data-rarity'],shortcut:c._attrs['aria-keyshortcuts'],markup:c.innerHTML}))});})()"));
+  assert.equal(x.ids.length,3);
+  assert.ok(x.ids.includes('homing'));
+  assert.deepEqual(x.cards.map(c=>c.shortcut),['1','2','3']);
+  assert.deepEqual(new Set(x.cards.map(c=>c.role)),new Set(['evolution','weapon','module']));
+  assert.ok(x.cards.some(c=>c.rarity==='LEGENDARY'));
+  assert.ok(x.cards.some(c=>c.markup.includes('EVRİMİ AÇ')));
+});
+
+test('M4.3.3 selection grants unchanged level-three evolution and rarity power', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts.homing=2;player.refreshBuildTraits();gameState='LEVEL_UP';const r=RARITIES[1],u=UPGRADES_POOL.find(u=>u.id==='homing'),before=player.homingMissiles;currentUpgradeChoices=[{upg:u,rarity:r}];selectUpgradeOption(0);return JSON.stringify({tier:player.upgradeCounts.homing,evolution:player.evolutions.has('homing'),missiles:player.homingMissiles,before,state:gameState,rarity:r.id});})()"));
+  assert.equal(x.tier,3);
+  assert.equal(x.evolution,true);
+  assert.ok(x.missiles>x.before);
+  assert.equal(x.state,'PLAYING');
+  assert.equal(x.rarity,'RARE');
+});
+
+test('M4.3.3 reduced motion covers all animations and keyboard/reroll flows remain wired', () => {
+  assert.match(html,/@media\(prefers-reduced-motion:reduce\)\{[\s\S]*?upgrade-evolution-orbit[\s\S]*?upgrade-weapon-scan\{animation:none!important/);
+  assert.match(html,/card\.setAttribute\('aria-keyshortcuts',String\(idx\+1\)\)/);
+  assert.match(html,/else if \(e\.code === 'KeyR'\)/);
+  assert.match(html,/function triggerLevelUp\(\)/);
+  assert.match(html,/function selectUpgradeOption\(index\)/);
 });
