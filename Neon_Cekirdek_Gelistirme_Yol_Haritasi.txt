@@ -488,3 +488,23 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
   render regresyon testleri.
 [AÇIK] Üç şasi ve 20-30 dakika gerçek oynanış/FPS kabulü.
 [SONRAKİ] M5.4 alternatif düşman ve boss karşılaşmaları.
+
+
+======================================================================
+17. M5.3.1 — SABIT ILK UC BOSS KARSILASMASI
+======================================================================
+
+[UYGULANDI] 1. boss: turuncu ZIRHLI SIBER BEHEMOT (TITAN).
+[UYGULANDI] 2. boss: kirmizi MEGA-CEKIRDEK YIKICI (DESTROYER).
+[UYGULANDI] 3. boss: mor, isinlanan KUANTUM HICLIK ORUMCEGI (VOID).
+[UYGULANDI] Ilk uc karsilasma tek boss; 4. ikili, 5. uclu,
+  6. ikili; sonraki arketip havuzunda camgobegi Prizma da var.
+[KORUNDU] Boss HP, zirh, hasar, hiz, saldiri, faz, ses ve
+  animasyon formul ve parametreleri aynidir.
+[HİYERARŞİ] Mevcut dalga/karsilasma olcekleri 4/7/10 ornek
+  dalgalarinda artan HP, zirh dahil efektif dayaniklilik ve
+  temas hasari verir; oynanis hissi manuel dogrulanmalidir.
+[KORUNDU] Boss basina garanti sandik ve 4 saniye NEFES.
+[OTOMATİK] Sira, renk, rastgelelikten bagimsizlik, gercek spawn,
+  odul, 4. karsilasma, yeni kosu reset ve guc testleri.
+[SONRAKİ] M5.4 alternatif dusman ve boss karsilasmalari.
