@@ -601,6 +601,102 @@
             .upgrade-card:hover .upgrade-card-footer i{transform:none!important;}
         }
 
+
+        /* M4.3.3.2: complementary color is the reward's detail channel.
+           Rarity remains the dominant background/border; role art is untouched. */
+        .upgrade-card {
+            --rarity-contrast:#ffac64;
+            --rarity-contrast-rgb:255,172,100;
+        }
+        .upgrade-card.upgrade-card[data-rarity="COMMON"] {
+            --rarity-contrast:#ffae70;  /* peach-orange on emerald */
+            --rarity-contrast-rgb:255,174,112;
+        }
+        .upgrade-card.upgrade-card[data-rarity="RARE"] {
+            --rarity-contrast:#e3a6ff;  /* lilac on electric blue */
+            --rarity-contrast-rgb:227,166,255;
+        }
+        .upgrade-card.upgrade-card[data-rarity="EPIC"] {
+            --rarity-contrast:#8af4ff;  /* ice cyan on magenta */
+            --rarity-contrast-rgb:138,244,255;
+        }
+        .upgrade-card.upgrade-card[data-rarity="LEGENDARY"] {
+            --rarity-contrast:#fff8e6;  /* champagne white on gold */
+            --rarity-contrast-rgb:255,248,230;
+        }
+        .upgrade-card .upgrade-icon {
+            position:relative;
+            background:
+                radial-gradient(circle at 28% 19%,rgba(var(--rarity-contrast-rgb),.25),transparent 51%),
+                linear-gradient(145deg,rgba(var(--rarity-rgb),.19),rgba(6,12,26,.96));
+            box-shadow:0 0 16px rgba(var(--rarity-rgb),.28),
+                inset 0 0 14px rgba(var(--rarity-contrast-rgb),.15);
+        }
+        .upgrade-card .upgrade-icon::before {
+            content:'';pointer-events:none;position:absolute;inset:5px;
+            border:1px solid rgba(var(--rarity-contrast-rgb),.30);
+            border-radius:10px;transform:rotate(-6deg);
+        }
+        .upgrade-card .upgrade-icon::after {
+            content:'';pointer-events:none;position:absolute;bottom:7px;right:7px;
+            width:5px;height:5px;border-radius:50%;
+            background:var(--rarity-ink);
+            box-shadow:0 0 7px rgba(var(--rarity-rgb),.66);
+        }
+        .upgrade-card .upgrade-icon i {
+            position:relative;z-index:1;
+            color:var(--rarity-contrast);
+            text-shadow:0 0 11px rgba(var(--rarity-contrast-rgb),.48);
+            transition:color .18s ease,text-shadow .18s ease;
+        }
+        .upgrade-card:hover .upgrade-icon i,
+        .upgrade-card:focus-visible .upgrade-icon i {
+            text-shadow:0 0 21px rgba(var(--rarity-contrast-rgb),.8);
+        }
+        .upgrade-card .upgrade-rarity-gem i {
+            color:var(--rarity-contrast);
+            text-shadow:0 0 7px rgba(var(--rarity-contrast-rgb),.5);
+        }
+        .upgrade-card .upgrade-rarity-band {
+            background:linear-gradient(90deg,transparent 0%,var(--rarity-ink) 15%,
+                var(--rarity-contrast) 50%,var(--rarity-ink) 85%,transparent 100%);
+        }
+        .upgrade-card .upgrade-tier-step.filled {
+            background:var(--rarity-ink);
+            box-shadow:0 0 10px rgba(var(--rarity-rgb),.32);
+        }
+        .upgrade-card .upgrade-tier-step.next {
+            background:var(--rarity-contrast);
+            opacity:1;
+            box-shadow:0 0 10px rgba(var(--rarity-contrast-rgb),.42);
+        }
+        .upgrade-card .upgrade-card-footer {
+            background:linear-gradient(90deg,rgba(var(--rarity-rgb),.16),
+                rgba(var(--rarity-contrast-rgb),.075),transparent);
+        }
+        .upgrade-card .upgrade-card-footer::before {
+            content:'';position:absolute;left:9px;top:-1px;width:44px;height:2px;
+            background:linear-gradient(90deg,var(--rarity-contrast),transparent);
+            pointer-events:none;
+        }
+        .upgrade-card .upgrade-card-footer i {
+            color:var(--rarity-contrast);
+            text-shadow:0 0 10px rgba(var(--rarity-contrast-rgb),.52);
+        }
+        .upgrade-card:not([data-rarity="LEGENDARY"]):hover::after {
+            background:linear-gradient(112deg,transparent 35%,
+                rgba(var(--rarity-contrast-rgb),.18) 51%,transparent 65%);
+        }
+        /* Purple evolution orbit and cyan weapon brackets still denote function,
+           even when the card's rarity accent changes. */
+        @media(prefers-reduced-motion:reduce) {
+            .upgrade-card .upgrade-icon i {transition:none!important;}
+            .upgrade-card:hover .upgrade-icon i,
+            .upgrade-card:focus-visible .upgrade-icon i {
+                text-shadow:0 0 11px rgba(var(--rarity-contrast-rgb),.48);
+            }
+        }
+
         /* M4.2: content-density without placeholder-sized cards. */
         .menu-panel-v2 {background:linear-gradient(145deg,rgba(7,15,30,.94),rgba(6,9,20,.95));border:1px solid rgba(0,218,238,.24);}
         .menu-chassis-v2{min-height:174px;gap:10px;align-content:start;}
