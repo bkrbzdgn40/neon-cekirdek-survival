@@ -1,10 +1,11 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.0 | Tarih: 18.10.2026
+Sürüm: 1.1 | İlk plan: 18.10.2026 | Durum: 19.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: PLANLAMA / HENÜZ OYUN KODUNDA DEĞİŞİKLİK YAPILMADI.
+Durum: M0-M4 kod kilometre taşları uygulandı; M5.1 uzun oyun ekonomi paketi çalışılıyor.
+Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
 1. VİZYON VE TASARIM İLKELERİ
@@ -410,3 +411,30 @@ değil. Hedefimiz, giderek derinleşen seçimler, gerçek güç evrimleri,
 adil zorluk ve güçlü bir neon görsel/ses kimliği üzerinden uzun süre
 oynanabilen bir deneyim kurmak. Mevcut HTML oyunu projenin korunacak
 temelidir; yeni sürümler bu temel üzerine inşa edilecektir.
+
+
+======================================================================
+13. GÜNCEL DURUM — 19.10.2026 / M5.1
+======================================================================
+
+Orijinal v1.0 tasarımı tarihsel referans olarak korunmuştur.
+PR/test ilerlemesi, gerçek donanımda 30 dakikalık FPS veya oyuncu
+hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
+
+[UYGULANDI] M0/M1: meta kayıt, düşman/XP dengesi, çarpışma indeksi,
+  nesne ve görsel efekt bütçeleri, Node 22 smoke testleri.
+[UYGULANDI] M2: Combat Director, telegraphed yönlü baskınlar, çoklu
+  boss koordinasyonu ve RELAY/VAULT risk-ödül etkinlikleri.
+[UYGULANDI] M3: 11 modül için ayrı kademe-3 evrimleri, build sinerjileri
+  ve oyuncuya gösterilen build rehberi.
+[UYGULANDI] M4: neon/arena/boss görsel sistemi, responsive HUD,
+  renkli upgrade kartları, adaptif müzik, silah/boss/dirilme SFX.
+[M5.1] Kaynak bazlı sandık ödülü ve altın telemetrisi; elit sandığı
+  açılma bütçesi, boss ödülü garantisi, deterministik 5/10/20/30
+  dakika sabit-olay ekonomi stres senaryosu.
+  Ayrıntılar: docs/M5.1-loot-economy.md
+[AÇIK] Gerçek 5/10/20/30 dakika oyunda üç şasi için FPS P95, zorluk,
+  hayatta kalma ve oyuncu davranışı testi; başka sistemlerdeki tam
+  altın/XP balans değerlendirmeleri.
+[SONRAKİ] M5.2 ileri görev çeşitliliği; M5.3 arena olayları;
+  M5.4 alternatif tehditler; M5.5 oyun sonu analiz raporu.
