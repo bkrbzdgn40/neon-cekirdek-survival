@@ -1880,6 +1880,11 @@
         let dyingSequenceTimer = 0;
         let reviveCountUsed = 0;
         let paidRevivesUsed = 0;
+        // Run-only metrics are counted at the actual event, not inferred afterward.
+        let runMetrics={peakCombo:1,damageTaken:0,hitsTaken:0,shieldBlocks:0,
+            freeRevivesUsed:0,paidReviveGoldSpent:0,paidRevivesUsed:0};
+        let finalRunReport=null;
+        let activeReportTab='summary';
         let gridOffset = { x: 0, y: 0 };
 
         let menuDemoNodes = [];
@@ -2542,6 +2547,7 @@
 
                 if (this.hasShield && this.shieldActive) {
                     this.shieldActive = false;
+                    runMetrics.shieldBlocks++;
                     this.shieldCooldown = this.shieldMaxCooldown;
                     this.invulnTimer = 0.8;
                     audio.playExplosion(false);
@@ -2574,7 +2580,13 @@
                     return;
                 }
 
+                const hpBefore=this.hp;
                 this.hp = Math.max(0, this.hp - amount);
+                const damageLost=hpBefore-this.hp;
+                if(damageLost>0){
+                    runMetrics.damageTaken+=damageLost;
+                    runMetrics.hitsTaken++;
+                }
                 resetFlawlessQuest();
                 this.invulnTimer = 0.65;
                 screenShake = 14;
@@ -3996,6 +4008,7 @@
                 if(this.isElite) advanceQuest('ELITE_HUNT',1);
 
                 combo = Math.min(99, combo + 1);
+                runMetrics.peakCombo=Math.max(runMetrics.peakCombo,combo);
                 comboTimer = COMBO_MAX_TIME;
                 advanceQuest('COMBO', combo);
 
@@ -6898,6 +6911,10 @@
             dyingSequenceTimer = 0;
             reviveCountUsed = 0;
             paidRevivesUsed = 0;
+            runMetrics={peakCombo:1,damageTaken:0,hitsTaken:0,shieldBlocks:0,
+                freeRevivesUsed:0,paidReviveGoldSpent:0,paidRevivesUsed:0};
+            finalRunReport=null;
+            activeReportTab='summary';
             questHistory=[];
             questStats={offered:0,completed:0,byType:{},hitsReset:0};
             questHudPrevious='';
@@ -7161,8 +7178,11 @@
             const goldReviveCost = 30 + paidRevivesUsed * 35;
             if (player.freeRevives > 0) {
                 player.freeRevives--;
+                runMetrics.freeRevivesUsed++;
             } else if (paidRevivesUsed < 2 && totalGold >= goldReviveCost) {
                 totalGold -= goldReviveCost;
+                runMetrics.paidRevivesUsed++;
+                runMetrics.paidReviveGoldSpent+=goldReviveCost;
                 paidRevivesUsed++;
                 saveMetaProgress();
             } else {
@@ -7199,7 +7219,51 @@
             updateHUD();
         }
 
-        function triggerGameOver() {
+        const RUN_REPORT_VERSION=1;
+        function snapshotEndOfRun(reason='CORE_DEPLETED',isNewRecord=false){
+            if(finalRunReport) return finalRunReport;
+            const economy=combatDirector?combatDirector.getEconomySnapshot():null;
+            const director=combatDirector?combatDirector.getDiagnostics():null;
+            const guide=player?getBuildGuideModel(player):null;
+            const modules=player?Object.entries(player.upgradeCounts).map(([id,tier])=>{
+                const definition=UPGRADES_POOL.find(u=>u.id===id);
+                return {id,name:definition?.name||id,icon:definition?.icon||'fa-solid fa-cube',
+                    color:definition?.color||'#a5eaff',tier};
+            }).sort((a,b)=>b.tier-a.tier||a.name.localeCompare(b.name,'tr')):[];
+            const data={
+                version:RUN_REPORT_VERSION,reason,newRecord:!!isNewRecord,
+                result:{score,wave,durationSeconds:totalTime,kills,goldEarned:sessionGold,
+                    totalGoldBalance:totalGold,bossEncounters:bossEncounterCount},
+                chassis:player?.chassis||selectedChassis,
+                combat:{...runMetrics,eliteKills:director?.eliteKills||0,
+                    bossKills:director?.bossKills||0,
+                    bossAttacksDeferred:director?.bossAttacksDeferred||0,
+                    specialEncounters:director?.specialEncounters||0},
+                build:{level:player?.level||1,modules,
+                    evolutions:guide?.evolutions||[],synergies:guide?.synergies||[],
+                    totalTiers:guide?.totalTiers||0,
+                    effects:{...(player?.buildStats||{})},
+                    stats:player?{damage:player.damage,critChance:player.critChance,
+                        fireDelay:player.fireDelay,maxHp:player.maxHp,speed:player.speed}:null},
+                economy:economy||{goldBySource:{},chestDrops:{},chestOpened:{},chestRewards:{}},
+                missions:{offered:questStats.offered,completed:questStats.completed,
+                    byType:{...questStats.byType},hitsReset:questStats.hitsReset},
+                arena:director?{offered:director.arenaOffered,completed:director.arenaCompleted,
+                    expired:director.arenaExpired,cancelled:director.arenaCancelled,
+                    byKind:director.arenaByKind}:{offered:0,completed:0,expired:0,cancelled:0,byKind:{}},
+                encounters:director?{bossByPattern:director.bossByPattern,
+                    specialByKind:director.specialByKind}:{bossByPattern:{},specialByKind:{}}
+            };
+            // A serialization boundary prevents later game mutations and UI references
+            // from ever modifying the finished run. Reports remain in this session only.
+            finalRunReport=JSON.parse(JSON.stringify(data));
+            return finalRunReport;
+        }
+        window.getNeonFinalReport=()=>finalRunReport?
+            JSON.parse(JSON.stringify(finalRunReport)):null;
+
+        function triggerGameOver(reason='CORE_DEPLETED') {
+            if(gameState==='GAME_OVER') return;
             gameState = 'GAME_OVER';
             document.getElementById('reviveModal').classList.add('hidden');
             document.getElementById('reviveModal').classList.remove('flex');
@@ -7215,6 +7279,7 @@
                 savedMaxWave = wave;
             }
             saveMetaProgress();
+            snapshotEndOfRun(reason,isNewRecord);
 
             document.getElementById('newRecordBadge').classList.toggle('hidden', !isNewRecord);
             document.getElementById('finalScoreText').textContent = score.toLocaleString('tr-TR');
@@ -7455,7 +7520,7 @@
         document.getElementById('closeShopBtn').addEventListener('click', closeShop);
 
         document.getElementById('confirmReviveBtn').addEventListener('click', executePlayerRevive);
-        document.getElementById('declineReviveBtn').addEventListener('click', triggerGameOver);
+        document.getElementById('declineReviveBtn').addEventListener('click', () => triggerGameOver('REVIVE_DECLINED'));
 
         document.querySelectorAll('.chassis-card').forEach((card) => {
             card.addEventListener('click', () => {
