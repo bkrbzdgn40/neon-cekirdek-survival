@@ -1,6 +1,6 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.5 | İlk plan: 18.10.2026 | Durum: 19.10.2026
+Sürüm: 1.6 | İlk plan: 18.10.2026 | Durum: 19.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
@@ -532,3 +532,27 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
   dalga kilitleri, gerçek maliyet, boss eşleşmesi ve reset testleri.
 [AÇIK] Gerçek üç şasi ile 20-30 dk savaş/FPS/zorluk testleri.
 [SONRAKİ] M5.5 Oyun Sonu Analiz Raporu.
+
+
+======================================================================
+19. M5.5 — OYUN SONU ANALİZ RAPORU (M5.5.1 - M5.5.4)
+======================================================================
+
+[M5.5.1] Oyun sonu tek sefer snapshot: skor, süre, dalga, imha,
+  boss, build, ekonomi, sandık, görev ve arena istatistikleri.
+  Gerçek HP kaybı, hasarlı isabet, kalkan bloğu, zirve kombo,
+  ücretsiz/ücretli diriliş ve altın masrafı sayılır.
+[M5.5.2] Tam ekran responsive rapor; dalga rozeti, dört KPI,
+  ÖZET/SAVAŞ/BUILD/EKONOMİ/GÖREV-ARENA sekmeleri, sticky
+  tekrar oyna/laboratuvar/menü aksiyonları, erişilebilir sekmeler.
+[M5.5.3] Modül kademeleri, evrim/sinerji; savaş, HP kaybı;
+  altın kaynakları, sandık ödülleri; görev ve arena sonuçları.
+  Sayıya dayalı en çok üç koşu içgörüsü.
+[M5.5.4] Türkçe sayılar, boş durum mesajları, HTML kaçış,
+  rekor idempotence, sekme erişilebilirliği, düşük hareket,
+  yeni koşuda snapshot sıfırlama ve regresyon testleri.
+[KORUNDU] M5.1-M5.4 oynanış, kayıt şeması ve boss dengesi.
+  Rapor kalıcı koşu arşivi değildir, aynı oturumda saklanır.
+[OTOMATİK] 17 yeni smoke testi; toplam 230 test hedefi.
+[AÇIK] Mobil ve üç şaside gerçek oyun sonu ekranı kabulü.
+[SONRAKİ] M6 planı ve genel UX kabulü.
