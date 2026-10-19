@@ -1931,6 +1931,7 @@
                     const goldWon = activeQuest.rewardGold;
                     totalGold += goldWon;
                     sessionGold += goldWon;
+                    if(combatDirector) combatDirector.onGoldGranted('quests',goldWon);
                     saveMetaProgress();
                     audio.playJackpot();
                     if (player) {
@@ -3935,7 +3936,7 @@
                     hitStopTimer = 0.045;
                     screenShake = 12;
                     if (combatDirector && combatDirector.registerChestDrop('elite', this.x, this.y)) {
-                        createFloatingText(this.x, this.y - 30, 'ELİT SANDIK', '#ffe600', 16);
+                        createFloatingText(this.x, this.y - 30, 'ELİT TAKVİYE', '#40e9bc', 16);
                     }
                 }
 
@@ -3960,7 +3961,7 @@
                         combatDirector.stats.bossKills++;
                         combatDirector.registerChestDrop('boss', this.x, this.y);
                     } else {
-                        lootChests.push(new LootChest(this.x, this.y));
+                        lootChests.push(new LootChest(this.x, this.y,'boss'));
                     }
                     for (let i = 0; i < 16; i++) {
                         emitEnergyOrb(
@@ -4098,6 +4099,7 @@
                         const goldAmt = Math.max(1, Math.round((2 + Math.floor(wave / 2)) * player.greedBonus)) * this.count;
                         totalGold += goldAmt;
                         sessionGold += goldAmt;
+                        if(combatDirector) combatDirector.onGoldGranted('orbs',goldAmt);
                         pendingMetaSave = true;
                         audio.playOrbPickup(combo, true);
                         createFloatingText(this.x, this.y - 12, `+${goldAmt} ALTIN`, '#ffe600', 14);
@@ -4126,10 +4128,27 @@
             }
         }
 
+
+        // M5.1: Elite supply drops and guaranteed boss jackpot have separate rules.
+        const CHEST_ECONOMY=Object.freeze({
+            eliteCooldownSeconds:18, eliteMaxPerMinute:2,
+            elitePityKills:7, eliteRollChance:.24, eliteGroundCap:4
+        });
+        function getChestRewardProfile(source,currentWave,xpNext,greed=1){
+            const boss=source==='boss';
+            return {
+                goldHeal:{gold:Math.round((boss?22+currentWave*6:14+currentWave*3)*greed),
+                    heal:boss?30:18},
+                overdriveXp:{charge:boss?55:32,xp:xpNext*(boss?.45:.28)},
+                bulletNova:{shots:boss?24:12,charge:boss?30:18}
+            };
+        }
+
         class LootChest {
-            constructor(x, y) {
+            constructor(x, y, source = 'elite') {
                 this.x = x;
                 this.y = y;
+                this.source = source==='boss'?'boss':'elite';
                 this.radius = 15;
                 this.dead = false;
                 this.pulse = 0;
@@ -4141,31 +4160,45 @@
                 if (dist < player.radius + this.radius + 6) {
                     this.dead = true;
                     audio.playJackpot();
-                    screenShake = 15;
-                    shockwaves.push(new Shockwave(this.x, this.y, 200, '#ffe600', 0.4));
-
-                    const roll = Math.random();
-                    if (roll < 0.38) {
-                        if (combatDirector) combatDirector.onChestOpened('goldHeal');
-                        const bonusGold = Math.round((22 + wave * 6) * player.greedBonus);
-                        totalGold += bonusGold;
-                        sessionGold += bonusGold;
-                        saveMetaProgress();
-                        player.hp = Math.min(player.maxHp, player.hp + 30);
-                        showDopamineBanner(`🎰 SİBER JACKPOT: +${bonusGold} ALTIN & +30 CAN! 🎰`, '#ffe600');
-                    } else if (roll < 0.72) {
-                        if (combatDirector) combatDirector.onChestOpened('overdriveXp');
-                        player.addOverdrive(55);
-                        player.gainXp(player.xpToNext * 0.45);
-                        showDopamineBanner('🎰 SİBER JACKPOT: +%55 CİNNET ŞARJI & DEV XP! 🎰', '#ff007f');
-                    } else {
-                        if (combatDirector) combatDirector.onChestOpened('bulletNova');
-                        for (let i = 0; i < 24; i++) {
-                            const a = (i * Math.PI * 2) / 24;
-                            bullets.push(new Bullet(player.x, player.y, Math.cos(a) * 650, Math.sin(a) * 650, player.damage * 2.5, 7, 4, 2, true, false));
+                    screenShake=this.source==='boss'?15:10;
+                    const rewardColor=this.source==='boss'?'#ffe600':'#40e9bc';
+                    shockwaves.push(new Shockwave(this.x,this.y,180,rewardColor,.36));
+                    const profile=getChestRewardProfile(this.source,wave,player.xpToNext,player.greedBonus);
+                    const roll=Math.random();
+                    if(roll<.38){
+                        const gold=profile.goldHeal.gold;
+                        const healed=Math.min(profile.goldHeal.heal,player.maxHp-player.hp);
+                        totalGold+=gold;sessionGold+=gold;player.hp+=healed;
+                        if(combatDirector){
+                            combatDirector.onGoldGranted('chests',gold);
+                            combatDirector.onChestOpened('goldHeal',this.source,{gold,healed});
                         }
-                        player.addOverdrive(30);
-                        showDopamineBanner('🎰 SİBER JACKPOT: 360° KUANTUM MERMİ NOVA! 🎰', '#00f3ff');
+                        saveMetaProgress();
+                        showDopamineBanner(this.source==='boss'?
+                            `🎰 BOSS JACKPOT · +${gold} ALTIN & +${profile.goldHeal.heal} CAN`:
+                            `✦ ELİT TAKVİYE · +${gold} ALTIN & +${profile.goldHeal.heal} CAN`,rewardColor);
+                    }else if(roll<.72){
+                        player.addOverdrive(profile.overdriveXp.charge);
+                        player.gainXp(profile.overdriveXp.xp);
+                        if(combatDirector) combatDirector.onChestOpened('overdriveXp',this.source,{
+                            charge:profile.overdriveXp.charge,xp:profile.overdriveXp.xp
+                        });
+                        showDopamineBanner(this.source==='boss'?'🎰 BOSS JACKPOT · DEV XP + CİNNET':
+                            '✦ ELİT TAKVİYE · XP + CİNNET',rewardColor);
+                    }else{
+                        const shots=Math.min(profile.bulletNova.shots,
+                            Math.max(0,MAX_PLAYER_PROJECTILES-bullets.length));
+                        for(let i=0;i<shots;i++){
+                            const a=(i*Math.PI*2)/Math.max(1,shots);
+                            bullets.push(new Bullet(player.x,player.y,Math.cos(a)*650,Math.sin(a)*650,
+                                player.damage*2.5,7,4,2,true,false));
+                        }
+                        player.addOverdrive(profile.bulletNova.charge);
+                        if(combatDirector) combatDirector.onChestOpened('bulletNova',this.source,{
+                            shots,charge:profile.bulletNova.charge
+                        });
+                        showDopamineBanner(this.source==='boss'?'🎰 BOSS JACKPOT · KUANTUM NOVA':
+                            '✦ ELİT TAKVİYE · KUANTUM NOVA',rewardColor);
                     }
                 }
             }
@@ -4176,10 +4209,10 @@
                 const s = 1 + Math.sin(this.pulse) * 0.1;
                 ctx.scale(s, s);
                 ctx.shadowBlur = 20;
-                ctx.shadowColor = '#ffe600';
-                ctx.fillStyle = '#ffe600';
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 2;
+                ctx.shadowColor=this.source==='boss'?'#ffe600':'#40e9bc';
+                ctx.fillStyle=this.source==='boss'?'#ffe600':'#2de8bd';
+                ctx.strokeStyle='#ffffff';
+                ctx.lineWidth=2;
                 ctx.beginPath();
                 const r = 13;
                 for (let i = 0; i < 8; i++) {
@@ -4197,7 +4230,7 @@
                 ctx.font = "900 12px 'Orbitron', sans-serif";
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText('★', 0, 1);
+                ctx.fillText(this.source==='boss'?'★':'◆', 0, 1);
                 ctx.restore();
             }
         }
@@ -5234,6 +5267,7 @@
                         const gold = Math.min(65, 20 + wave * 3);
                         totalGold += gold;
                         sessionGold += gold;
+                        if(combatDirector) combatDirector.onGoldGranted('arena',gold);
                         player.hp = Math.min(player.maxHp, player.hp + 6);
                         saveMetaProgress();
                         createFloatingText(this.x, this.y - 28, `+ ${gold} ALTIN · +6 CAN`, '#ffe600', 17);
@@ -5348,7 +5382,13 @@
                     bossSpecialAttacks: 0, bossAttacksDeferred: 0,
                     arenaOffered: 0, arenaCompleted: 0, arenaExpired: 0, arenaCancelled: 0,
                     chestDrops: { elite: 0, boss: 0 },
-                    chestOpened: { goldHeal: 0, overdriveXp: 0, bulletNova: 0 }
+                    chestDenied:{cooldown:0,perMinute:0,groundCap:0,roll:0},
+                    chestOpened: { goldHeal: 0, overdriveXp: 0, bulletNova: 0 },
+                    chestRewards:{
+                        elite:{opened:0,gold:0,heal:0,xp:0,charge:0,shots:0},
+                        boss:{opened:0,gold:0,heal:0,xp:0,charge:0,shots:0}
+                    },
+                    goldBySource:{orbs:0,quests:0,arena:0,chests:0}
                 };
             }
 
@@ -5525,30 +5565,68 @@
                 this.afterBossUntil = totalTime + 9;
             }
 
-            registerChestDrop(source, x, y) {
-                if (source === 'boss') {
-                    if (this.bossChestAwarded) return false;
-                    this.bossChestAwarded = true;
+            registerChestDrop(source,x,y) {
+                if(source==='boss'){
+                    if(this.bossChestAwarded) return false;
+                    this.bossChestAwarded=true;
                     this.stats.chestDrops.boss++;
-                    lootChests.push(new LootChest(x, y));
+                    lootChests.push(new LootChest(x,y,'boss'));
                     return true;
                 }
                 this.stats.eliteKills++;
                 this.elitePity++;
-                this.eliteChestTimes = this.eliteChestTimes.filter(t => totalTime - t < 60);
-                if (totalTime - this.lastEliteChestAt < 12 || this.eliteChestTimes.length >= 3 ||
-                    lootChests.length >= 6) return false;
-                if (this.elitePity < 7 && Math.random() >= 0.24) return false;
-                this.lastEliteChestAt = totalTime;
+                this.eliteChestTimes=this.eliteChestTimes.filter(t=>totalTime-t<60);
+                if(totalTime-this.lastEliteChestAt<CHEST_ECONOMY.eliteCooldownSeconds){
+                    this.stats.chestDenied.cooldown++;return false;
+                }
+                if(this.eliteChestTimes.length>=CHEST_ECONOMY.eliteMaxPerMinute){
+                    this.stats.chestDenied.perMinute++;return false;
+                }
+                if(lootChests.length>=CHEST_ECONOMY.eliteGroundCap){
+                    this.stats.chestDenied.groundCap++;return false;
+                }
+                if(this.elitePity<CHEST_ECONOMY.elitePityKills &&
+                    Math.random()>=CHEST_ECONOMY.eliteRollChance){
+                    this.stats.chestDenied.roll++;return false;
+                }
+                this.lastEliteChestAt=totalTime;
                 this.eliteChestTimes.push(totalTime);
-                this.elitePity = 0;
+                this.elitePity=0;
                 this.stats.chestDrops.elite++;
-                lootChests.push(new LootChest(x, y));
+                lootChests.push(new LootChest(x,y,'elite'));
                 return true;
             }
-
-            onChestOpened(reward) {
-                if (this.stats.chestOpened[reward] !== undefined) this.stats.chestOpened[reward]++;
+            onGoldGranted(source,amount) {
+                if(!Number.isFinite(amount)||amount<=0||!(source in this.stats.goldBySource)) return;
+                this.stats.goldBySource[source]+=amount;
+            }
+            onChestOpened(reward,source='elite',granted={}) {
+                if(this.stats.chestOpened[reward]!==undefined) this.stats.chestOpened[reward]++;
+                const bucket=this.stats.chestRewards[source];
+                if(!bucket) return;
+                bucket.opened++;
+                bucket.gold+=granted.gold||0;
+                bucket.heal+=granted.healed||0;
+                bucket.xp+=granted.xp||0;
+                bucket.charge+=granted.charge||0;
+                bucket.shots+=granted.shots||0;
+            }
+            getEconomySnapshot(){
+                const d=this.stats.chestDrops;
+                return {
+                    timeSeconds:Math.round(totalTime),wave,
+                    eliteKills:this.stats.eliteKills,bossKills:this.stats.bossKills,
+                    chestDrops:{...d},chestDenied:{...this.stats.chestDenied},
+                    chestOpened:{...this.stats.chestOpened},
+                    chestRewards:{elite:{...this.stats.chestRewards.elite},
+                        boss:{...this.stats.chestRewards.boss}},
+                    goldBySource:{...this.stats.goldBySource},
+                    goldSession:sessionGold,
+                    goldTracked:Object.values(this.stats.goldBySource).reduce((a,v)=>a+v,0),
+                    onGround:lootChests.length,
+                    eliteChestsPerMinute:totalTime>0?Math.round(600*d.elite/totalTime)/10:0,
+                    totalChestsPerMinute:totalTime>0?Math.round(600*(d.elite+d.boss)/totalTime)/10:0
+                };
             }
 
             getDiagnostics() {
@@ -5564,6 +5642,13 @@
                     arenaProgress: this.activeArenaEvent ?
                         Math.round(100 * this.activeArenaEvent.progress / this.activeArenaEvent.required) : 0,
                     ...this.stats,
+                    chestDrops:{...this.stats.chestDrops},
+                    chestDenied:{...this.stats.chestDenied},
+                    chestOpened:{...this.stats.chestOpened},
+                    chestRewards:{elite:{...this.stats.chestRewards.elite},
+                        boss:{...this.stats.chestRewards.boss}},
+                    goldBySource:{...this.stats.goldBySource},
+                    economy:this.getEconomySnapshot(),
                     chestsPerMinute: totalTime > 0 ? Math.round(600 * drops / totalTime) / 10 : 0
                 };
             }
@@ -7197,6 +7282,7 @@
 
         // Read-only run counters for balancing; no data leaves the local browser.
         window.getNeonRunDiagnostics = () => combatDirector ? combatDirector.getDiagnostics() : null;
+        window.getNeonEconomySnapshot = () => combatDirector ? combatDirector.getEconomySnapshot() : null;
         window.getNeonBuildSnapshot = () => player ? {
             modules: { ...player.upgradeCounts },
             evolutions: [...player.evolutions],
