@@ -2964,7 +2964,7 @@ test('M5.3.1 later multi-boss encounters preserve diversity and cyan Prism pool'
  const a=JSON.parse(run("(()=>{startNewGame();const pool=getBossArchetypesForEncounter(4).map(b=>b.type);bossEncounterCount=3;wave=12;spawnBossEncounter();return JSON.stringify({count:activeBosses.length,types:activeBosses.map(b=>b.type),pool,sequence:[1,2,3,4,5,6,7].map(getBossCountForEncounter)});})()"));
  assert.deepEqual(a.sequence,[1,1,1,2,3,2,3]);
  assert.equal(a.count,2);assert.notEqual(a.types[0],a.types[1]);
- assert.equal(new Set(a.pool).size,4);assert.ok(a.pool.includes('BOSS_PRISM'));
+ assert.deepEqual(a.pool,['BOSS_TITAN','BOSS_PRISM']);assert.notEqual(a.types[0],a.types[1]);
 });
 
 test('M5.3.1 new game resets boss order to orange armored Behemoth',()=>{
@@ -2981,4 +2981,133 @@ test('M5.3.1 original boss movement and defense mechanics remain in code',()=>{
  assert.ok(x.every(b=>b.hp>0&&b.speed>0&&b.phase===1&&b.timer===1.8));
  assert.match(html,/this\.type === 'BOSS_TITAN' && !isCrit/);
  assert.match(html,/this\.secondaryTimer <= 0 && \(!combatDirector \|\| combatDirector\.canBossReposition/);
+});
+
+
+test('M5.4 wave gates progressively unlock sniper escort, interceptor and breacher',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("JSON.stringify([3,7,8,9,10,12,13,20].map(w=>getSpecialEncounterKinds(w).map(p=>p.type)))"));
+ assert.deepEqual(x[0],['PINCER','SPEARHEAD']);
+ assert.deepEqual(x[1],x[0]);
+ assert.deepEqual(x[2],['PINCER','SPEARHEAD','ESCORT']);
+ assert.equal(x[3].length,3);
+ assert.deepEqual(x[4],['PINCER','SPEARHEAD','ESCORT','INTERCEPT']);
+ assert.deepEqual(x[6],['PINCER','SPEARHEAD','ESCORT','INTERCEPT','BREACH']);
+ assert.deepEqual(x[7],x[6]);
+});
+
+test('M5.4 invasion plans include visible attack roles, sides and exact threat costs',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("JSON.stringify([0,1,2,3,4].map(i=>getSpecialEncounterPlan(14,'SIEGE',1,i)).map(p=>({type:p.type,label:p.label,color:p.color,warning:p.warning,units:p.units,threatCost:p.threatCost,cost:p.units.reduce((v,u)=>v+ENEMY_THREAT_COST[u.type],0)})))"));
+ assert.deepEqual(x.map(p=>p.type),['PINCER','SPEARHEAD','ESCORT','INTERCEPT','BREACH']);
+ assert.deepEqual(x[2].units.map(u=>u.type),['SWARM','SHIELD_BEARER','SNIPER','SWARM']);
+ assert.deepEqual(x[3].units.map(u=>u.type),['DASHER','ASSASSIN','DASHER','SHOOTER']);
+ assert.deepEqual(x[4].units.map(u=>u.type),['TANK','SPLITTER','GRAV_WELL','SWARM']);
+ assert.deepEqual([...new Set(x[3].units.map(u=>u.side))].sort(),[1,3]);
+ for(const p of x){
+  assert.ok(p.label.length>10);assert.match(p.color,/^#[0-9a-f]{6}$/i);
+  assert.equal(p.warning,1.65);assert.ok(p.units.length<=4);
+  assert.ok(p.units.every(u=>u.side>=0&&u.side<4&&u.slot<u.count));
+  assert.ok(Math.abs(p.cost-p.threatCost)<.001);assert.ok(p.threatCost<=9);
+ }
+});
+
+test('M5.4 Director gives each real formation a telegraph and spends only real spawn costs',()=>{
+ const {run}=setup();
+ const a=JSON.parse(run("(()=>{const out=[];for(let i=0;i<5;i++){startNewGame();wave=14;totalTime=30;nextBossTime=500;combatDirector.encounterIndex=i;combatDirector.nextEncounterAt=0;combatDirector.tokens=14;combatDirector.update(.02);const p=combatDirector.pendingEncounter;const stopped=combatDirector.trySpawn();combatDirector.update(1.7);const d=combatDirector.getDiagnostics(),m=d.specialByKind[p.type];out.push({kind:p.type,stopped,spawned:enemies.length,offered:m.offered,resolved:m.resolved,units:m.units,spent:m.tokensSpent,cost:p.threatCost,old:d.specialEncounters});}return JSON.stringify(out);})()"));
+ assert.deepEqual(a.map(x=>x.kind),['PINCER','SPEARHEAD','ESCORT','INTERCEPT','BREACH']);
+ for(const x of a){
+  assert.equal(x.stopped,false);assert.equal(x.spawned,x.units);
+  assert.ok(x.spawned>=3&&x.spawned<=4,x.kind);
+  assert.equal(x.offered,1);assert.equal(x.resolved,1);
+  assert.equal(x.spent,x.cost);assert.equal(x.old,1);
+ }
+});
+
+test('M5.4 low budget and enemy cap continue to limit encounter spawning',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{const out=[];for(let i=2;i<=4;i++){startNewGame();wave=14;const p=getSpecialEncounterPlan(14,'HUNT',1,i);combatDirector.pendingEncounter=p;combatDirector.trackSpecialOffer(p);combatDirector.tokens=5;const amount=combatDirector.resolveSpecialEncounter();const stats=combatDirector.getDiagnostics().specialByKind[p.type];out.push({kind:p.type,amount,spawned:enemies.length,left:combatDirector.tokens,spent:stats.tokensSpent});}return JSON.stringify(out);})()"));
+ for(const item of x){
+  assert.equal(item.amount,item.spawned);
+  assert.ok(item.amount>=1&&item.amount<4);
+  assert.ok(item.left>=0);assert.ok(item.spent<=5);
+ }
+});
+
+test('M5.4 imminent boss cancels a telegraphed encounter without any spawn or resource cost',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();wave=14;totalTime=30;nextBossTime=500;combatDirector.tokens=14;combatDirector.encounterIndex=2;combatDirector.nextEncounterAt=0;combatDirector.update(.02);const p=combatDirector.pendingEncounter;nextBossTime=totalTime+6;combatDirector.update(.02);const stats=combatDirector.getDiagnostics();return JSON.stringify({kind:p.type,metric:stats.specialByKind[p.type],cancelled:stats.specialCancelled,spawn:enemies.length,pending:combatDirector.pendingEncounter});})()"));
+ assert.equal(x.kind,'ESCORT');
+ assert.equal(x.metric.offered,1);assert.equal(x.metric.cancelled,1);
+ assert.equal(x.metric.units,0);assert.equal(x.metric.tokensSpent,0);
+ assert.equal(x.cancelled,1);assert.equal(x.spawn,0);assert.equal(x.pending,null);
+});
+
+test('M5.4 boss start cancels a pending assault at most once',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();wave=14;const p=getSpecialEncounterPlan(14,'HUNT',0,3);combatDirector.pendingEncounter=p;combatDirector.trackSpecialOffer(p);combatDirector.onBossEncounter();combatDirector.onBossEncounter();return JSON.stringify({cancelled:combatDirector.stats.specialByKind.INTERCEPT.cancelled,global:combatDirector.stats.specialCancelled,pending:combatDirector.pendingEncounter});})()"));
+ assert.equal(x.cancelled,1);assert.equal(x.global,1);assert.equal(x.pending,null);
+});
+
+test('M5.4 telegraphed special formation names render without changing real enemy physics',()=>{
+ const {run}=setup();
+ assert.match(html,/ctx\.fillText\(plan\.label,worldWidth\/2/);
+ const x=JSON.parse(run("(()=>{startNewGame();gameState='PLAYING';wave=14;combatDirector.pendingEncounter=getSpecialEncounterPlan(14,'HUNT',1,4);drawSpecialEncounterWarning();return JSON.stringify({type:combatDirector.pendingEncounter.type,name:combatDirector.pendingEncounter.label,sides:[...new Set(combatDirector.pendingEncounter.units.map(u=>u.side))]});})()"));
+ assert.equal(x.type,'BREACH');assert.equal(x.name,'AĞIR HAT YARMA');
+ assert.deepEqual(x.sides,[1,2]);
+});
+
+test('M5.4 all six late boss formations are named, diverse and have the same 2/3 boss cap',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("JSON.stringify([4,5,6,7,8,9,10,11].map(n=>({n,count:getBossCountForEncounter(n),plan:getBossEncounterPlan(n)})))"));
+ assert.deepEqual(x.slice(0,6).map(p=>p.plan.id),['ARMOR_PRISM','VOID_CROSSFIRE','BREAKING_LINE','GRAVITY_NET','SIEGE_BEAMS','VOID_IRON']);
+ for(const entry of x){
+  assert.equal(entry.count,entry.plan.types.length,entry.n);
+  assert.equal(new Set(entry.plan.types).size,entry.count);
+  assert.ok(entry.plan.types.every(type=>['BOSS_DESTROYER','BOSS_TITAN','BOSS_VOID','BOSS_PRISM'].includes(type)));
+ }
+ assert.equal(x[6].plan.id,'ARMOR_PRISM');assert.equal(x[7].plan.id,'VOID_CROSSFIRE');
+});
+
+test('M5.4 first three fixed solo bosses are unaffected by late boss formations',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("JSON.stringify([1,2,3].map(n=>({count:getBossCountForEncounter(n),plan:getBossEncounterPlan(n)})))"));
+ assert.deepEqual(x.map(y=>y.count),[1,1,1]);
+ assert.deepEqual(x.map(y=>y.plan.types[0]),['BOSS_TITAN','BOSS_DESTROYER','BOSS_VOID']);
+ assert.deepEqual(x.map(y=>y.plan.id),['INTRO_1','INTRO_2','INTRO_3']);
+});
+
+test('M5.4 real late boss encounters keep one guaranteed chest per encounter and no duplicate type',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();bossEncounterCount=3;wave=14;const sets=[];for(let n=4;n<=9;n++){spawnBossEncounter();sets.push(activeBosses.map(b=>b.type));for(const b of [...activeBosses]){b.hp=1;b.takeDamage(9000,0,0,false,false);}}return JSON.stringify({sets,bossKills:combatDirector.stats.bossKills,chests:combatDirector.stats.chestDrops.boss,byPattern:combatDirector.stats.bossByPattern});})()"));
+ assert.deepEqual(x.sets.map(s=>s.length),[2,3,2,3,2,3]);
+ assert.ok(x.sets.every(s=>new Set(s).size===s.length));
+ assert.equal(x.bossKills,15);assert.equal(x.chests,6);
+ assert.equal(Object.keys(x.byPattern).length,6);
+});
+
+test('M5.4 late boss spawn still shares existing attack throttle and default phase',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();wave=14;bossEncounterCount=3;spawnBossEncounter();const s=activeBosses.map(b=>({phase:b.bossPhase,hp:b.maxHp,speed:b.speed}));const a=combatDirector.allowBossAttack(activeBosses[0],'regular');const b=combatDirector.allowBossAttack(activeBosses[1],'regular');return JSON.stringify({s,a,b,deferred:combatDirector.stats.bossAttacksDeferred});})()"));
+ assert.equal(x.s.length,2);assert.ok(x.s.every(b=>b.phase===1&&b.hp>0&&b.speed>0));
+ assert.equal(x.a,true);assert.equal(x.b,false);assert.equal(x.deferred,1);
+});
+
+test('M5.4 formation and boss statistics are copy-safe and reset per run',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();wave=14;totalTime=30;nextBossTime=500;combatDirector.encounterIndex=3;combatDirector.nextEncounterAt=0;combatDirector.tokens=14;combatDirector.update(.02);combatDirector.update(1.7);bossEncounterCount=3;spawnBossEncounter();const a=combatDirector.getDiagnostics();a.specialByKind.INTERCEPT.offered=999;a.bossByPattern.ARMOR_PRISM=999;const b=combatDirector.getDiagnostics();startNewGame();const c=combatDirector.getDiagnostics();return JSON.stringify({special:b.specialByKind.INTERCEPT.offered,boss:b.bossByPattern.ARMOR_PRISM,resetSpecial:c.specialByKind,resetBoss:c.bossByPattern,next:c.upcomingBossPattern});})()"));
+ assert.equal(x.special,1);assert.equal(x.boss,1);
+ assert.deepEqual(x.resetSpecial,{});assert.deepEqual(x.resetBoss,{});
+ assert.equal(x.next,'INTRO_1');
+});
+
+test('M5.4 5/10/20/30-minute fixed-interval plan stress respects enemy/boss budgets',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("JSON.stringify([5,10,20,30].map(minutes=>{const w=Math.floor(minutes*60/16)+1;const plans=Array.from({length:Math.floor(minutes*60/39)},(_,i)=>getSpecialEncounterPlan(w,'HUNT',i%4,i));const bossPlans=Array.from({length:Math.floor(minutes*60/55)},(_,i)=>getBossEncounterPlan(i+1));return {minutes,types:[...new Set(plans.map(p=>p.type))],maxUnits:Math.max(...plans.map(p=>p.units.length)),maxThreat:Math.max(...plans.map(p=>p.threatCost)),maxBoss:Math.max(...bossPlans.map(p=>p.types.length)),unique:bossPlans.every(p=>new Set(p.types).size===p.types.length)};}))"));
+ assert.deepEqual(x.map(i=>i.minutes),[5,10,20,30]);
+ for(const p of x){
+  assert.ok(p.maxUnits<=4);assert.ok(p.maxThreat<=9);
+  assert.ok(p.maxBoss<=3);assert.equal(p.unique,true);
+ }
+ console.log('M5.4 fixed-interval plan stress, not real playtime: '+JSON.stringify(x));
 });
