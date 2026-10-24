@@ -3390,3 +3390,80 @@ test('M6.1.1 new run resets held keys, mouse, and menu keyboard input', () => {
     sourceCapabilities: { firesTouchEvents: true } });
   assert.equal(run('mouse.active'), false);
 });
+
+
+test('M6.2.1 compact and desktop render DPR obey fixed pixel budgets', () => {
+  const { run } = setup();
+  const v = JSON.parse(run(`JSON.stringify({
+    phone: getRenderDpr(390, 844, 3),
+    tablet: getRenderDpr(820, 1180, 3),
+    desktop: getRenderDpr(1920, 1080, 2),
+    lowDensity: getRenderDpr(1280, 720, 1),
+    fourK: getRenderDpr(3840, 2160, 2),
+    invalid: getRenderDpr(390, 844, 0)
+  })`));
+  assert.equal(v.phone, 1.75);
+  assert.ok(820 * 1180 * v.tablet ** 2 <= 1800001);
+  assert.ok(1920 * 1080 * v.desktop ** 2 <= 6000001);
+  assert.equal(v.lowDensity, 1);
+  assert.ok(3840 * 2160 * v.fourK ** 2 <= 6000001);
+  assert.equal(v.invalid, 1);
+});
+
+test('M6.2.1 backing canvas shrinks on high-DPR phone without altering world or CSS size', () => {
+  const { run } = setup();
+  const result = JSON.parse(run(`(() => {
+    document.documentElement.clientWidth = 390;
+    document.documentElement.clientHeight = 844;
+    window.devicePixelRatio = 1;
+    resizeCanvas();
+    const baseline = { worldWidth, worldHeight, viewScale };
+    window.devicePixelRatio = 3;
+    resizeCanvas();
+    return JSON.stringify({ baseline,
+      logical: { worldWidth, worldHeight, viewScale },
+      width: canvas.width, height: canvas.height,
+      cssWidth: canvas.style.width, cssHeight: canvas.style.height,
+      dpr: currentDpr, miB: window.getNeonPerformanceSnapshot().canvasBufferMiB });
+  })()`));
+  assert.equal(result.logical.worldWidth, result.baseline.worldWidth);
+  assert.equal(result.logical.worldHeight, result.baseline.worldHeight);
+  assert.equal(result.logical.viewScale, result.baseline.viewScale);
+  assert.equal(result.cssWidth, '390px');
+  assert.equal(result.cssHeight, '844px');
+  assert.equal(result.dpr, 1.75);
+  assert.ok(result.width * result.height <= 1800000);
+  assert.ok(result.miB < 4);
+});
+
+test('M6.2.1 rolling frame stats produce real average and P95 without gameplay mutations', () => {
+  const { run } = setup();
+  const result = JSON.parse(run(`(() => {
+    togglePerformanceOverlay();
+    gameState = 'PAUSED';
+    lastFrameTime = 0;
+    let now = 0;
+    for (const delta of [10, 10, 15, 40]) {
+      now += delta;
+      gameLoop(now);
+    }
+    return JSON.stringify({ frame: window.getNeonPerformanceSnapshot().frame,
+      state: gameState, recent: perfRecentFrameCount,
+      overlay: performanceOverlayOn });
+  })()`));
+  assert.equal(result.frame.sampleCount, 4);
+  assert.ok(Math.abs(result.frame.avgMs - 18.75) < 0.001);
+  assert.equal(result.frame.p95Ms, 40);
+  assert.equal(result.state, 'PAUSED');
+  assert.equal(result.recent, 4);
+  assert.equal(result.overlay, true);
+});
+
+test('M6.2.1 mobile ?perf=1 opt-in is isolated from normal game startup', () => {
+  const { run } = setup();
+  assert.equal(run('performanceOverlayOn'), false);
+  assert.equal(run("window.location={search:'?perf=1'}; shouldShowPerformanceOverlay()"), true);
+  assert.equal(run("window.location={search:'?x=1&perf=1&y=2'}; shouldShowPerformanceOverlay()"), true);
+  assert.equal(run("window.location={search:'?perf=10'}; shouldShowPerformanceOverlay()"), false);
+  assert.equal(run('window.getNeonPerformanceSnapshot().frame.sampleCount'), 0);
+});
