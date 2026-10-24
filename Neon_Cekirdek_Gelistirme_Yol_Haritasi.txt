@@ -1,10 +1,10 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.8 | İlk plan: 18.10.2026 | Durum: 24.10.2026
+Sürüm: 1.9 | İlk plan: 18.10.2026 | Durum: 24.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: M0-M5.5 tamamlandı; M6.1.1 main'de 236/236 CI PASS ve mobil 9/9 kullanıcı kabulü. Performans/bellek bakımı V2 içeriklerden önce gelir.
+Durum: M0-M6.2.1 kod paketleri main'de. PC performansı ve kod bakımı birincil; mobil ürün geliştirmesi ertelendi. M6.2-PC1 çarpışma tahsisleri PR incelemesinde.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -603,3 +603,27 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
   iş paketleriyle gelecek. M6 performans PR'larına V2 ekleme.
 [KORUNACAK] M4.3.3.2 kart tasarımı, M5.5 analiz raporu, şasi,
   oyuncu hissi, XP/altın, boss sırası, kalkan, diriliş ve save şeması.
+
+
+======================================================================
+22. M6.2-PC — PC ODAKLI OPTİMİZASYON, BELLEK VE KOD BAKIMI
+======================================================================
+
+[STRATEJİ] Önce PC'de kare zamanı, heap/GC ve kod istikrarı;
+  mobil arayüz, dokunmatik ürün tasarımı ve ekran yönü ayrı yol.
+  Tek ortak oyun mantığı, test ve kaynak korunacak.
+[M6.2-PC1] Çarpışma grid hücre dizileri en fazla 260 kapasiteli
+  havuzda tekrar kullanılır; düşman başına aday listesi her kare
+  yeniden allocate edilmez. Ters mermi sırası ve gerçek temas
+  korunur. Ayrıntı: docs/M6.2-PC1-collision-memory.md
+[OTOMATİK] 4 yeni regresyon testi, eski 240 testle birlikte CI.
+[KABUL] Gerçek PC'de FPS/P95 ve Chrome Performance GC ölçümü,
+  5/10/20/30 dakika ve üç şasi bazında ayrı doğrulanacak.
+[SONRA] M6.2-PC2 render grid/glow/UI boyama profili;
+  M6.2-PC3 ses/partikül/küre uzun oyun heap incelemesi;
+  M6.2-PC4 tarayıcı smoke, cihaz profili ve kalıcı bakım.
+[V2 SONRA] Gameplay V2, Görseller V2, UI V2, Efektler V2.
+  V2 ile PC stabilizasyonu aynı PR'da karıştırılmayacak.
+[NUMARALANDIRMA] Önceden taslak kalan M6.2.2 genel cihaz
+  kalite profili, mobil sürümü hedeflemeden önce PC özel
+  M6.2-PC paketleriyle yer değiştirir; tarihsel kayıt saklandı.
