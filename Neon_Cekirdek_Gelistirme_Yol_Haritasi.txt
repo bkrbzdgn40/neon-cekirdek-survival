@@ -1,10 +1,10 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.7 | İlk plan: 18.10.2026 | Durum: 19.10.2026
+Sürüm: 1.8 | İlk plan: 18.10.2026 | Durum: 24.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: M0-M5.5 tamamlandı, M5.5 manuel kabul edildi. M6.1.1 giriş güvenliği değişiklikleri PR incelemesindedir.
+Durum: M0-M5.5 tamamlandı; M6.1.1 main'de 236/236 CI PASS ve mobil 9/9 kullanıcı kabulü. Performans/bellek bakımı V2 içeriklerden önce gelir.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -575,3 +575,31 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
 [SONRAKİ] M6.1.2 uzun koşu koruması ve modal odak/erişilebilirlik;
   M6.1.3 çevrimdışı CSS; M6.1.4 tarayıcı smoke testi;
   M6.2 gerçek uzun koşu profil ölçümleri ve teknoloji kararı.
+
+
+======================================================================
+21. M6.2 — PERFORMANS VE BELLEK BAKIMI / V2 ÖNCESİ ZORUNLU AŞAMA
+======================================================================
+
+[MANUEL GÖZLEM] Telefon performansı belirgin düşük. Monster Abra
+  sorunsuz; ASUS TUF A15 (16 GB RAM) gibi bazı sistemlerde hafif
+  takılma var. RAM miktarı tek başına sebep/çözüm değil.
+[M6.1.1 KABUL] Mobil menü, başlatma, dokunmatik bırakma, hareket,
+  EMP/Atılım, yükseltme, dirilme, oyun sonu dahil 9/9 PASS.
+[M6.2.1] Canvas native DPR yerine piksel bütçesi; FPS, P95 kare
+  aralığı, CPU update/draw süreleri ve tek RGBA canvas tamponu için
+  teorik bellek etiketi; mobil ?perf=1. Bu ilk değişikliğin cihaz FPS
+  kazanımı ayrıca ölçülmeli. Ayrıntı: docs/M6.2.1-render-budget-telemetry.md
+[M6.2.2] Performansa göre ölçümlü render/kalite profilleri ve
+  masaüstü/mobil kalite karşılaştırması.
+[M6.2.3] Kare başına tahsis, GC, efektler, background grid ve
+  offscreen çizim darboğazlarını profil edip küçük paketlerle iyileştir.
+[M6.2.4] Uzun oyun canlı nesne envanteri, CPU/GPU bellek, ses ve
+  obje havuzu ihtiyaçlarını ölç. Gereksiz veya riskli pooling yapma.
+[M6.2.5] Üç şasi ve cihazlarla 5/10/20/30 dk gerçek FPS/P95 ve
+  boss okunurluğu kabulü; otomatik testler yalnızca destekleyicidir.
+[M6.3] Testler korunduktan sonra modüler kod bakımı ve teknik borç.
+[V2 SONRA] Gameplay V2, Görseller V2, UI V2, Efektler V2 ayrı
+  iş paketleriyle gelecek. M6 performans PR'larına V2 ekleme.
+[KORUNACAK] M4.3.3.2 kart tasarımı, M5.5 analiz raporu, şasi,
+  oyuncu hissi, XP/altın, boss sırası, kalkan, diriliş ve save şeması.

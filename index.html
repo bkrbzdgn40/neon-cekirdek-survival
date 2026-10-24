@@ -804,6 +804,7 @@
         .report-kpi-primary{border-color:#247e9a;background:linear-gradient(145deg,#123349,#0d192e)}
         .report-kpi-primary strong{color:#79edff}
         .report-kpi-gold strong{color:#ffe3a0}
+        #perfOverlay{max-width:min(680px,92vw);max-height:35dvh;overflow:hidden;line-height:1.5;overflow-wrap:anywhere;}
         .report-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin;padding:10px clamp(16px,4vw,42px);
             background:#0a1425;border-block:1px solid #27374c;position:sticky;top:0;z-index:2;}
         .report-tab{flex:0 0 auto;min-height:43px;padding:0 15px;border:1px solid transparent;border-radius:8px;
@@ -4858,9 +4859,27 @@
         const BULLET_GRID_SIZE = 96;
         const HUD_REFRESH_INTERVAL = 0.10;
         let hudRefreshAccumulator = 0;
-        let performanceOverlayOn = false;
+        function shouldShowPerformanceOverlay() {
+            // Mobile devices lack F3. A local ?perf=1 URL opts into diagnostics.
+            return /(?:^|[?&])perf=1(?:&|$)/.test(window.location?.search || '');
+        }
+        let performanceOverlayOn = shouldShowPerformanceOverlay();
         let performanceSampleFrames = 0;
         let performanceSampleMs = 0;
+        const PERFORMANCE_FRAME_WINDOW = 300;
+        const perfRecentFrameMs = new Float32Array(PERFORMANCE_FRAME_WINDOW);
+        let perfRecentFrameCount = 0;
+        let perfRecentFrameIndex = 0;
+        let perfUpdateTotalMs = 0;
+        let perfRenderTotalMs = 0;
+        function getPerformanceFrameStats() {
+            if (!perfRecentFrameCount) return { sampleCount: 0, avgMs: 0, p95Ms: 0 };
+            const values = Array.from(perfRecentFrameMs.subarray(0, perfRecentFrameCount))
+                .sort((a, b) => a - b);
+            const total = values.reduce((sum, ms) => sum + ms, 0);
+            return { sampleCount: values.length, avgMs: total / values.length,
+                p95Ms: values[Math.ceil(values.length * .95) - 1] };
+        }
         let bulletCollisionGrid = new Map();
         let largestBulletRadius = 0;
         let combatDirector = null;
@@ -7727,10 +7746,20 @@
             });
         }
 
+        // Bound backing-store pixels rather than simulating fewer enemies or weaker effects.
+        // Estimated one RGBA canvas buffer: width * height * 4 bytes, not total GPU memory.
+        function getRenderDpr(w, h, nativeDpr = 1) {
+            const compact = Math.min(w, h) < 900;
+            const pixelBudget = compact ? 1800000 : 6000000;
+            const dprCap = compact ? 1.75 : 2;
+            const safeDpr = Number.isFinite(nativeDpr) && nativeDpr > 0 ? nativeDpr : 1;
+            return Math.min(safeDpr, dprCap,
+                Math.sqrt(pixelBudget / Math.max(1, w * h)));
+        }
         function resizeCanvas() {
-            currentDpr = window.devicePixelRatio || 1;
             const w = document.documentElement.clientWidth || window.innerWidth;
             const h = document.documentElement.clientHeight || window.innerHeight;
+            currentDpr = getRenderDpr(w, h, window.devicePixelRatio || 1);
 
             const diag = Math.hypot(w, h);
             viewScale = Math.max(0.75, Math.min(1.9, diag / 1565));
@@ -7759,6 +7788,10 @@
             performanceOverlayOn = !performanceOverlayOn;
             performanceSampleFrames = 0;
             performanceSampleMs = 0;
+            perfRecentFrameCount = 0;
+            perfRecentFrameIndex = 0;
+            perfUpdateTotalMs = 0;
+            perfRenderTotalMs = 0;
             document.getElementById('perfOverlay').classList.toggle('hidden', !performanceOverlayOn);
         }
 
@@ -8060,18 +8093,7 @@
             const frameMs = Math.max(0, now - lastFrameTime);
             const dt = Math.min(0.05, frameMs / 1000);
             lastFrameTime = now;
-
-            if (performanceOverlayOn && frameMs > 0) {
-                performanceSampleFrames++;
-                performanceSampleMs += frameMs;
-                if (performanceSampleMs >= 1000) {
-                    const fps = Math.round(performanceSampleFrames * 1000 / performanceSampleMs);
-                    document.getElementById('perfOverlay').textContent =
-                        `FPS ${fps} | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length} | Küre ${orbs.length}/${orbs.reduce((sum, orb) => sum + orb.count, 0)} | Efekt ${particles.length} | Boss FX ${getBossFxQuality()} | Sandık ${lootChests.length} | ${combatDirector ? combatDirector.profile.label + '/' + combatDirector.profile.theme : '-'} | Baskın ${combatDirector?.pendingEncounter?.type || '-'} | Etkinlik ${combatDirector?.activeArenaEvent?.kind || '-'} | Sandık/dk ${combatDirector ? combatDirector.getDiagnostics().chestsPerMinute : 0}`;
-                    performanceSampleFrames = 0;
-                    performanceSampleMs = 0;
-                }
-            }
+            const frameCpuStart = performanceOverlayOn ? performance.now() : 0;
 
             if (gameState === 'MENU') {
                 for (const n of menuDemoNodes) {
@@ -8096,12 +8118,48 @@
                     showRevivePromptOrGameOver();
                 }
             }
+            const renderCpuStart = performanceOverlayOn ? performance.now() : 0;
             renderGame();
+            if (performanceOverlayOn && frameMs > 0) {
+                const renderCpuEnd = performance.now();
+                perfRecentFrameMs[perfRecentFrameIndex] = frameMs;
+                perfRecentFrameIndex = (perfRecentFrameIndex + 1) % PERFORMANCE_FRAME_WINDOW;
+                perfRecentFrameCount = Math.min(PERFORMANCE_FRAME_WINDOW, perfRecentFrameCount + 1);
+                performanceSampleFrames++;
+                performanceSampleMs += frameMs;
+                perfUpdateTotalMs += Math.max(0, renderCpuStart - frameCpuStart);
+                perfRenderTotalMs += Math.max(0, renderCpuEnd - renderCpuStart);
+                if (performanceSampleMs >= 1000) {
+                    const frames = Math.max(1, performanceSampleFrames);
+                    const fps = Math.round(performanceSampleFrames * 1000 / performanceSampleMs);
+                    const frame = getPerformanceFrameStats();
+                    const bufferMiB = (canvas.width * canvas.height * 4 / 1048576).toFixed(1);
+                    document.getElementById('perfOverlay').textContent =
+                        `FPS ${fps} | Kare Ort/P95 ${frame.avgMs.toFixed(1)}/${frame.p95Ms.toFixed(1)}ms (son ${frame.sampleCount} kare)` +
+                        ` | CPU Güncelleme/Çizim ${(perfUpdateTotalMs / frames).toFixed(1)}/${(perfRenderTotalMs / frames).toFixed(1)}ms` +
+                        ` | Canvas ${canvas.width}x${canvas.height} (~${bufferMiB} MiB / tek RGBA tampon) DPR ${currentDpr.toFixed(2)}` +
+                        ` | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length}` +
+                        ` | Küre ${orbs.length} | Efekt ${particles.length} | Sandık ${lootChests.length}`;
+                    performanceSampleFrames = 0;
+                    performanceSampleMs = 0;
+                    perfUpdateTotalMs = 0;
+                    perfRenderTotalMs = 0;
+                }
+            }
 
             requestAnimationFrame(gameLoop);
         }
 
         // Read-only run counters for balancing; no data leaves the local browser.
+        window.getNeonPerformanceSnapshot = () => ({
+            frame: getPerformanceFrameStats(),
+            nativeDpr: window.devicePixelRatio || 1,
+            renderDpr: currentDpr,
+            canvasWidth: canvas.width,
+            canvasHeight: canvas.height,
+            canvasBufferMiB: +(canvas.width * canvas.height * 4 / 1048576).toFixed(2),
+            state: gameState
+        });
         window.getNeonRunDiagnostics = () => combatDirector ? combatDirector.getDiagnostics() : null;
         window.getNeonEconomySnapshot = () => combatDirector ? combatDirector.getEconomySnapshot() : null;
         window.getNeonBuildSnapshot = () => player ? {
@@ -8117,6 +8175,7 @@
             initMenuDemoNodes();
             updateMenuCounters();
             scheduleMenuFit();
+            document.getElementById('perfOverlay').classList.toggle('hidden', !performanceOverlayOn);
             requestAnimationFrame(gameLoop);
         };
     </script>
