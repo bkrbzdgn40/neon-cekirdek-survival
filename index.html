@@ -4881,6 +4881,10 @@
                 p95Ms: values[Math.ceil(values.length * .95) - 1] };
         }
         let bulletCollisionGrid = new Map();
+        // These short-lived structures are reused in the PC collision hot path.
+        // Pool is capped so prolonged runs cannot retain an unbounded cell cache.
+        const bulletGridCellPool = [];
+        const bulletCandidateScratch = [];
         let largestBulletRadius = 0;
         let combatDirector = null;
 
@@ -5153,6 +5157,15 @@
         }
 
         function buildBulletCollisionGrid() {
+            // Recycling the previous frame's buckets avoids allocating one array per
+            // occupied cell on every frame. The grid itself still contains only
+            // current-frame keys, so moving shots never leave ghost collisions.
+            for (const cell of bulletCollisionGrid.values()) {
+                cell.length = 0;
+                if (bulletGridCellPool.length < MAX_PLAYER_PROJECTILES) {
+                    bulletGridCellPool.push(cell);
+                }
+            }
             bulletCollisionGrid.clear();
             largestBulletRadius = 0;
             for (let i = 0; i < bullets.length; i++) {
@@ -5162,21 +5175,23 @@
                 const key = `${Math.floor(b.x / BULLET_GRID_SIZE)},${Math.floor(b.y / BULLET_GRID_SIZE)}`;
                 let cell = bulletCollisionGrid.get(key);
                 if (!cell) {
-                    cell = [];
+                    cell = bulletGridCellPool.pop() || [];
                     bulletCollisionGrid.set(key, cell);
                 }
                 cell.push(i);
             }
         }
 
-        function getNearbyBulletIndices(x, y, enemyRadius) {
+        function getNearbyBulletIndices(x, y, enemyRadius, candidates = []) {
+            // Callers can supply scratch storage. The public/default behavior still
+            // returns an independent array, while updateGame reuses one per enemy.
+            candidates.length = 0;
             // Include the maximum projectile radius, so large bullets and bosses never miss cells.
             const reach = enemyRadius + largestBulletRadius;
             const minX = Math.floor((x - reach) / BULLET_GRID_SIZE);
             const maxX = Math.floor((x + reach) / BULLET_GRID_SIZE);
             const minY = Math.floor((y - reach) / BULLET_GRID_SIZE);
             const maxY = Math.floor((y + reach) / BULLET_GRID_SIZE);
-            const candidates = [];
             for (let gx = minX; gx <= maxX; gx++) {
                 for (let gy = minY; gy <= maxY; gy++) {
                     const cell = bulletCollisionGrid.get(`${gx},${gy}`);
@@ -6293,7 +6308,7 @@
                 const e = enemies[i];
                 e.update(dt * enemyTimeScale);
 
-                for (const j of getNearbyBulletIndices(e.x, e.y, e.radius)) {
+                for (const j of getNearbyBulletIndices(e.x, e.y, e.radius, bulletCandidateScratch)) {
                     const b = bullets[j];
                     if (b.dead || b.hitIds.has(e.id)) continue;
                     const dx = e.x - b.x;
