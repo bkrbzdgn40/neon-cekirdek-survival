@@ -3467,3 +3467,105 @@ test('M6.2.1 mobile ?perf=1 opt-in is isolated from normal game startup', () => 
   assert.equal(run("window.location={search:'?perf=10'}; shouldShowPerformanceOverlay()"), false);
   assert.equal(run('window.getNeonPerformanceSnapshot().frame.sampleCount'), 0);
 });
+
+
+test('M6.2.2 collision bucket is reused across frames without stale coordinates', () => {
+  const { run } = setup();
+  const data = JSON.parse(run(`(() => {
+    bullets = [{ x: 12, y: 24, radius: 5, dead: false }];
+    buildBulletCollisionGrid();
+    const oldBucket = bulletCollisionGrid.get('0,0');
+    const oldHits = getNearbyBulletIndices(12, 24, 8);
+    bullets[0].x = 400;
+    bullets[0].y = 200;
+    buildBulletCollisionGrid();
+    return JSON.stringify({
+      reused: bulletCollisionGrid.get('4,2') === oldBucket,
+      oldHits, oldCellPresent: bulletCollisionGrid.has('0,0'),
+      staleHits: getNearbyBulletIndices(12, 24, 8),
+      currentHits: getNearbyBulletIndices(400, 200, 8),
+      pool: bulletGridCellPool.length
+    });
+  })()`));
+  assert.equal(data.reused, true);
+  assert.deepEqual(data.oldHits, [0]);
+  assert.equal(data.oldCellPresent, false);
+  assert.deepEqual(data.staleHits, []);
+  assert.deepEqual(data.currentHits, [0]);
+  assert.equal(data.pool, 0);
+});
+
+test('M6.2.2 collision query scratch stays sorted, reusable and independent by default', () => {
+  const { run } = setup();
+  const data = JSON.parse(run(`(() => {
+    bullets = [
+      { x: 20, y: 20, radius: 6, dead: false },
+      { x: 22, y: 22, radius: 6, dead: false },
+      { x: 380, y: 20, radius: 6, dead: false }
+    ];
+    buildBulletCollisionGrid();
+    const scratch = ['previous', 999];
+    const first = getNearbyBulletIndices(20, 20, 10, scratch).slice();
+    const sameIdentity = getNearbyBulletIndices(380, 20, 10, scratch) === scratch;
+    const second = scratch.slice();
+    const directA = getNearbyBulletIndices(20, 20, 10);
+    const directB = getNearbyBulletIndices(20, 20, 10);
+    return JSON.stringify({ first, second, sameIdentity,
+      directA, directB, independent: directA !== directB });
+  })()`));
+  assert.deepEqual(data.first, [1, 0], 'reverse original projectile order is preserved');
+  assert.deepEqual(data.second, [2], 'old candidates are discarded between enemies');
+  assert.equal(data.sameIdentity, true);
+  assert.deepEqual(data.directA, [1, 0]);
+  assert.deepEqual(data.directB, [1, 0]);
+  assert.equal(data.independent, true, 'legacy/direct callers receive separate arrays');
+});
+
+test('M6.2.2 collision cell pool remains bounded through moving dense volleys', () => {
+  const { run } = setup();
+  const data = JSON.parse(run(`(() => {
+    bullets = Array.from({ length: 400 }, (_, i) =>
+      ({ x: (i * 101) % 2800, y: (i * 67) % 1900, radius: 5, dead: false }));
+    let highestPool = 0;
+    let largestGrid = 0;
+    for (let step = 0; step < 180; step++) {
+      for (const b of bullets) {
+        b.x = (b.x + 37) % 2800;
+        b.y = (b.y + 19) % 1900;
+      }
+      buildBulletCollisionGrid();
+      highestPool = Math.max(highestPool, bulletGridCellPool.length);
+      largestGrid = Math.max(largestGrid, bulletCollisionGrid.size);
+      if (bulletGridCellPool.length > MAX_PLAYER_PROJECTILES) throw Error('unbounded pool');
+    }
+    return JSON.stringify({ highestPool, largestGrid,
+      finalCells: bulletCollisionGrid.size, playerCap: MAX_PLAYER_PROJECTILES,
+      valid: getNearbyBulletIndices(bullets[3].x, bullets[3].y, 10).includes(3) });
+  })()`));
+  assert.ok(data.highestPool <= data.playerCap);
+  assert.ok(data.largestGrid <= 400);
+  assert.ok(data.finalCells > 0);
+  assert.equal(data.valid, true);
+});
+
+test('M6.2.2 dying projectiles are not revived by the recycled bucket cache', () => {
+  const { run } = setup();
+  const data = JSON.parse(run(`(() => {
+    bullets = [
+      { x: 48, y: 48, radius: 12, dead: false },
+      { x: 500, y: 500, radius: 6, dead: false }
+    ];
+    buildBulletCollisionGrid();
+    const start = getNearbyBulletIndices(48, 48, 16);
+    bullets[0].dead = true;
+    buildBulletCollisionGrid();
+    return JSON.stringify({ start,
+      removed: getNearbyBulletIndices(48, 48, 16),
+      survivor: getNearbyBulletIndices(500, 500, 10),
+      maxRadius: largestBulletRadius });
+  })()`));
+  assert.deepEqual(data.start, [0]);
+  assert.deepEqual(data.removed, []);
+  assert.deepEqual(data.survivor, [1]);
+  assert.equal(data.maxRadius, 6);
+});
