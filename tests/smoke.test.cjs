@@ -8,7 +8,7 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
 const gameCode = scripts.at(-1)?.[1];
 
-function setup(stored = {}) {
+function setup(stored = {}, options = {}) {
   const nodes = new Map();
   const noop = () => {};
   const windowListeners = new Map();
@@ -30,7 +30,7 @@ function setup(stored = {}) {
       click() { emit(elementListeners, 'click', { target: this }); },
       appendChild: noop,
        _attrs: {}, setAttribute(key, value) { this._attrs[key] = value; },
-      getContext: () => new Proxy({}, { get: () => noop }),
+      getContext: () => options.canvasContext || new Proxy({}, { get: () => noop }),
       querySelector: () => element(),
       getAttribute: () => '',
     };
@@ -3568,4 +3568,151 @@ test('M6.2.2 dying projectiles are not revived by the recycled bucket cache', ()
   assert.deepEqual(data.removed, []);
   assert.deepEqual(data.survivor, [1]);
   assert.equal(data.maxRadius, 6);
+});
+
+
+test('M6.2-PC2 straight grid draws same sampled end coordinates with two path points', () => {
+  const trace = [];
+  const context = new Proxy({}, {
+    get(_, key) { return (...args) => { trace.push({ kind: String(key), args }); }; }
+  });
+  const { run } = setup({}, { canvasContext: context });
+  trace.length = 0;
+  const result = JSON.parse(run(`(() => {
+    worldWidth = 100; worldHeight = 81; gridOffset.x = -5; gridOffset.y = 7;
+    shockwaves = [];
+    drawBackgroundGrid();
+    return JSON.stringify({ waveCount: shockwaves.length, worldWidth, worldHeight });
+  })()`));
+  assert.equal(result.waveCount, 0);
+  const moves = trace.filter(t => t.kind === 'moveTo').map(t => t.args);
+  const lines = trace.filter(t => t.kind === 'lineTo').map(t => t.args);
+  assert.deepEqual(moves, [[-5, 0], [43, 0], [91, 0], [0, 7], [0, 55]]);
+  assert.deepEqual(lines, [[-5, 64], [43, 64], [91, 64], [96, 7], [96, 55]]);
+  assert.equal(trace.filter(t => t.kind === 'stroke').length, 5);
+  assert.equal(trace.filter(t => t.kind === 'beginPath').length, 5);
+});
+
+test('M6.2-PC2 active shockwave retains dense distorted grid sampling', () => {
+  const trace = [];
+  const context = new Proxy({}, {
+    get(_, key) { return (...args) => { trace.push({ kind: String(key), args }); }; }
+  });
+  const { run } = setup({}, { canvasContext: context });
+  trace.length = 0;
+  const state = JSON.parse(run(`(() => {
+    startNewGame();
+    worldWidth = 100; worldHeight = 81;
+    gridOffset.x = -5; gridOffset.y = 7;
+    const before = { hp: player.hp, gold: totalGold, kills };
+    shockwaves = [{ x: 35, y: 20, maxRadius: 110, elapsed: .2, duration: .4 }];
+    drawBackgroundGrid();
+    return JSON.stringify({ before, after: { hp: player.hp, gold: totalGold, kills } });
+  })()`));
+  assert.deepEqual(state.after, state.before);
+  assert.ok(trace.filter(t => t.kind === 'lineTo').length > 5,
+    'shockwave path keeps original 32px subdivision and distortion');
+  assert.equal(trace.filter(t => t.kind === 'stroke').length, 5);
+});
+
+test('M6.2-PC2 atmosphere palettes are stable immutable records with unchanged danger priority', () => {
+  const { run } = setup();
+  const state = JSON.parse(run(`JSON.stringify({
+    repeat: getArenaAtmosphereProfile('CRISIS', false) ===
+      getArenaAtmosphereProfile('CRISIS', false),
+    frozen: Object.isFrozen(getArenaAtmosphereProfile('CRISIS', false)),
+    bossOverrides: getArenaAtmosphereProfile('BOSS', true).id,
+    warningOverrides: getArenaAtmosphereProfile('WARNING', true).id,
+    overdrive: getArenaAtmosphereProfile('PRESSURE', true).id,
+    crisis: getArenaAtmosphereProfile('CRISIS', false)
+  })`));
+  assert.equal(state.repeat, true);
+  assert.equal(state.frozen, true);
+  assert.equal(state.bossOverrides, 'danger');
+  assert.equal(state.warningOverrides, 'danger');
+  assert.equal(state.overdrive, 'overdrive');
+  assert.deepEqual(state.crisis, {
+    id: 'crisis', color: '#f4a44b', accent: '#ff6277', strength: 0.68, speed: 1.6
+  });
+});
+
+test('M6.2-PC2 stable boss HUD skips expensive markup and gradient DOM writes', () => {
+  const { run } = setup();
+  const state = JSON.parse(run(`(() => {
+    startNewGame();
+    const strip = document.getElementById('bossIdentityStrip');
+    const bar = document.getElementById('bossHpBar');
+    const dash = document.getElementById('dashStatus');
+    const nova = document.getElementById('novaStatus');
+    let htmlWrites = 0, gradientWrites = 0, dashClassWrites = 0, novaClassWrites = 0;
+    let markup = '', gradient = '', dashClass = '', novaClass = '';
+    Object.defineProperty(strip, 'innerHTML', {
+      get() { return markup; }, set(v) { htmlWrites++; markup = v; }, configurable: true
+    });
+    Object.defineProperty(bar.style, 'background', {
+      get() { return 'browser-normalized:' + gradient; },
+      set(v) { gradientWrites++; gradient = v; }, configurable: true
+    });
+    for (const [el, kind] of [[dash, 'dash'], [nova, 'nova']]) {
+      Object.defineProperty(el, 'className', {
+        get() { return kind === 'dash' ? dashClass : novaClass; },
+        set(v) {
+          if (kind === 'dash') { dashClassWrites++; dashClass = v; }
+          else { novaClassWrites++; novaClass = v; }
+        }, configurable: true
+      });
+    }
+    activeBosses = [{
+      dead: false, hp: 120, maxHp: 150, bossName: 'TEST BOSS',
+      color: '#f80', bossPhase: 1, bossVisual: { tag: 'TEST' }
+    }];
+    updateHUD();
+    updateHUD();
+    const stable = { htmlWrites, gradientWrites, dashClassWrites, novaClassWrites };
+    activeBosses[0].hp = 90;
+    updateHUD();
+    const hpOnly = { htmlWrites, gradientWrites, hpText: document.getElementById('bossHpText').textContent };
+    activeBosses[0].bossPhase = 2;
+    updateHUD();
+    const phase = { htmlWrites, gradientWrites, markup };
+    activeBosses[0].color = '#0f0';
+    updateHUD();
+    const color = { htmlWrites, gradientWrites, gradient };
+    player.dashCooldown = 1;
+    player.novaCooldown = 2;
+    updateHUD(); updateHUD();
+    const cooldown = { dashClassWrites, novaClassWrites };
+    return JSON.stringify({ stable, hpOnly, phase, color, cooldown });
+  })()`));
+  assert.deepEqual(state.stable, { htmlWrites: 1, gradientWrites: 1, dashClassWrites: 1, novaClassWrites: 1 });
+  assert.equal(state.hpOnly.htmlWrites, 1);
+  assert.equal(state.hpOnly.gradientWrites, 1);
+  assert.match(state.hpOnly.hpText, /90 \/ 150/);
+  assert.equal(state.phase.htmlWrites, 2);
+  assert.equal(state.phase.gradientWrites, 1);
+  assert.match(state.phase.markup, /F2/);
+  assert.equal(state.color.htmlWrites, 3);
+  assert.equal(state.color.gradientWrites, 2);
+  assert.match(state.color.gradient, /#0f0/);
+  assert.deepEqual(state.cooldown, { dashClassWrites: 2, novaClassWrites: 2 });
+});
+
+test('M6.2-PC2 restarting a run invalidates boss HUD value cache', () => {
+  const { run } = setup();
+  const state = JSON.parse(run(`(() => {
+    startNewGame();
+    activeBosses = [{
+      dead: false, hp: 60, maxHp: 100, bossName: 'CORE',
+      color: '#ff738f', bossPhase: 1, bossVisual: { tag: 'A' }
+    }];
+    updateHUD();
+    const filled = lastBossGradientColor !== null && lastBossIdentityMarkup !== null;
+    startNewGame();
+    return JSON.stringify({ filled, gradientReset: lastBossGradientColor,
+      markupReset: lastBossIdentityMarkup, active: gameState === 'PLAYING' });
+  })()`));
+  assert.equal(state.filled, true);
+  assert.equal(state.gradientReset, null);
+  assert.equal(state.markupReset, null);
+  assert.equal(state.active, true);
 });
