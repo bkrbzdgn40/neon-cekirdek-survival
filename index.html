@@ -6878,6 +6878,10 @@
             }
         }
 
+        // Cache source values, not serialized DOM strings: browsers can normalize
+        // CSS gradients and inline style markup on readback.
+        let lastBossGradientColor = null;
+        let lastBossIdentityMarkup = null;
         function updateHUD() {
             if (!player) return;
 
@@ -6986,8 +6990,10 @@
                 const hud=document.getElementById('bossHudContainer');
                 hud.style.borderColor=color;
                 const hpBar=document.getElementById('bossHpBar');
-                const bossGradient = 'linear-gradient(90deg,#630e28,'+color+' 72%,#eaffff)';
-                if (hpBar.style.background !== bossGradient) hpBar.style.background = bossGradient;
+                if (lastBossGradientColor !== color) {
+                    hpBar.style.background = 'linear-gradient(90deg,#630e28,'+color+' 72%,#eaffff)';
+                    lastBossGradientColor = color;
+                }
                 if(nameEl && nameEl.style.color!==color)nameEl.style.color=color;
                 const phaseEl=document.getElementById('bossPhaseText');
                 if(phaseEl)phaseEl.textContent=living.length>1?'FAZLAR AYRI':
@@ -6997,7 +7003,10 @@
                     const nextStrip = living.map(b=>'<span class="boss-id-chip" style="color:'+
                         b.color+';border-color:'+b.color+'">'+b.bossVisual.tag+' · F'+
                         b.bossPhase+'</span>').join('');
-                    if (strip.innerHTML !== nextStrip) strip.innerHTML = nextStrip;
+                    if (lastBossIdentityMarkup !== nextStrip) {
+                        strip.innerHTML = nextStrip;
+                        lastBossIdentityMarkup = nextStrip;
+                    }
                 }
             }
 
@@ -7054,6 +7063,8 @@
 
         function startNewGame() {
             clearGameplayInput();
+            lastBossGradientColor = null;
+            lastBossIdentityMarkup = null;
             audio.init();
             resizeCanvas();
             player = new Player(worldWidth / 2, worldHeight / 2);
