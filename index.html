@@ -6223,11 +6223,13 @@
                 const upcomingCount=getBossCountForEncounter(bossEncounterCount+1);
                 const upcomingPlan=getBossEncounterPlan(bossEncounterCount+1);
                 if (warnText) {
-                    warnText.textContent=upcomingCount>1?
+                    const nextLabel = upcomingCount>1?
                         upcomingCount+' BOSS · '+upcomingPlan.label:
                         'BOSS YAKLAŞIYOR';
-                    warnText.title=upcomingPlan.types.map(type=>
+                    if (warnText.textContent !== nextLabel) warnText.textContent = nextLabel;
+                    const nextTitle = upcomingPlan.types.map(type=>
                         BOSS_ARCHETYPES.find(arch=>arch.type===type).name).join(' + ');
+                    if (warnText.title !== nextTitle) warnText.title = nextTitle;
                 }
                 warnBanner.classList.remove('hidden');
             } else {
@@ -6421,6 +6423,26 @@
             }
         }
 
+        // No shockwave: straight grid geometry needs only two path points per
+        // line, rather than 32px subdivisions across the entire arena.
+        function drawStraightGridLines(targetCtx, offset, width, height, spacing = 48) {
+            // The legacy path ended at the last 32px sample, not at the viewport edge.
+            const lastVerticalY = Math.floor(height / 32) * 32;
+            const lastHorizontalX = Math.floor(width / 32) * 32;
+            for (let x = offset.x; x < width; x += spacing) {
+                targetCtx.beginPath();
+                targetCtx.moveTo(x, 0);
+                targetCtx.lineTo(x, lastVerticalY);
+                targetCtx.stroke();
+            }
+            for (let y = offset.y; y < height; y += spacing) {
+                targetCtx.beginPath();
+                targetCtx.moveTo(0, y);
+                targetCtx.lineTo(lastHorizontalX, y);
+                targetCtx.stroke();
+            }
+        }
+
         function drawBackgroundGrid() {
             ctx.fillStyle = '#050816';
             ctx.fillRect(0, 0, worldWidth, worldHeight);
@@ -6439,12 +6461,18 @@
             }
 
             const spacing = 48;
+            ctx.strokeStyle = (player && player.overdriveActive) ? 'rgba(255, 0, 127, 0.14)' : 'rgba(0, 243, 255, 0.08)';
+            ctx.lineWidth = 1;
+            if (shockwaves.length === 0) {
+                drawStraightGridLines(ctx, gridOffset, worldWidth, worldHeight, spacing);
+                return;
+            }
+            // Only sample and distort the grid during a visible shockwave.
+            // This branch retains the original shockwave path and geometry.
             const gridShockwaves = shockwaves.map(sw => {
                 const progress = sw.elapsed / sw.duration;
                 return { x: sw.x, y: sw.y, radius: sw.maxRadius * progress, displacement: 9 * (1 - progress) };
             });
-            ctx.strokeStyle = (player && player.overdriveActive) ? 'rgba(255, 0, 127, 0.14)' : 'rgba(0, 243, 255, 0.08)';
-            ctx.lineWidth = 1;
 
             for (let x = gridOffset.x; x < worldWidth; x += spacing) {
                 ctx.beginPath();
@@ -6487,18 +6515,23 @@
 
         // The ambient palette reacts to encounter pacing, never to random FX.
         // Boss warning contrast overrides player Overdrive so danger remains legible.
+        // Immutable phase palettes prevent a short-lived object allocation
+        // on every active render frame without reducing neon visual intensity.
+        const ARENA_ATMOSPHERE_PROFILES = Object.freeze({
+            danger: Object.freeze({ id:'danger', color:'#ff526d', accent:'#ffb15c', strength:0.83, speed:1.8 }),
+            overdrive: Object.freeze({ id:'overdrive', color:'#ff3ba7', accent:'#5de7ff', strength:0.8, speed:2.1 }),
+            crisis: Object.freeze({ id:'crisis', color:'#f4a44b', accent:'#ff6277', strength:0.68, speed:1.6 }),
+            pressure: Object.freeze({ id:'pressure', color:'#00cde7', accent:'#9776ff', strength:0.54, speed:1.3 }),
+            recovery: Object.freeze({ id:'recovery', color:'#39c7a5', accent:'#48a9db', strength:0.32, speed:0.65 }),
+            buildup: Object.freeze({ id:'buildup', color:'#25b2d7', accent:'#567ad1', strength:0.39, speed:0.8 })
+        });
         function getArenaAtmosphereProfile(phase, overdrive) {
-            if (phase === 'WARNING' || phase === 'BOSS')
-                return { id:'danger', color:'#ff526d', accent:'#ffb15c', strength:0.83, speed:1.8 };
-            if (overdrive)
-                return { id:'overdrive', color:'#ff3ba7', accent:'#5de7ff', strength:0.8, speed:2.1 };
-            if (phase === 'CRISIS')
-                return { id:'crisis', color:'#f4a44b', accent:'#ff6277', strength:0.68, speed:1.6 };
-            if (phase === 'PRESSURE')
-                return { id:'pressure', color:'#00cde7', accent:'#9776ff', strength:0.54, speed:1.3 };
-            if (phase === 'RECOVERY')
-                return { id:'recovery', color:'#39c7a5', accent:'#48a9db', strength:0.32, speed:0.65 };
-            return { id:'buildup', color:'#25b2d7', accent:'#567ad1', strength:0.39, speed:0.8 };
+            if (phase === 'WARNING' || phase === 'BOSS') return ARENA_ATMOSPHERE_PROFILES.danger;
+            if (overdrive) return ARENA_ATMOSPHERE_PROFILES.overdrive;
+            if (phase === 'CRISIS') return ARENA_ATMOSPHERE_PROFILES.crisis;
+            if (phase === 'PRESSURE') return ARENA_ATMOSPHERE_PROFILES.pressure;
+            if (phase === 'RECOVERY') return ARENA_ATMOSPHERE_PROFILES.recovery;
+            return ARENA_ATMOSPHERE_PROFILES.buildup;
         }
 
         const PREFERS_REDUCED_VFX_MOTION =
@@ -6845,6 +6878,10 @@
             }
         }
 
+        // Cache source values, not serialized DOM strings: browsers can normalize
+        // CSS gradients and inline style markup on readback.
+        let lastBossGradientColor = null;
+        let lastBossIdentityMarkup = null;
         function updateHUD() {
             if (!player) return;
 
@@ -6953,15 +6990,24 @@
                 const hud=document.getElementById('bossHudContainer');
                 hud.style.borderColor=color;
                 const hpBar=document.getElementById('bossHpBar');
-                hpBar.style.background='linear-gradient(90deg,#630e28,'+color+' 72%,#eaffff)';
-                if(nameEl)nameEl.style.color=color;
+                if (lastBossGradientColor !== color) {
+                    hpBar.style.background = 'linear-gradient(90deg,#630e28,'+color+' 72%,#eaffff)';
+                    lastBossGradientColor = color;
+                }
+                if(nameEl && nameEl.style.color!==color)nameEl.style.color=color;
                 const phaseEl=document.getElementById('bossPhaseText');
                 if(phaseEl)phaseEl.textContent=living.length>1?'FAZLAR AYRI':
                     'FAZ '+(primary?.bossPhase||1)+' / 3';
                 const strip=document.getElementById('bossIdentityStrip');
-                if(strip)strip.innerHTML=living.map(b=>'<span class="boss-id-chip" style="color:'+
-                    b.color+';border-color:'+b.color+'">'+b.bossVisual.tag+' · F'+
-                    b.bossPhase+'</span>').join('');
+                if (strip) {
+                    const nextStrip = living.map(b=>'<span class="boss-id-chip" style="color:'+
+                        b.color+';border-color:'+b.color+'">'+b.bossVisual.tag+' · F'+
+                        b.bossPhase+'</span>').join('');
+                    if (lastBossIdentityMarkup !== nextStrip) {
+                        strip.innerHTML = nextStrip;
+                        lastBossIdentityMarkup = nextStrip;
+                    }
+                }
             }
 
             const dashPct = (player.dashCooldown / player.dashMaxCooldown) * 100;
@@ -6969,10 +7015,12 @@
             const dashStatus = document.getElementById('dashStatus');
             if (player.dashCooldown <= 0) {
                 dashStatus.textContent = 'HAZIR';
-                dashStatus.className = 'font-cyber text-xs font-bold text-green-400 relative z-10';
+                const nextDashClass = 'font-cyber text-xs font-bold text-green-400 relative z-10';
+                if (dashStatus.className !== nextDashClass) dashStatus.className = nextDashClass;
             } else {
                 dashStatus.textContent = `${player.dashCooldown.toFixed(1)}s`;
-                dashStatus.className = 'font-cyber text-xs font-bold text-cyan-300 relative z-10';
+                const nextDashClass = 'font-cyber text-xs font-bold text-cyan-300 relative z-10';
+                if (dashStatus.className !== nextDashClass) dashStatus.className = nextDashClass;
             }
 
             const novaPct = (player.novaCooldown / player.novaMaxCooldown) * 100;
@@ -6980,10 +7028,12 @@
             const novaStatus = document.getElementById('novaStatus');
             if (player.novaCooldown <= 0) {
                 novaStatus.textContent = 'HAZIR';
-                novaStatus.className = 'font-cyber text-xs font-bold text-green-400 relative z-10';
+                const nextNovaClass = 'font-cyber text-xs font-bold text-green-400 relative z-10';
+                if (novaStatus.className !== nextNovaClass) novaStatus.className = nextNovaClass;
             } else {
                 novaStatus.textContent = `${player.novaCooldown.toFixed(1)}s`;
-                novaStatus.className = 'font-cyber text-xs font-bold text-purple-300 relative z-10';
+                const nextNovaClass = 'font-cyber text-xs font-bold text-purple-300 relative z-10';
+                if (novaStatus.className !== nextNovaClass) novaStatus.className = nextNovaClass;
             }
         }
 
@@ -7013,6 +7063,8 @@
 
         function startNewGame() {
             clearGameplayInput();
+            lastBossGradientColor = null;
+            lastBossIdentityMarkup = null;
             audio.init();
             resizeCanvas();
             player = new Player(worldWidth / 2, worldHeight / 2);

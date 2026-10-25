@@ -1,10 +1,10 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.9 | İlk plan: 18.10.2026 | Durum: 24.10.2026
+Sürüm: 1.10 | İlk plan: 18.10.2026 | Durum: 25.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: M0-M6.2.1 kod paketleri main'de. PC performansı ve kod bakımı birincil; mobil ürün geliştirmesi ertelendi. M6.2-PC1 çarpışma tahsisleri PR incelemesinde.
+Durum: M0-M6.2-PC1 main'de (244/244 CI PASS). PC performansı ve kod bakımı birincil, mobil ürün geliştirmesi ertelendi. M6.2-PC2 çizim/HUD iyileştirmeleri PR incelemesinde.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -627,3 +627,24 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
 [NUMARALANDIRMA] Önceden taslak kalan M6.2.2 genel cihaz
   kalite profili, mobil sürümü hedeflemeden önce PC özel
   M6.2-PC paketleriyle yer değiştirir; tarihsel kayıt saklandı.
+
+
+======================================================================
+23. M6.2-PC2 — CANVAS GRID / NEON PALET / HUD ÇİZİM BAKIMI
+======================================================================
+
+[KOD] Şok dalgası YOK iken grid çizgilerinde 32 birimlik pahalı
+  adım döngüsü yerine aynı örneklenmiş son noktaya tek doğru
+  segmenti çizilir. Şok dalgası VARKEN eski deformasyon korunur.
+[KOD] Neon atmosfer renk/yoğunluk profilleri frozen paylaşımlı
+  nesnelerdir; her render'da kısa ömürlü palette nesnesi üretilmez.
+[KOD] Boss kimlik rozeti, gradyan, cooldown CSS sınıfları ve boss
+  yaklaşma metinleri, kaynak değeri değişmiyorsa yeniden yazılmaz.
+  Yeni koşu boss HUD cache'lerini sıfırlar.
+[KORUNDU] shadowBlur/glow yoğunluk ve efekt bütçeleri, uyarı
+  okunurluğu, HP/XP, şasi, boss sırası, kartlar, M5.5 raporu.
+[TEST] Eski 244 smoke + 5 yeni beklenir; tarayıcıda gerçek FPS/P95
+  kazancı ayrıca ölçülmeden başarılı optimizasyon ilan edilmez.
+[BELGE] docs/M6.2-PC2-canvas-hud.md
+[SONRA] M6.2-PC3 profilleme odaklı gölge/gradient/offscreen
+  çizim optimizasyonu ve M6.2-PC4 uzun oyun heap/GC doğrulaması.
