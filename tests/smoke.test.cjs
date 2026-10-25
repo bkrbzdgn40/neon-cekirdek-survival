@@ -36,7 +36,7 @@ function setup(stored = {}, options = {}) {
     };
   }
   const document = {
-    documentElement: { clientWidth: 1280, clientHeight: 720 },
+    documentElement: { clientWidth: 1280, clientHeight: 720, dataset: {} },
     getElementById: (id) => {
       if (!nodes.has(id)) nodes.set(id, element());
       return nodes.get(id);
@@ -3955,4 +3955,135 @@ test('M6.2-PC3 hourly sample ring is bounded and returned chronologically', () =
   assert.equal(data.first, 55);
   assert.equal(data.last, 3650);
   assert.equal(data.heapUnavailable, null);
+});
+
+
+test('M6.2-PC4 graphics settings load, synchronize controls and persist across sessions', () => {
+  const store={};
+  const { run } = setup(store);
+  const states = JSON.parse(run(`(() => {
+    const initial={quality:graphicsQuality,root:document.documentElement.dataset.graphicsQuality,
+      menu:document.getElementById('menuGraphicsQuality').value,
+      pause:document.getElementById('pauseGraphicsQuality').value};
+    const accepted=applyGraphicsQuality('low');
+    const selected={quality:graphicsQuality,root:document.documentElement.dataset.graphicsQuality,
+      menu:document.getElementById('menuGraphicsQuality').value,
+      pause:document.getElementById('pauseGraphicsQuality').value,
+      stored:localStorage.getItem(GRAPHICS_SAVE_KEY)};
+    const rejected=applyGraphicsQuality('ultra');
+    return JSON.stringify({initial,accepted,selected,rejected,afterReject:graphicsQuality});
+  })()`));
+  assert.deepEqual(states.initial,{quality:'high',root:'high',menu:'high',pause:'high'});
+  assert.equal(states.accepted,true);
+  assert.deepEqual(states.selected,{quality:'low',root:'low',menu:'low',pause:'low',stored:'low'});
+  assert.equal(states.rejected,false);
+  assert.equal(states.afterReject,'low');
+  const reloaded=setup(store);
+  assert.equal(reloaded.run('graphicsQuality'),'low');
+  assert.equal(reloaded.run('document.getElementById("menuGraphicsQuality").value'),'low');
+  assert.equal(reloaded.run('document.getElementById("pauseGraphicsQuality").value'),'low');
+});
+
+test('M6.2-PC4 invalid and blocked graphics storage safely falls back to High', () => {
+  const invalid=setup({'neonCekirdek.graphics.v1':'super-max'}).run('graphicsQuality');
+  assert.equal(invalid,'high');
+  const {run}=setup();
+  const r=JSON.parse(run(`(() => {
+    localStorage.setItem = () => { throw Error('blocked'); };
+    const accepted=applyGraphicsQuality('medium');
+    return JSON.stringify({accepted,quality:graphicsQuality,
+      root:document.documentElement.dataset.graphicsQuality});
+  })()`));
+  assert.deepEqual(r,{accepted:true,quality:'medium',root:'medium'});
+});
+
+test('M6.2-PC4 quality graphics profiles visibly differ without modifying world space', () => {
+  const {run}=setup();
+  const p=JSON.parse(run(`(() => {
+    const rows={};
+    for(const q of ['high','medium','low']) {
+      applyGraphicsQuality(q);
+      const world={width:worldWidth,height:worldHeight,scale:viewScale};
+      rows[q]={dpr:getRenderDpr(1920,1080,3),
+        blur:getGraphicsBlur(20),fx:getBossFxQuality(),
+        spacing:getGraphicsPreset().gridSpacing,
+        particles:getGraphicsPreset().particleDrawRatio,
+        world};
+    }
+    return JSON.stringify(rows);
+  })()`));
+  assert.ok(p.high.dpr>p.medium.dpr&&p.medium.dpr>p.low.dpr);
+  assert.equal(p.high.blur,20);
+  assert.equal(p.medium.blur,9);
+  assert.equal(p.low.blur,0);
+  assert.equal(p.high.fx,2);
+  assert.equal(p.medium.fx,1);
+  assert.equal(p.low.fx,0);
+  assert.deepEqual([p.high.spacing,p.medium.spacing,p.low.spacing],[48,64,96]);
+  assert.deepEqual([p.high.particles,p.medium.particles,p.low.particles],[1,.68,.35]);
+  assert.deepEqual(p.high.world,p.medium.world);
+  assert.deepEqual(p.medium.world,p.low.world);
+});
+
+test('M6.2-PC4 medium and low selectively reduce cosmetic particle draws only', () => {
+  const {run}=setup();
+  const data=JSON.parse(run(`(() => {
+    const drawn=[];
+    const items=Array.from({length:100},(_,i)=>({x:300,y:300,radius:2,
+      draw(){drawn.push(i);}}));
+    const rows={};
+    for(const q of ['high','medium','low']) {
+      applyGraphicsQuality(q);
+      drawn.length=0;
+      drawVisibleFxCollection(items,12,getGraphicsPreset().particleDrawRatio);
+      rows[q]=drawn.length;
+    }
+    drawn.length=0;drawVisibleFxCollection(items,20);
+    return JSON.stringify({rows,shots:drawn.length,intact:items.length});
+  })()`));
+  assert.deepEqual(data.rows,{high:100,medium:70,low:40});
+  assert.equal(data.shots,100);
+  assert.equal(data.intact,100);
+});
+
+test('M6.2-PC4 frozen upgrade card state renders canvas once, then invalidates on quality change', () => {
+  const calls=[];
+  const context=new Proxy({}, {get(_,key){return (...args)=>calls.push(String(key));}});
+  const {run}=setup({}, {canvasContext:context});
+  const data=JSON.parse(run(`(() => {
+    startNewGame();
+    gameState='LEVEL_UP';
+    lastFrameTime=0;
+    gameLoop(16);
+    const first=canvasRenderInvalidated===false&&lastCanvasRenderedState==='LEVEL_UP';
+    gameLoop(32);
+    const steady=canvasRenderInvalidated===false;
+    const firstCount=pc3RenderCounts.visible+pc3RenderCounts.skipped;
+    applyGraphicsQuality('low');
+    const dirty=canvasRenderInvalidated;
+    gameLoop(48);
+    return JSON.stringify({first,steady,firstCount,dirty,
+      after:canvasRenderInvalidated,last:lastCanvasRenderedState,
+      quality:graphicsQuality});
+  })()`));
+  assert.equal(data.first,true);
+  assert.equal(data.steady,true);
+  assert.equal(data.dirty,true);
+  assert.equal(data.after,false);
+  assert.equal(data.last,'LEVEL_UP');
+  assert.equal(data.quality,'low');
+});
+
+test('M6.2-PC4 card overlay has low-cost backdrop and animation rules by quality',()=>{
+  for (const needle of [
+    'id="menuGraphicsQuality"', 'id="pauseGraphicsQuality"',
+    'html[data-graphics-quality="low"] .upgrade-card',
+    'html[data-graphics-quality="medium"] .upgrade-card',
+    'backdrop-filter:none!important',
+    'backdrop-filter:blur(2px)!important',
+    '.upgrade-card .upgrade-evolution-orbit',
+    'select id="pauseGraphicsQuality"'
+  ]) assert.ok(html.includes(needle),needle);
+  assert.ok(!html.includes('renderGame()\n            capturePc3LongRunSample()'),
+    'frozen modal must not call canvas render every frame');
 });

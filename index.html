@@ -181,6 +181,43 @@
             #bossWarningBanner .warning-pill { font-size: 12px; padding: .5rem .8rem; }
             #killstreakBanner .event-pill { font-size: 12px; padding: .4rem .7rem; }
         }
+        /* PC graphic profiles: high retains original presentation. Modal blur
+           and continuously animated card shadows are expensive on weaker GPUs. */
+        .graphics-quality-select { background:#101e32;color:#e5f7ff;border:1px solid #4385a1;
+            border-radius:7px;padding:5px 7px;font:700 11px 'Orbitron',sans-serif;cursor:pointer; }
+        .graphics-quality-select:focus-visible { outline:2px solid #67e8f9;outline-offset:2px; }
+        html[data-graphics-quality="medium"] :is(#startModal,#upgradeModal,#pauseModal,#shopModal,#reviveModal,#gameOverModal),
+        html[data-graphics-quality="medium"] .backdrop-blur-md { backdrop-filter:blur(2px)!important;-webkit-backdrop-filter:blur(2px)!important; }
+        html[data-graphics-quality="low"] :is(#startModal,#upgradeModal,#pauseModal,#shopModal,#reviveModal,#gameOverModal),
+        html[data-graphics-quality="low"] .backdrop-blur-md { backdrop-filter:none!important;-webkit-backdrop-filter:none!important; }
+        html[data-graphics-quality="medium"] .upgrade-card[data-rarity="LEGENDARY"],
+        html[data-graphics-quality="medium"] .upgrade-card[data-rarity="EPIC"],
+        html[data-graphics-quality="medium"] .upgrade-card .upgrade-evolution-orbit,
+        html[data-graphics-quality="medium"] .upgrade-card .upgrade-weapon-scan,
+        html[data-graphics-quality="medium"] .upgrade-card::after { animation:none!important; }
+        html[data-graphics-quality="medium"] .upgrade-card { box-shadow:0 5px 12px rgba(0,0,0,.35)!important; }
+        html[data-graphics-quality="medium"] .upgrade-card:hover,
+        html[data-graphics-quality="medium"] .upgrade-card:focus-visible { box-shadow:0 8px 16px rgba(0,0,0,.44),0 0 7px var(--card-glow)!important; }
+        html[data-graphics-quality="low"] .upgrade-card,
+        html[data-graphics-quality="low"] .upgrade-card *,
+        html[data-graphics-quality="low"] .upgrade-card::before,
+        html[data-graphics-quality="low"] .upgrade-card::after {
+            animation:none!important;transition:none!important;filter:none!important;
+            box-shadow:none!important;text-shadow:none!important; }
+        html[data-graphics-quality="low"] .upgrade-card { background:#0b1525!important;transform:none!important; }
+        html[data-graphics-quality="low"] .upgrade-card:hover,
+        html[data-graphics-quality="low"] .upgrade-card:focus-visible { transform:none!important;outline:2px solid var(--rarity-ink);outline-offset:2px; }
+        html[data-graphics-quality="low"] .upgrade-card::after,
+        html[data-graphics-quality="low"] .upgrade-card .upgrade-evolution-orbit,
+        html[data-graphics-quality="low"] .upgrade-card .upgrade-weapon-scan { display:none!important; }
+        html[data-graphics-quality="low"] .upgrade-card::before { background:none!important; }
+        html[data-graphics-quality="low"] :is(.box-glow-cyan,.box-glow-pink,.box-glow-yellow,
+            .text-glow-cyan,.text-glow-pink,.text-glow-yellow) { box-shadow:none!important;text-shadow:none!important; }
+        html[data-graphics-quality="low"] :is(.animate-spin-slow,.animate-spin-reverse,
+            .legendary-card-glow,.epic-card-glow),
+        html[data-graphics-quality="low"] .menu-core-v2::before { animation:none!important; }
+        html[data-graphics-quality="low"] .upgrade-modal-kicker { background:#101c2b; }
+
         @media (prefers-reduced-motion: reduce) {
             .animate-boss-warn, .animate-pulse, .animate-ping, .legendary-card-glow,
             .epic-card-glow, .animate-spin-slow, .animate-spin-reverse {
@@ -1101,6 +1138,14 @@
                         <span class="font-cyber text-[11px] text-gray-400">BAKİYE:</span>
                         <span id="menuGoldText" class="font-cyber text-xs sm:text-sm font-black text-yellow-400">50</span>
                     </div>
+                    <label for="menuGraphicsQuality" class="flex items-center gap-2 text-cyan-200 font-cyber text-[10px] font-bold">
+                        GRAFİK
+                        <select id="menuGraphicsQuality" class="graphics-quality-select" aria-label="PC grafik kalitesi">
+                            <option value="high">YÜKSEK</option>
+                            <option value="medium">ORTA</option>
+                            <option value="low">DÜŞÜK</option>
+                        </select>
+                    </label>
                     <button id="menuFullscreenBtn" type="button" class="bg-gray-900 hover:bg-cyan-950 border border-cyan-500/60 text-cyan-300 font-cyber text-xs font-bold px-3.5 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-2">
                         <i class="fa-solid fa-expand"></i> TAM EKRAN
                     </button>
@@ -1420,6 +1465,14 @@
         <div class="max-w-sm w-full bg-gray-950 border border-cyan-500/60 rounded-2xl p-6 text-center box-glow-cyan">
             <h2 class="font-cyber text-2xl font-black text-white text-glow-cyan mb-6">OYUN DURAKLATILDI</h2>
             <div class="flex flex-col gap-3">
+                <label for="pauseGraphicsQuality" class="flex items-center justify-between gap-2 font-cyber text-xs font-bold text-cyan-200">
+                    GRAFİK KALİTESİ
+                    <select id="pauseGraphicsQuality" class="graphics-quality-select" aria-label="Duraklatma ekranı grafik kalitesi">
+                        <option value="high">YÜKSEK</option>
+                        <option value="medium">ORTA</option>
+                        <option value="low">DÜŞÜK</option>
+                    </select>
+                </label>
                 <button id="resumeBtn" type="button" class="cyber-btn w-full py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 font-cyber font-bold text-white cursor-pointer">
                     DEVAM ET [P / ESC]
                 </button>
@@ -1863,6 +1916,47 @@
         };
 
         // A versioned save preserves the original single-file, offline playable build.
+        const GRAPHICS_SAVE_KEY = 'neonCekirdek.graphics.v1';
+        const GRAPHICS_PRESETS = Object.freeze({
+            high: Object.freeze({ dprCap: 2, pixelBudget: 6000000, particleDrawRatio: 1, glowScale: 1, gridSpacing: 48, bossFxCap: 2 }),
+            medium: Object.freeze({ dprCap: 1.4, pixelBudget: 3600000, particleDrawRatio: .68, glowScale: .45, gridSpacing: 64, bossFxCap: 1 }),
+            low: Object.freeze({ dprCap: 1, pixelBudget: 1800000, particleDrawRatio: .35, glowScale: 0, gridSpacing: 96, bossFxCap: 0 })
+        });
+        let graphicsQuality = 'high';
+        let canvasRenderInvalidated = true;
+        function getGraphicsPreset() { return GRAPHICS_PRESETS[graphicsQuality]; }
+        function getGraphicsBlur(value) { return value * getGraphicsPreset().glowScale; }
+        function isValidGraphicsQuality(value) { return Object.hasOwn(GRAPHICS_PRESETS, value); }
+        function applyGraphicsQuality(value, persist = true) {
+            if (!isValidGraphicsQuality(value)) return false;
+            const changed = graphicsQuality !== value;
+            graphicsQuality = value;
+            document.documentElement.dataset.graphicsQuality = value;
+            for (const id of ['menuGraphicsQuality', 'pauseGraphicsQuality']) {
+                const select = document.getElementById(id);
+                if (select) select.value = value;
+            }
+            if (changed) {
+                // Rebuild the backing store using the new render pixel budget.
+                // World coordinates and all combat rules remain unchanged.
+                resizeCanvas();
+            }
+            canvasRenderInvalidated = true;
+            if (persist) {
+                try { localStorage.setItem(GRAPHICS_SAVE_KEY, value); }
+                catch (e) { console.warn('Grafik tercihi kaydedilemedi.', e); }
+            }
+            return true;
+        }
+        function loadGraphicsQuality() {
+            let selected = 'high';
+            try {
+                const saved = localStorage.getItem(GRAPHICS_SAVE_KEY);
+                if (isValidGraphicsQuality(saved)) selected = saved;
+            } catch (e) { /* local file/storage restrictions must not block play */ }
+            applyGraphicsQuality(selected, false);
+        }
+
         const META_SAVE_KEY = 'neonCekirdek.meta.v1';
         const META_SAVE_VERSION = 1;
         const META_UPGRADE_LIMITS = { baseDamage: 10, maxHp: 10, speedDash: 8, greed: 8, defibrillator: 3 };
@@ -2756,7 +2850,7 @@
                 const orbPositions = this.getOrbitalPositions();
                 for (const op of orbPositions) {
                     ctx.save();
-                    ctx.shadowBlur = 15;
+                    ctx.shadowBlur = getGraphicsBlur(15);
                     ctx.shadowColor = '#ffe600';
                     ctx.beginPath();
                     ctx.arc(op.x, op.y, op.r, 0, Math.PI * 2);
@@ -2840,7 +2934,7 @@
                     }
                     ctx.restore();
                 }
-                ctx.shadowBlur = 22;
+                ctx.shadowBlur = getGraphicsBlur(22);
                 ctx.shadowColor = this.overdriveActive ? '#ff007f' : (this.isDashing ? '#ffe600' : this.color);
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
@@ -2988,7 +3082,7 @@
                 ctx.globalAlpha = 1;
                 ctx.fillStyle = visual.color;
                 ctx.shadowColor = visual.color;
-                ctx.shadowBlur = compact ? 0 : visual.glow;
+                ctx.shadowBlur = compact ? 0 : getGraphicsBlur(visual.glow);
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();
@@ -3191,7 +3285,7 @@
             draw(ctx) {
                 ctx.save();
                 // All hostile projectiles use the same magenta ring, including cyan bosses.
-                ctx.shadowBlur = 5;
+                ctx.shadowBlur = getGraphicsBlur(5);
                 ctx.shadowColor = '#ff527a';
                 ctx.strokeStyle = '#ff809b';
                 ctx.lineWidth = 2;
@@ -3365,9 +3459,9 @@
         function getBossFxQuality() {
             if (PREFERS_REDUCED_VFX_MOTION) return 0;
             const pressure=bullets.length+enemyProjectiles.length+particles.length*.55;
-            if (pressure>=210 || (activeBosses.length>=3 && pressure>=135)) return 0;
-            if (pressure>=105 || activeBosses.length>=3) return 1;
-            return 2;
+            const adaptive = pressure>=210 || (activeBosses.length>=3 && pressure>=135) ? 0 :
+                pressure>=105 || activeBosses.length>=3 ? 1 : 2;
+            return Math.min(adaptive, getGraphicsPreset().bossFxCap);
         }
         function isBossFxInView(x,y,margin=105) {
             return x>=-margin && x<=worldWidth+margin &&
@@ -4289,7 +4383,7 @@
                 if (this.isBoss) {
                     drawBossIdentity(ctx, this);
                 } else {
-                    ctx.shadowBlur=this.isElite?24:14;
+                    ctx.shadowBlur=getGraphicsBlur(this.isElite?24:14);
                     ctx.shadowColor=this.isElite?'#ffe600':this.color;
                     ctx.fillStyle='rgba(8,10,20,.90)';
                     ctx.strokeStyle=this.color;ctx.lineWidth=2.5;
@@ -4356,7 +4450,7 @@
 
             draw(ctx) {
                 ctx.save();
-                ctx.shadowBlur = 10;
+                ctx.shadowBlur = getGraphicsBlur(10);
                 ctx.shadowColor = this.color;
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
@@ -4455,7 +4549,7 @@
                 ctx.translate(this.x, this.y);
                 const s = 1 + Math.sin(this.pulse) * 0.1;
                 ctx.scale(s, s);
-                ctx.shadowBlur = 20;
+                ctx.shadowBlur = getGraphicsBlur(20);
                 ctx.shadowColor=this.source==='boss'?'#ffe600':'#40e9bc';
                 ctx.fillStyle=this.source==='boss'?'#ffe600':'#2de8bd';
                 ctx.strokeStyle='#ffffff';
@@ -4509,7 +4603,7 @@
 
             draw(ctx) {
                 ctx.save();
-                ctx.shadowBlur = 16;
+                ctx.shadowBlur = getGraphicsBlur(16);
                 ctx.shadowColor = this.color;
                 ctx.strokeStyle = this.color;
                 ctx.lineWidth = 2.5;
@@ -5054,7 +5148,8 @@
         }
 
         function drawLightningArcs() {
-            const dense = lightningBolts.length > 15;
+            const dense = graphicsQuality === 'low' ||
+                lightningBolts.length > (graphicsQuality === 'medium' ? 8 : 15);
             for (const arc of lightningBolts) {
                 const duration = arc.duration || 0.15;
                 const strength = Math.max(0, Math.min(1, arc.life / duration));
@@ -5135,7 +5230,8 @@
         }
 
         function drawWeaponImpacts() {
-            const dense = weaponImpacts.length > 30;
+            const dense = graphicsQuality === 'low' ||
+                weaponImpacts.length > (graphicsQuality === 'medium' ? 15 : 30);
             for (const impact of weaponImpacts) {
                 const life = Math.max(0, Math.min(1, impact.life / impact.duration));
                 const p = 1 - life;
@@ -6519,7 +6615,7 @@
                 ctx.fillRect(x, dy > 0 ? y : y-corner*.65, 2, corner*.65);
             }
 
-            const spacing = 48;
+            const spacing = getGraphicsPreset().gridSpacing;
             ctx.strokeStyle = (player && player.overdriveActive) ? 'rgba(255, 0, 127, 0.14)' : 'rgba(0, 243, 255, 0.08)';
             ctx.lineWidth = 1;
             if (shockwaves.length === 0) {
@@ -6652,7 +6748,9 @@
             const cx = worldWidth / 2, cy = worldHeight / 2;
             ctx.lineWidth = 1;
             ctx.globalAlpha = 0.10 + intensity * 0.10;
-            for (let ring = 0; ring < 3; ring++) {
+            const atmosphereRings = graphicsQuality === 'low' ? 0 :
+                graphicsQuality === 'medium' ? 1 : 3;
+            for (let ring = 0; ring < atmosphereRings; ring++) {
                 const radius = Math.min(worldWidth, worldHeight) * (0.27 + ring * 0.19);
                 const offset = phaseTime * (ring % 2 ? -0.075 : 0.06);
                 ctx.beginPath();
@@ -6766,7 +6864,7 @@
                 ctx.save();
                 ctx.translate(ix, iy);
                 ctx.rotate(angle);
-                ctx.shadowBlur = 10;
+                ctx.shadowBlur = getGraphicsBlur(10);
                 ctx.shadowColor = t.col;
                 ctx.fillStyle = t.col;
                 ctx.beginPath();
@@ -6797,8 +6895,15 @@
             return x >= -extent && x <= worldWidth + extent &&
                 y >= -extent && y <= worldHeight + extent;
         }
-        function drawVisibleFxCollection(items, glowMargin = 0) {
-            for (const item of items) {
+        function drawVisibleFxCollection(items, glowMargin = 0, drawRatio = 1) {
+            // Only thin cosmetic sprites. Harmful shots and collision keep full fidelity.
+            const visibleSlots = Math.max(0, Math.min(10, Math.round(drawRatio * 10)));
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (i % 10 >= visibleSlots) {
+                    if (performanceOverlayOn) pc3RenderCounts.skipped++;
+                    continue;
+                }
                 if (isFxInsideViewport(item.x, item.y,
                     item.radius ?? item.size ?? 0, glowMargin)) {
                     item.draw(ctx);
@@ -6860,7 +6965,7 @@
             drawVisibleFxCollection(orbs, 22);
             drawVisibleFxCollection(lootChests, 32);
             drawVisibleFxCollection(powerups, 28);
-            drawVisibleFxCollection(particles, 12);
+            drawVisibleFxCollection(particles, 12, getGraphicsPreset().particleDrawRatio);
             drawVisibleFxCollection(enemyProjectiles, 20);
             const denseVolley = bullets.length > 150;
             for (const b of bullets) b.draw(ctx, denseVolley);
@@ -6900,7 +7005,7 @@
                 ctx.font = `700 ${ft.size}px 'Orbitron', sans-serif`;
                 ctx.fillStyle = ft.color;
                 ctx.textAlign = 'center';
-                ctx.shadowBlur = 6;
+                ctx.shadowBlur = getGraphicsBlur(6);
                 ctx.shadowColor = ft.color;
                 ctx.fillText(ft.text, ft.x, ft.y);
                 ctx.restore();
@@ -7940,13 +8045,15 @@
         // Estimated one RGBA canvas buffer: width * height * 4 bytes, not total GPU memory.
         function getRenderDpr(w, h, nativeDpr = 1) {
             const compact = Math.min(w, h) < 900;
-            const pixelBudget = compact ? 1800000 : 6000000;
-            const dprCap = compact ? 1.75 : 2;
+            const preset = getGraphicsPreset();
+            const pixelBudget = compact ? Math.min(1800000, preset.pixelBudget) : preset.pixelBudget;
+            const dprCap = compact ? Math.min(1.75, preset.dprCap) : preset.dprCap;
             const safeDpr = Number.isFinite(nativeDpr) && nativeDpr > 0 ? nativeDpr : 1;
             return Math.min(safeDpr, dprCap,
                 Math.sqrt(pixelBudget / Math.max(1, w * h)));
         }
         function resizeCanvas() {
+            canvasRenderInvalidated = true;
             const w = document.documentElement.clientWidth || window.innerWidth;
             const h = document.documentElement.clientHeight || window.innerHeight;
             currentDpr = getRenderDpr(w, h, window.devicePixelRatio || 1);
@@ -8275,10 +8382,16 @@
             scheduleMenuFit();
         }
 
+        for (const id of ['menuGraphicsQuality', 'pauseGraphicsQuality']) {
+            document.getElementById(id).addEventListener('change', event => {
+                applyGraphicsQuality(event.target.value);
+            });
+        }
         document.getElementById('menuFromPauseBtn').addEventListener('click', returnToMainMenu);
         document.getElementById('backToMenuBtn').addEventListener('click', returnToMainMenu);
 
         let lastFrameTime = performance.now();
+        let lastCanvasRenderedState = null;
 
         function gameLoop(now) {
             const frameMs = Math.max(0, now - lastFrameTime);
@@ -8310,7 +8423,15 @@
                 }
             }
             const renderCpuStart = performanceOverlayOn ? performance.now() : 0;
-            renderGame();
+            // Keep menu and combat live. Frozen modal backgrounds only need
+            // one redraw when state or render resolution changes.
+            const liveCanvas = gameState === 'PLAYING' || gameState === 'MENU' ||
+                gameState === 'DYING_SEQUENCE';
+            if (liveCanvas || canvasRenderInvalidated || lastCanvasRenderedState !== gameState) {
+                renderGame();
+                canvasRenderInvalidated = false;
+                lastCanvasRenderedState = gameState;
+            }
             capturePc3LongRunSample();
             if (performanceOverlayOn && frameMs > 0) {
                 const renderCpuEnd = performance.now();
@@ -8327,7 +8448,7 @@
                     const frame = getPerformanceFrameStats();
                     const bufferMiB = (canvas.width * canvas.height * 4 / 1048576).toFixed(1);
                     document.getElementById('perfOverlay').textContent =
-                        `FPS ${fps} | Kare Ort/P95 ${frame.avgMs.toFixed(1)}/${frame.p95Ms.toFixed(1)}ms (son ${frame.sampleCount} kare)` +
+                        `Kalite ${graphicsQuality.toUpperCase()} | FPS ${fps} | Kare Ort/P95 ${frame.avgMs.toFixed(1)}/${frame.p95Ms.toFixed(1)}ms (son ${frame.sampleCount} kare)` +
                         ` | CPU Güncelleme/Çizim ${(perfUpdateTotalMs / frames).toFixed(1)}/${(perfRenderTotalMs / frames).toFixed(1)}ms` +
                         ` | Canvas ${canvas.width}x${canvas.height} (~${bufferMiB} MiB / tek RGBA tampon) DPR ${currentDpr.toFixed(2)}` +
                         ` | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length}` +
@@ -8384,6 +8505,7 @@
         } : null;
         window.onload = function () {
             loadMetaProgress();
+            loadGraphicsQuality();
             resizeCanvas();
             initMenuDemoNodes();
             updateMenuCounters();
