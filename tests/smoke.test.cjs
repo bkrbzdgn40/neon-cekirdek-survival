@@ -3825,3 +3825,134 @@ test('PC46 dashed boundary warning remains an intentional special-encounter tele
   assert.deepEqual(dashes,[[14,9],[]]);
   assert.ok(calls.some(x=>x.kind==='fillText'&&x.args[0]==='ÖNCÜ HÜCUMU'));
 });
+
+
+test('M6.2-PC3 offscreen FX culling includes sprite glow and leaves nonfinite positions unculled', () => {
+  const { run } = setup();
+  const values = JSON.parse(run(`JSON.stringify({
+    edge: isFxInsideViewport(-27, 100, 5, 14),
+    outside: isFxInsideViewport(-28, 100, 5, 14),
+    right: isFxInsideViewport(worldWidth + 27, 100, 5, 14),
+    farRight: isFxInsideViewport(worldWidth + 28, 100, 5, 14),
+    bottom: isFxInsideViewport(100, worldHeight + 27, 5, 14),
+    farBottom: isFxInsideViewport(100, worldHeight + 28, 5, 14),
+    invalid: isFxInsideViewport(NaN, 500, 8, 5)
+  })`));
+  assert.deepEqual(values, {
+    edge: true, outside: false, right: true, farRight: false,
+    bottom: true, farBottom: false, invalid: true
+  });
+});
+
+test('M6.2-PC3 FX drawing culls offscreen instances but retains all game objects', () => {
+  const { run } = setup();
+  const data = JSON.parse(run(`(() => {
+    startNewGame();
+    performanceOverlayOn = true;
+    const drawn = [];
+    const make = (name, x, y, radius) => ({
+      x, y, radius, draw() { drawn.push(name); }
+    });
+    const near = make('near-glow', -30, 100, 10);
+    const far = make('far', -300, 100, 10);
+    const onScreen = make('on', 100, 100, 10);
+    const actors = [near, far, onScreen];
+    drawVisibleFxCollection(actors, 20);
+    return JSON.stringify({
+      drawn, originalCount: actors.length,
+      same: actors[0] === near && actors[1] === far,
+      stats: { ...pc3RenderCounts },
+      normalBossDraw: typeof drawBossAttackTelegraphs === 'function'
+    });
+  })()`));
+  assert.deepEqual(data.drawn, ['near-glow', 'on']);
+  assert.equal(data.originalCount, 3);
+  assert.equal(data.same, true);
+  assert.deepEqual(data.stats, { visible: 2, skipped: 1 });
+  assert.equal(data.normalBossDraw, true);
+});
+
+test('M6.2-PC3 gameplay update still advances invisible XP orb and enemy shot', () => {
+  const { run } = setup();
+  const state = JSON.parse(run(`(() => {
+    startNewGame(); gameState = 'PLAYING';
+    const orb = new EnergyOrb(-400, 100, 27, false);
+    const shot = new EnemyProjectile(-38, 100, 35, 0, 7, 12, '#ff88dd');
+    orbs=[orb]; enemyProjectiles=[shot];
+    const before={orbX:orb.x, projectileX:shot.x, orbValue:orb.value};
+    drawVisibleFxCollection(orbs, 22);
+    drawVisibleFxCollection(enemyProjectiles, 20);
+    orb.update(.1);
+    shot.update(.1);
+    return JSON.stringify({
+      before, after:{orbX:orb.x, projectileX:shot.x, orbValue:orb.value},
+      kept:orbs[0]===orb && enemyProjectiles[0]===shot
+    });
+  })()`));
+  assert.equal(state.kept, true);
+  assert.equal(state.after.orbValue, state.before.orbValue);
+  assert.equal(state.after.orbX, state.before.orbX);
+  assert.ok(state.after.projectileX > state.before.projectileX);
+  assert.ok(state.after.projectileX < 0, 'movement occurs while still offscreen');
+});
+
+test('M6.2-PC3 long-run memory samples are opt-in, spaced and reset per run', () => {
+  const { run } = setup();
+  const data = JSON.parse(run(`(() => {
+    startNewGame();
+    performance.memory = { usedJSHeapSize: 48 * 1048576 };
+    totalTime = 0; capturePc3LongRunSample();
+    const disabled=window.getNeonPerformanceHistory().length;
+    togglePerformanceOverlay();
+    gameState='PLAYING';
+    totalTime = 0; capturePc3LongRunSample();
+    totalTime = 4.5; capturePc3LongRunSample();
+    const early=window.getNeonPerformanceHistory().length;
+    performance.memory.usedJSHeapSize=64 * 1048576;
+    orbs=Array.from({ length: 7 }, () => ({ count: 1 }));
+    totalTime=5.1; capturePc3LongRunSample();
+    const before=window.getNeonPerformanceSnapshot().longRun;
+    const history=window.getNeonPerformanceHistory();
+    startNewGame();
+    const after=window.getNeonPerformanceSnapshot().longRun;
+    return JSON.stringify({ disabled,early,before,history,after });
+  })()`));
+  assert.equal(data.disabled, 0);
+  assert.equal(data.early, 1);
+  assert.equal(data.before.storedSamples, 2);
+  assert.equal(data.before.lastHeapMiB, 64);
+  assert.equal(data.before.sampledPeakHeapMiB, 64);
+  assert.equal(data.before.sampledPeakObjects.orbs, 7);
+  assert.equal(data.history.length, 2);
+  assert.equal(data.history[0].jsHeapMiB, 48);
+  assert.equal(data.history[1].orbs, 7);
+  assert.equal(data.after.storedSamples, 0);
+  assert.equal(data.after.lastHeapMiB, null);
+  assert.equal(data.after.sampledPeakObjects.orbs, 0);
+});
+
+test('M6.2-PC3 hourly sample ring is bounded and returned chronologically', () => {
+  const { run } = setup();
+  const data = JSON.parse(run(`(() => {
+    startNewGame();
+    togglePerformanceOverlay();
+    for (let i = 0; i < PC3_HISTORY_LIMIT + 11; i++) {
+      totalTime = i * PC3_SAMPLE_INTERVAL;
+      capturePc3LongRunSample();
+    }
+    const records = window.getNeonPerformanceHistory();
+    return JSON.stringify({
+      count: records.length, max: PC3_HISTORY_LIMIT,
+      first: records[0].gameSeconds,
+      last: records[records.length - 1].gameSeconds,
+      heapUnavailable: records[0].jsHeapMiB,
+      stored: window.getNeonPerformanceSnapshot().longRun.storedSamples
+    });
+  })()`));
+  assert.equal(data.count, 720);
+  assert.equal(data.stored, 720);
+  assert.equal(data.max, 720);
+  assert.equal(data.first, 55);
+  assert.equal(data.last, 3650);
+  assert.equal(data.heapUnavailable, null);
+});

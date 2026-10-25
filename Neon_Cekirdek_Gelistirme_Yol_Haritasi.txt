@@ -1,10 +1,10 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.11 | İlk plan: 18.10.2026 | Durum: 25.10.2026
+Sürüm: 1.12 | İlk plan: 18.10.2026 | Durum: 25.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: M6.2-PC2 main'de (249/249 CI PASS). Kullanıcı 46 dalgaya kadar FPS sorunu gözlemlemedi; çoklu boss saldırı kilidi ve arena kenarındaki çizim eksikleri için PC46 düzeltmesi inceleniyor. PC öncelikli, mobil ertelendi.
+Durum: PC46 düzeltmesi main'de (254/254 CI PASS). 46 dalga manuel FPS gözlemi olumlu; PC46 boss/ızgara tekrar kabulü açık. M6.2-PC3 ekran dışı VFX ve uzun koşu telemetrisi PR incelemesinde. PC öncelikli, mobil ertelendi.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -673,3 +673,30 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
 [BELGE] docs/PC46-boss-deadlock-grid-edge.md
 [SONRA] M6.2-PC3/PC4 profil, efekt ve uzun koşu bellek testleri;
   V2 geliştirmelerinden önce mevcut oyun davranışı güvenceye al.
+
+
+======================================================================
+25. M6.2-PC3 — GÖRÜNMEYEN FX ÇİZİMİ VE 60 DAKİKA BELLEK ÖLÇÜMÜ
+======================================================================
+
+[AMAÇ] Görsel kaliteyi azaltmadan ekranda görülmeyen küçük FX /
+  gölgelerin Canvas çizim yükünü kaldır, uzun koşudaki JS heap ve
+  nesne sayısı eğilimini ölç.
+[KOD] Orb, sandık, powerup, parçacık, düşman mermisi ve yüzen
+  yazılar yalnızca tam güvenli padded viewport dışında ise ÇİZİLMEZ.
+  update/AI, XP/altın, efekt hasarı, çarpışma ve spawn aynı kalır.
+[KORUNDU] Bosslar, saldırı uyarısı, lazer/telegraph çizgileri,
+  şok dalgaları, offscreen yön okları, mevcut glow/shadowBlur ve
+  efekt renk/yoğunlukları değiştirilmedi.
+[ÖLÇÜM] F3 açıkken 5 sn aralıkla gameSeconds, mevcutsa JS heap
+  ve düşman/mermi/küre/parçacık sayısı; son 720 örnek (~60 dk)
+  sabit Float32Array. F3 kapalıyken örnek toplama yok.
+[KONTROL] window.getNeonPerformanceSnapshot().longRun ve
+  window.getNeonPerformanceHistory() sadece yerel kopya sağlar.
+  performance.memory desteklenmeyebilir ve toplam RAM/GPU ölçmez.
+[OTOMATİK] 254 eski + 5 yeni smoke; hedef 259 PASS.
+[MANUEL KABUL] PC 5/10/20/30 dk FPS/P95 + Chrome Performance
+  GC/heap gözlemi ve kritik FX/boss uyarısı okunurluğu.
+[BELGE] docs/M6.2-PC3-offscreen-fx-memory.md
+[SONRA] M6.2-PC4 uzun PC performans kaydı ve ölçüme dayalı
+  shadowBlur/sprite optimizasyonu; mobil ve V2 ayrı paketler.
