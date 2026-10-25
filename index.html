@@ -4872,6 +4872,59 @@
         let perfRecentFrameIndex = 0;
         let perfUpdateTotalMs = 0;
         let perfRenderTotalMs = 0;
+        // Opt-in PC long-run telemetry: 5s samples, at most 60 minutes of data.
+        // Typed storage avoids allocating sample objects during gameplay.
+        const PC3_SAMPLE_INTERVAL = 5;
+        const PC3_HISTORY_LIMIT = 720;
+        const PC3_HISTORY_STRIDE = 7; // seconds, JS heap MiB, enemies, bullets, enemy shots, orbs, particles
+        const pc3History = new Float32Array(PC3_HISTORY_LIMIT * PC3_HISTORY_STRIDE);
+        let pc3HistoryNext = 0;
+        let pc3HistoryCount = 0;
+        let pc3NextSampleAt = 0;
+        let pc3HeapPeakMiB = 0;
+        let pc3LastHeapMiB = null;
+        const pc3SampledPeaks = { enemies: 0, bullets: 0, enemyProjectiles: 0, orbs: 0, particles: 0 };
+        const pc3RenderCounts = { visible: 0, skipped: 0 };
+        function resetPc3Telemetry() {
+            pc3HistoryNext = 0;
+            pc3HistoryCount = 0;
+            pc3NextSampleAt = 0;
+            pc3HeapPeakMiB = 0;
+            pc3LastHeapMiB = null;
+            for (const key of Object.keys(pc3SampledPeaks)) pc3SampledPeaks[key] = 0;
+            pc3RenderCounts.visible = 0;
+            pc3RenderCounts.skipped = 0;
+        }
+        function capturePc3LongRunSample() {
+            if (!performanceOverlayOn || gameState !== 'PLAYING' || totalTime < pc3NextSampleAt) return;
+            pc3NextSampleAt = totalTime + PC3_SAMPLE_INTERVAL;
+            // Chromium-only, deprecated and approximate process-level JS heap.
+            // This is NOT GPU memory or a reliable per-tab RAM total.
+            const bytes = performance.memory?.usedJSHeapSize;
+            const heapMiB = Number.isFinite(bytes) && bytes > 0 ? bytes / 1048576 : 0;
+            const counts = [enemies.length, bullets.length, enemyProjectiles.length, orbs.length, particles.length];
+            const offset = pc3HistoryNext * PC3_HISTORY_STRIDE;
+            pc3History[offset] = totalTime;
+            pc3History[offset + 1] = heapMiB;
+            for (let i = 0; i < counts.length; i++) pc3History[offset + i + 2] = counts[i];
+            pc3HistoryNext = (pc3HistoryNext + 1) % PC3_HISTORY_LIMIT;
+            pc3HistoryCount = Math.min(PC3_HISTORY_LIMIT, pc3HistoryCount + 1);
+            pc3LastHeapMiB = heapMiB || null;
+            pc3HeapPeakMiB = Math.max(pc3HeapPeakMiB, heapMiB);
+            const names = ['enemies', 'bullets', 'enemyProjectiles', 'orbs', 'particles'];
+            for (let i = 0; i < names.length; i++)
+                pc3SampledPeaks[names[i]] = Math.max(pc3SampledPeaks[names[i]], counts[i]);
+        }
+        function getPc3TelemetrySummary() {
+            return {
+                intervalSeconds: PC3_SAMPLE_INTERVAL, storedSamples: pc3HistoryCount,
+                maxSamples: PC3_HISTORY_LIMIT,
+                lastHeapMiB: pc3LastHeapMiB,
+                sampledPeakHeapMiB: pc3HeapPeakMiB || null,
+                sampledPeakObjects: { ...pc3SampledPeaks },
+                lastRender: { ...pc3RenderCounts }
+            };
+        }
         function getPerformanceFrameStats() {
             if (!perfRecentFrameCount) return { sampleCount: 0, avgMs: 0, p95Ms: 0 };
             const values = Array.from(perfRecentFrameMs.subarray(0, perfRecentFrameCount))
@@ -6736,7 +6789,31 @@
             }
         }
 
+        // Graphics-only culling: never skip simulation, collision, loot or audio.
+        // A padded viewport includes glow and sprite size to avoid visible popping.
+        function isFxInsideViewport(x, y, radius = 0, glowMargin = 0) {
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return true;
+            const extent = Math.max(0, radius) + glowMargin + 8;
+            return x >= -extent && x <= worldWidth + extent &&
+                y >= -extent && y <= worldHeight + extent;
+        }
+        function drawVisibleFxCollection(items, glowMargin = 0) {
+            for (const item of items) {
+                if (isFxInsideViewport(item.x, item.y,
+                    item.radius ?? item.size ?? 0, glowMargin)) {
+                    item.draw(ctx);
+                    if (performanceOverlayOn) pc3RenderCounts.visible++;
+                } else if (performanceOverlayOn) {
+                    pc3RenderCounts.skipped++;
+                }
+            }
+        }
+
         function renderGame() {
+            if (performanceOverlayOn) {
+                pc3RenderCounts.visible = 0;
+                pc3RenderCounts.skipped = 0;
+            }
             ctx.setTransform(currentDpr * viewScale, 0, 0, currentDpr * viewScale, 0, 0);
             ctx.save();
 
@@ -6778,11 +6855,13 @@
             if (combatDirector?.activeArenaEvent) combatDirector.activeArenaEvent.draw(ctx);
             for (const sw of shockwaves) sw.draw(ctx);
             for (const vfx of bossDeathVfx) drawBossDeathVfx(ctx,vfx);
-            for (const orb of orbs) orb.draw(ctx);
-            for (const lc of lootChests) lc.draw(ctx);
-            for (const pu of powerups) pu.draw(ctx);
-            for (const p of particles) p.draw(ctx);
-            for (const ep of enemyProjectiles) ep.draw(ctx);
+            // A glow cannot affect visible pixels if its entire padded area
+            // falls outside the canvas. Keep critical boss/beam/warning art uncullable.
+            drawVisibleFxCollection(orbs, 22);
+            drawVisibleFxCollection(lootChests, 32);
+            drawVisibleFxCollection(powerups, 28);
+            drawVisibleFxCollection(particles, 12);
+            drawVisibleFxCollection(enemyProjectiles, 20);
             const denseVolley = bullets.length > 150;
             for (const b of bullets) b.draw(ctx, denseVolley);
             drawWeaponImpacts();
@@ -6809,6 +6888,13 @@
             drawOffscreenIndicators();
 
             for (const ft of floatingTexts) {
+                // Text extends farther than a disc, so leave a conservative
+                // 160px margin instead of clipping notifications at the edge.
+                if (!isFxInsideViewport(ft.x, ft.y, 0, 160)) {
+                    if (performanceOverlayOn) pc3RenderCounts.skipped++;
+                    continue;
+                }
+                if (performanceOverlayOn) pc3RenderCounts.visible++;
                 ctx.save();
                 ctx.globalAlpha = Math.max(0, ft.life / ft.maxLife);
                 ctx.font = `700 ${ft.size}px 'Orbitron', sans-serif`;
@@ -7099,6 +7185,7 @@
 
         function startNewGame() {
             clearGameplayInput();
+            resetPc3Telemetry();
             lastBossGradientColor = null;
             lastBossIdentityMarkup = null;
             audio.init();
@@ -7889,6 +7976,7 @@
 
         function togglePerformanceOverlay() {
             performanceOverlayOn = !performanceOverlayOn;
+            resetPc3Telemetry();
             performanceSampleFrames = 0;
             performanceSampleMs = 0;
             perfRecentFrameCount = 0;
@@ -8223,6 +8311,7 @@
             }
             const renderCpuStart = performanceOverlayOn ? performance.now() : 0;
             renderGame();
+            capturePc3LongRunSample();
             if (performanceOverlayOn && frameMs > 0) {
                 const renderCpuEnd = performance.now();
                 perfRecentFrameMs[perfRecentFrameIndex] = frameMs;
@@ -8242,7 +8331,10 @@
                         ` | CPU Güncelleme/Çizim ${(perfUpdateTotalMs / frames).toFixed(1)}/${(perfRenderTotalMs / frames).toFixed(1)}ms` +
                         ` | Canvas ${canvas.width}x${canvas.height} (~${bufferMiB} MiB / tek RGBA tampon) DPR ${currentDpr.toFixed(2)}` +
                         ` | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length}` +
-                        ` | Küre ${orbs.length} | Efekt ${particles.length} | Sandık ${lootChests.length}`;
+                        ` | Küre ${orbs.length} | Efekt ${particles.length} | Sandık ${lootChests.length}` +
+                        ` | FX çiz/atla ${pc3RenderCounts.visible}/${pc3RenderCounts.skipped}` +
+                        ` | JS heap ${pc3LastHeapMiB === null ? 'destek yok' : pc3LastHeapMiB.toFixed(1) + ' MiB'}` +
+                        ` (örnek ${pc3HistoryCount}, tepe ${pc3HeapPeakMiB.toFixed(1)} MiB)`;
                     performanceSampleFrames = 0;
                     performanceSampleMs = 0;
                     perfUpdateTotalMs = 0;
@@ -8261,8 +8353,26 @@
             canvasWidth: canvas.width,
             canvasHeight: canvas.height,
             canvasBufferMiB: +(canvas.width * canvas.height * 4 / 1048576).toFixed(2),
-            state: gameState
+            state: gameState,
+            longRun: getPc3TelemetrySummary()
         });
+        // On-demand copy of the last 60 minutes of opt-in 5-second samples.
+        // No background recording, network upload or localStorage writes.
+        window.getNeonPerformanceHistory = () => {
+            const records = [];
+            for (let i = 0; i < pc3HistoryCount; i++) {
+                const index = (pc3HistoryNext - pc3HistoryCount + i + PC3_HISTORY_LIMIT) % PC3_HISTORY_LIMIT;
+                const k = index * PC3_HISTORY_STRIDE;
+                records.push({
+                    gameSeconds: pc3History[k],
+                    jsHeapMiB: pc3History[k + 1] || null,
+                    enemies: pc3History[k + 2], bullets: pc3History[k + 3],
+                    enemyProjectiles: pc3History[k + 4],
+                    orbs: pc3History[k + 5], particles: pc3History[k + 6]
+                });
+            }
+            return records;
+        };
         window.getNeonRunDiagnostics = () => combatDirector ? combatDirector.getDiagnostics() : null;
         window.getNeonEconomySnapshot = () => combatDirector ? combatDirector.getEconomySnapshot() : null;
         window.getNeonBuildSnapshot = () => player ? {
