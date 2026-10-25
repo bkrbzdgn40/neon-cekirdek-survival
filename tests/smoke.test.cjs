@@ -3571,7 +3571,7 @@ test('M6.2.2 dying projectiles are not revived by the recycled bucket cache', ()
 });
 
 
-test('M6.2-PC2 straight grid draws same sampled end coordinates with two path points', () => {
+test('M6.2-PC2 straight grid extends to the visible arena edge with two path points', () => {
   const trace = [];
   const context = new Proxy({}, {
     get(_, key) { return (...args) => { trace.push({ kind: String(key), args }); }; }
@@ -3588,7 +3588,7 @@ test('M6.2-PC2 straight grid draws same sampled end coordinates with two path po
   const moves = trace.filter(t => t.kind === 'moveTo').map(t => t.args);
   const lines = trace.filter(t => t.kind === 'lineTo').map(t => t.args);
   assert.deepEqual(moves, [[-5, 0], [43, 0], [91, 0], [0, 7], [0, 55]]);
-  assert.deepEqual(lines, [[-5, 64], [43, 64], [91, 64], [96, 7], [96, 55]]);
+  assert.deepEqual(lines, [[-5, 81], [43, 81], [91, 81], [100, 7], [100, 55]]);
   assert.equal(trace.filter(t => t.kind === 'stroke').length, 5);
   assert.equal(trace.filter(t => t.kind === 'beginPath').length, 5);
 });
@@ -3715,4 +3715,113 @@ test('M6.2-PC2 restarting a run invalidates boss HUD value cache', () => {
   assert.equal(state.gradientReset, null);
   assert.equal(state.markupReset, null);
   assert.equal(state.active, true);
+});
+
+
+test('PC46 multi-boss simultaneous phase readiness does not deadlock all attacks', () => {
+  const { run } = setup();
+  const data = JSON.parse(run(`(() => {
+    startNewGame();
+    totalTime=500; wave=46;
+    const bosses=['BOSS_TITAN','BOSS_VOID','BOSS_DESTROYER']
+      .map((type,i)=>new Enemy(160+i*110,180,type));
+    activeBosses=bosses;
+    for (const b of bosses) {
+      b.bossPhase=2;
+      b.bossSpecial={angle:0,delay:0,timer:-0.05,phase:2};
+      b.stunTimer=0;
+    }
+    const initial=enemyProjectiles.length;
+    for (const b of bosses) b.updateBossPhases(.016,1,0);
+    const afterFirst=enemyProjectiles.length;
+    const first=[...bosses.map(b=>b.bossSpecialCount)];
+    totalTime+=1.51;
+    for (const b of bosses) b.updateBossPhases(.016,1,0);
+    const afterSecond=enemyProjectiles.length;
+    const second=[...bosses.map(b=>b.bossSpecialCount)];
+    totalTime+=1.51;
+    for (const b of bosses) b.updateBossPhases(.016,1,0);
+    const third=bosses.map(b=>b.bossSpecialCount);
+    return JSON.stringify({
+      initial,afterFirst,afterSecond,finalShots:enemyProjectiles.length,
+      first,second,third,remaining:bosses.map(b=>b.bossSpecial),
+      tracked:combatDirector.stats.bossSpecialAttacks,
+      deferred:combatDirector.stats.bossAttacksDeferred
+    });
+  })()`));
+  assert.equal(data.initial, 0);
+  assert.equal(data.afterFirst, 3);
+  assert.equal(data.afterSecond, 8);
+  assert.equal(data.finalShots, 13);
+  assert.deepEqual(data.first, [1,0,0]);
+  assert.deepEqual(data.second, [1,1,0]);
+  assert.deepEqual(data.third, [1,1,1]);
+  assert.deepEqual(data.remaining, [null,null,null]);
+  assert.equal(data.tracked, 3);
+  assert.ok(data.deferred >= 2);
+});
+
+test('PC46 an announced phase blocks regular attacks but never itself', () => {
+  const { run } = setup();
+  const data=JSON.parse(run(`(() => {
+    startNewGame(); totalTime=250;
+    const a=new Enemy(100,100,'BOSS_PRISM');
+    const b=new Enemy(200,200,'BOSS_VOID');
+    activeBosses=[a,b];
+    a.bossSpecial={angle:0,phase:2,delay:0,timer:.4};
+    const regular=combatDirector.allowBossAttack(b,'regular');
+    const phase=combatDirector.allowBossAttack(a,'phase');
+    return JSON.stringify({regular,phase,deferred:combatDirector.stats.bossAttacksDeferred});
+  })()`));
+  assert.equal(data.regular,false);
+  assert.equal(data.phase,true);
+  assert.equal(data.deferred,1);
+});
+
+test('PC46 stunned phase owner does not block another armed boss indefinitely', () => {
+  const { run } = setup();
+  const data=JSON.parse(run(`(() => {
+    startNewGame(); totalTime=500;
+    const a=new Enemy(100,100,'BOSS_DESTROYER');
+    const b=new Enemy(200,200,'BOSS_PRISM');
+    activeBosses=[a,b];
+    for (const x of [a,b]) x.bossSpecial={angle:0,phase:2,delay:0,timer:-.1};
+    a.stunTimer=8;
+    const allowed=combatDirector.allowBossAttack(b,'phase');
+    return JSON.stringify({allowed,deferred:combatDirector.stats.bossAttacksDeferred});
+  })()`));
+  assert.equal(data.allowed,true);
+  assert.equal(data.deferred,0);
+});
+
+test('PC46 warped grid continues through right and bottom edge on non-32px sizes', () => {
+  const calls=[];
+  const context=new Proxy({}, { get(_,key) { return (...args) => calls.push({kind:String(key),args}); } });
+  const { run }=setup({}, { canvasContext: context });
+  calls.length=0;
+  run(`(() => {
+    worldWidth=100;worldHeight=81;gridOffset.x=-5;gridOffset.y=7;
+    shockwaves=[{x:35,y:20,maxRadius:110,elapsed:.2,duration:.4}];
+    drawBackgroundGrid();
+  })()`);
+  const lines=calls.filter(x=>x.kind==='lineTo');
+  assert.ok(lines.some(x=>x.args[1]===81), 'vertical grid extends to bottom edge');
+  assert.ok(lines.some(x=>x.args[0]===100), 'horizontal grid extends to right edge');
+  assert.equal(calls.filter(x=>x.kind==='stroke').length,5);
+});
+
+test('PC46 dashed boundary warning remains an intentional special-encounter telegraph',()=>{
+  const calls=[];
+  const context=new Proxy({}, { get(_,key) { return (...args)=>calls.push({kind:String(key),args}); } });
+  const { run }=setup({}, { canvasContext: context });
+  calls.length=0;
+  run(`(() => {
+    startNewGame();
+    combatDirector.pendingEncounter={warning:SPECIAL_ENCOUNTER_WARNING,
+      label:'ÖNCÜ HÜCUMU',color:'#ffbf58',units:[{side:1}]};
+    drawSpecialEncounterWarning();
+  })()`);
+  const dashes=calls.filter(x=>x.kind==='setLineDash').map(x=>Array.from(x.args[0]));
+  assert.deepEqual(dashes,[[14,9],[]]);
+  assert.ok(calls.some(x=>x.kind==='fillText'&&x.args[0]==='ÖNCÜ HÜCUMU'));
 });

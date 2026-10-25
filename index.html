@@ -5803,11 +5803,19 @@
             }
 
             allowBossAttack(boss, kind) {
-                if (activeBosses.length > 1 &&
-                    activeBosses.some(other => other !== boss && !other.dead &&
-                        other.bossSpecial && other.bossSpecial.delay <= 0)) {
-                    this.stats.bossAttacksDeferred++;
-                    return false;
+                if (activeBosses.length > 1) {
+                    // If several phase warnings finish together, "another boss is
+                    // ready" would deny ALL of them forever. Elect the first
+                    // eligible boss as owner of the phase slot; subsequent bosses
+                    // wait for the existing shared cooldown. Regular attacks still
+                    // give priority to announced phases.
+                    const phaseOwner = activeBosses.find(other => !other.dead &&
+                        other.stunTimer <= 0 && other.bossSpecial &&
+                        other.bossSpecial.delay <= 0);
+                    if (phaseOwner && (kind !== 'phase' || phaseOwner !== boss)) {
+                        this.stats.bossAttacksDeferred++;
+                        return false;
+                    }
                 }
                 if (totalTime + 0.00001 < this.bossAttackNextAt) {
                     this.stats.bossAttacksDeferred++;
@@ -6424,21 +6432,19 @@
         }
 
         // No shockwave: straight grid geometry needs only two path points per
-        // line, rather than 32px subdivisions across the entire arena.
+        // line. Cover the full viewport so non-multiple-of-32 sizes do not
+        // leave visually clipped grid lines at the right and bottom edges.
         function drawStraightGridLines(targetCtx, offset, width, height, spacing = 48) {
-            // The legacy path ended at the last 32px sample, not at the viewport edge.
-            const lastVerticalY = Math.floor(height / 32) * 32;
-            const lastHorizontalX = Math.floor(width / 32) * 32;
             for (let x = offset.x; x < width; x += spacing) {
                 targetCtx.beginPath();
                 targetCtx.moveTo(x, 0);
-                targetCtx.lineTo(x, lastVerticalY);
+                targetCtx.lineTo(x, height);
                 targetCtx.stroke();
             }
             for (let y = offset.y; y < height; y += spacing) {
                 targetCtx.beginPath();
                 targetCtx.moveTo(0, y);
-                targetCtx.lineTo(lastHorizontalX, y);
+                targetCtx.lineTo(width, y);
                 targetCtx.stroke();
             }
         }
@@ -6490,6 +6496,22 @@
                     if (y === 0) ctx.moveTo(gx, y);
                     else ctx.lineTo(gx, y);
                 }
+                // The last 32px sample may fall short of the canvas edge.
+                // Continue the same shockwave deformation at the real boundary.
+                if (worldHeight % 32 !== 0) {
+                    let gx = x;
+                    for (const sw of gridShockwaves) {
+                        const dx = x - sw.x;
+                        const dy = worldHeight - sw.y;
+                        if (Math.abs(dx) > sw.radius + 42 ||
+                            Math.abs(dy) > sw.radius + 42) continue;
+                        const d = Math.hypot(dx, dy);
+                        if (Math.abs(d - sw.radius) < 42) {
+                            gx += (dx / (d || 1)) * sw.displacement;
+                        }
+                    }
+                    ctx.lineTo(gx, worldHeight);
+                }
                 ctx.stroke();
             }
 
@@ -6508,6 +6530,20 @@
                     }
                     if (x === 0) ctx.moveTo(x, gy);
                     else ctx.lineTo(x, gy);
+                }
+                if (worldWidth % 32 !== 0) {
+                    let gy = y;
+                    for (const sw of gridShockwaves) {
+                        const dx = worldWidth - sw.x;
+                        const dy = y - sw.y;
+                        if (Math.abs(dx) > sw.radius + 42 ||
+                            Math.abs(dy) > sw.radius + 42) continue;
+                        const d = Math.hypot(dx, dy);
+                        if (Math.abs(d - sw.radius) < 42) {
+                            gy += (dy / (d || 1)) * sw.displacement;
+                        }
+                    }
+                    ctx.lineTo(worldWidth, gy);
                 }
                 ctx.stroke();
             }
