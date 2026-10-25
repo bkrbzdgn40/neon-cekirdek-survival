@@ -1,10 +1,10 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.12 | İlk plan: 18.10.2026 | Durum: 25.10.2026
+Sürüm: 1.13 | İlk plan: 18.10.2026 | Durum: 25.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: PC46 düzeltmesi main'de (254/254 CI PASS). 46 dalga manuel FPS gözlemi olumlu; PC46 boss/ızgara tekrar kabulü açık. M6.2-PC3 ekran dışı VFX ve uzun koşu telemetrisi PR incelemesinde. PC öncelikli, mobil ertelendi.
+Durum: M6.2-PC3 main'de (259/259 CI PASS). 46 dalga FPS gözlemi olumlu, PC46 yeniden kabulü açık. M6.2-PC4 üç kademeli grafik profili ve kart ekranı performans iyileştirmesi PR incelemesinde. PC öncelikli, mobil ertelendi.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -700,3 +700,28 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
 [BELGE] docs/M6.2-PC3-offscreen-fx-memory.md
 [SONRA] M6.2-PC4 uzun PC performans kaydı ve ölçüme dayalı
   shadowBlur/sprite optimizasyonu; mobil ve V2 ayrı paketler.
+
+
+======================================================================
+26. M6.2-PC4 — PC GRAFİK PROFİLLERİ VE KART EKRANI PERFORMANSI
+======================================================================
+
+[KULLANICI GEREKSİNİMİ] PC oyununa DÜŞÜK/ORTA/YÜKSEK ayarları.
+  Yüksek neon sunumu en iyi korur; Orta daha az kaynak kullanır;
+  Düşük, okunurluğu koruyarak efektleri ciddi ölçüde sadeleştirir.
+[SEÇİM] Ana menü ve pause ekranında aynı ayar; değişiklik anında
+  uygulanır, farklı yerel kayıt anahtarında saklanır.
+[KART EKRANI] LEVEL_UP/PAUSED gibi donmuş oyun hallerinde Canvas
+  60 fps arka plan yeniden çizimi yapmaz. Orta ve Düşük ayarları
+  ağır CSS kart animasyonları/gölgeleri/backdrop-filter maliyetini
+  azaltır; Düşükte blur kaldırılır.
+[CANVAS] Quality başına DPR/piksel bütçesi, shadowBlur,
+  grid/atmosfer yoğunluğu ve kozmetik parçacık çizim oranı ayrılır.
+[OYNANIŞ] Boss telegraph, vurma/hitbox, gerçek düşman mermileri,
+  XP/altın/loot, kart seçim mekaniği, şasi ve kayıtlar değişmez.
+[TEST] 259 eski + 6 yeni smoke; hedef 265 PASS.
+[BELGE] docs/M6.2-PC4-graphics-profiles.md
+[MANUEL] Üç modda kart açma/kapama, reroll, legend/evolution,
+  kontrast/okunurluk ve arkadaşın PC'sindeki FPS/P95 farkı.
+[SONRA] Profile göre kart menülerindeki diğer animasyonların
+  ölçümü ve 20–30 dakika GC/heap kabul testi, ardından PC V2.
