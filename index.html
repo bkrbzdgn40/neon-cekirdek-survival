@@ -189,8 +189,7 @@
         html[data-graphics-quality="medium"] :is(#startModal,#upgradeModal,#pauseModal,#shopModal,#reviveModal,#gameOverModal),
         html[data-graphics-quality="medium"] .backdrop-blur-md { backdrop-filter:blur(2px)!important;-webkit-backdrop-filter:blur(2px)!important; }
         html[data-graphics-quality="low"] :is(#startModal,#upgradeModal,#pauseModal,#shopModal,#reviveModal,#gameOverModal),
-        html[data-graphics-quality="low"] .backdrop-blur-md,
-        html[data-graphics-quality="low"] .backdrop-blur-\[4px\] { backdrop-filter:none!important;-webkit-backdrop-filter:none!important; }
+        html[data-graphics-quality="low"] .backdrop-blur-md { backdrop-filter:none!important;-webkit-backdrop-filter:none!important; }
         html[data-graphics-quality="medium"] .upgrade-card[data-rarity="LEGENDARY"],
         html[data-graphics-quality="medium"] .upgrade-card[data-rarity="EPIC"],
         html[data-graphics-quality="medium"] .upgrade-card .upgrade-evolution-orbit,
@@ -199,8 +198,10 @@
         html[data-graphics-quality="medium"] .upgrade-card { box-shadow:0 5px 12px rgba(0,0,0,.35)!important; }
         html[data-graphics-quality="medium"] .upgrade-card:hover,
         html[data-graphics-quality="medium"] .upgrade-card:focus-visible { box-shadow:0 8px 16px rgba(0,0,0,.44),0 0 7px var(--card-glow)!important; }
-        html[data-graphics-quality="low"] :is(.upgrade-card,.upgrade-card *,
-            .upgrade-card::before,.upgrade-card::after,.upgrade-card .upgrade-evolution-orbit,.upgrade-card .upgrade-weapon-scan) {
+        html[data-graphics-quality="low"] .upgrade-card,
+        html[data-graphics-quality="low"] .upgrade-card *,
+        html[data-graphics-quality="low"] .upgrade-card::before,
+        html[data-graphics-quality="low"] .upgrade-card::after {
             animation:none!important;transition:none!important;filter:none!important;
             box-shadow:none!important;text-shadow:none!important; }
         html[data-graphics-quality="low"] .upgrade-card { background:#0b1525!important;transform:none!important; }
@@ -213,7 +214,8 @@
         html[data-graphics-quality="low"] :is(.box-glow-cyan,.box-glow-pink,.box-glow-yellow,
             .text-glow-cyan,.text-glow-pink,.text-glow-yellow) { box-shadow:none!important;text-shadow:none!important; }
         html[data-graphics-quality="low"] :is(.animate-spin-slow,.animate-spin-reverse,
-            .legendary-card-glow,.epic-card-glow,.menu-core-v2::before) { animation:none!important; }
+            .legendary-card-glow,.epic-card-glow),
+        html[data-graphics-quality="low"] .menu-core-v2::before { animation:none!important; }
         html[data-graphics-quality="low"] .upgrade-modal-kicker { background:#101c2b; }
 
         @media (prefers-reduced-motion: reduce) {
@@ -6895,10 +6897,10 @@
         }
         function drawVisibleFxCollection(items, glowMargin = 0, drawRatio = 1) {
             // Only thin cosmetic sprites. Harmful shots and collision keep full fidelity.
-            const stride = drawRatio >= 1 ? 1 : Math.max(1, Math.round(1 / drawRatio));
+            const visibleSlots = Math.max(0, Math.min(10, Math.round(drawRatio * 10)));
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
-                if (i % stride !== 0) {
+                if (i % 10 >= visibleSlots) {
                     if (performanceOverlayOn) pc3RenderCounts.skipped++;
                     continue;
                 }
