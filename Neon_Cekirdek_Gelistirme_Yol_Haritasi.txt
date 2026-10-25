@@ -1,10 +1,10 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.10 | İlk plan: 18.10.2026 | Durum: 25.10.2026
+Sürüm: 1.11 | İlk plan: 18.10.2026 | Durum: 25.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: M0-M6.2-PC1 main'de (244/244 CI PASS). PC performansı ve kod bakımı birincil, mobil ürün geliştirmesi ertelendi. M6.2-PC2 çizim/HUD iyileştirmeleri PR incelemesinde.
+Durum: M6.2-PC2 main'de (249/249 CI PASS). Kullanıcı 46 dalgaya kadar FPS sorunu gözlemlemedi; çoklu boss saldırı kilidi ve arena kenarındaki çizim eksikleri için PC46 düzeltmesi inceleniyor. PC öncelikli, mobil ertelendi.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -648,3 +648,28 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
 [BELGE] docs/M6.2-PC2-canvas-hud.md
 [SONRA] M6.2-PC3 profilleme odaklı gölge/gradient/offscreen
   çizim optimizasyonu ve M6.2-PC4 uzun oyun heap/GC doğrulaması.
+
+
+======================================================================
+24. PC46 — 46 DALGALI MANUEL TEST / REGRESYON DÜZELTMESİ
+======================================================================
+
+[KULLANICI TESTİ] 46 dalgaya kadar belirgin FPS sorunu yok. Bazı
+  ileri bosslarda saldırı uyarısı göründü ancak mermi çıkmadı.
+  Bazı dalga geçişlerinde ekran kenarında kesik çizgiler görüldü.
+[KÖK NEDEN] Çoklu boss aynı anda faz saldırısına hazırsa mevcut
+  izin kontrolü karşılıklı engellemeye ve süresiz uyarıya gidebilir.
+[DÜZELTME] Öncelikli, uygun faz sahibine saldırma hakkı tanınır;
+  kalanlar mevcut ortak bekleme süresine uyar. Sersemlemiş boss
+  diğer hazır bossları süresiz engelleyemez.
+[GÖRSEL] Izgaranın tam 32 birim katı olmayan viewport'larda sağ/
+  alt kenara ulaşmama sorunu düz ve şok dalgalı yolda giderilir.
+[AÇIKLAMA] Özel baskın sırasında çizilen renkli kesik sınır
+  uyarıları KASITLIDIR ve korunur. Kullanıcının gördüğü çizginin
+  hangisi olduğu gerçek cihazda ayırt edilmelidir.
+[TEST] Toplam 254 smoke hedefi; 5 yeni boss/grid/baskın testi.
+[MANUEL KABUL] İki/üç bossun özel saldırılarının sonunda mermi
+  çıkması, 46+ dalgada uyarının kilitlenmemesi ve kenar çizimi.
+[BELGE] docs/PC46-boss-deadlock-grid-edge.md
+[SONRA] M6.2-PC3/PC4 profil, efekt ve uzun koşu bellek testleri;
+  V2 geliştirmelerinden önce mevcut oyun davranışı güvenceye al.
