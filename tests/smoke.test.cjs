@@ -3821,7 +3821,7 @@ test('PC46 dashed boundary warning remains an intentional special-encounter tele
       label:'ÖNCÜ HÜCUMU',color:'#ffbf58',units:[{side:1}]};
     drawSpecialEncounterWarning();
   })()`);
-  const dashes=calls.filter(x=>x.kind==='setLineDash').map(x=>x.args[0]);
+  const dashes=calls.filter(x=>x.kind==='setLineDash').map(x=>Array.from(x.args[0]));
   assert.deepEqual(dashes,[[14,9],[]]);
   assert.ok(calls.some(x=>x.kind==='fillText'&&x.args[0]==='ÖNCÜ HÜCUMU'));
 });
