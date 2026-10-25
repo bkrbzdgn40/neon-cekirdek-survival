@@ -3877,7 +3877,7 @@ test('M6.2-PC3 gameplay update still advances invisible XP orb and enemy shot', 
   const state = JSON.parse(run(`(() => {
     startNewGame(); gameState = 'PLAYING';
     const orb = new EnergyOrb(-400, 100, 27, false);
-    const shot = new EnemyProjectile(-400, 100, 35, 0, 7, 12, '#ff88dd');
+    const shot = new EnemyProjectile(-38, 100, 35, 0, 7, 12, '#ff88dd');
     orbs=[orb]; enemyProjectiles=[shot];
     const before={orbX:orb.x, projectileX:shot.x, orbValue:orb.value};
     drawVisibleFxCollection(orbs, 22);
@@ -3893,6 +3893,7 @@ test('M6.2-PC3 gameplay update still advances invisible XP orb and enemy shot', 
   assert.equal(state.after.orbValue, state.before.orbValue);
   assert.equal(state.after.orbX, state.before.orbX);
   assert.ok(state.after.projectileX > state.before.projectileX);
+  assert.ok(state.after.projectileX < 0, 'movement occurs while still offscreen');
 });
 
 test('M6.2-PC3 long-run memory samples are opt-in, spaced and reset per run', () => {
