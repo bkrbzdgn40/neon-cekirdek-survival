@@ -2848,7 +2848,7 @@
                 const orbPositions = this.getOrbitalPositions();
                 for (const op of orbPositions) {
                     ctx.save();
-                    ctx.shadowBlur = 15;
+                    ctx.shadowBlur = getGraphicsBlur(15);
                     ctx.shadowColor = '#ffe600';
                     ctx.beginPath();
                     ctx.arc(op.x, op.y, op.r, 0, Math.PI * 2);
@@ -2932,7 +2932,7 @@
                     }
                     ctx.restore();
                 }
-                ctx.shadowBlur = 22;
+                ctx.shadowBlur = getGraphicsBlur(22);
                 ctx.shadowColor = this.overdriveActive ? '#ff007f' : (this.isDashing ? '#ffe600' : this.color);
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
@@ -3080,7 +3080,7 @@
                 ctx.globalAlpha = 1;
                 ctx.fillStyle = visual.color;
                 ctx.shadowColor = visual.color;
-                ctx.shadowBlur = compact ? 0 : visual.glow;
+                ctx.shadowBlur = compact ? 0 : getGraphicsBlur(visual.glow);
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();
@@ -3283,7 +3283,7 @@
             draw(ctx) {
                 ctx.save();
                 // All hostile projectiles use the same magenta ring, including cyan bosses.
-                ctx.shadowBlur = 5;
+                ctx.shadowBlur = getGraphicsBlur(5);
                 ctx.shadowColor = '#ff527a';
                 ctx.strokeStyle = '#ff809b';
                 ctx.lineWidth = 2;
@@ -4381,7 +4381,7 @@
                 if (this.isBoss) {
                     drawBossIdentity(ctx, this);
                 } else {
-                    ctx.shadowBlur=this.isElite?24:14;
+                    ctx.shadowBlur=getGraphicsBlur(this.isElite?24:14);
                     ctx.shadowColor=this.isElite?'#ffe600':this.color;
                     ctx.fillStyle='rgba(8,10,20,.90)';
                     ctx.strokeStyle=this.color;ctx.lineWidth=2.5;
@@ -4448,7 +4448,7 @@
 
             draw(ctx) {
                 ctx.save();
-                ctx.shadowBlur = 10;
+                ctx.shadowBlur = getGraphicsBlur(10);
                 ctx.shadowColor = this.color;
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
@@ -4547,7 +4547,7 @@
                 ctx.translate(this.x, this.y);
                 const s = 1 + Math.sin(this.pulse) * 0.1;
                 ctx.scale(s, s);
-                ctx.shadowBlur = 20;
+                ctx.shadowBlur = getGraphicsBlur(20);
                 ctx.shadowColor=this.source==='boss'?'#ffe600':'#40e9bc';
                 ctx.fillStyle=this.source==='boss'?'#ffe600':'#2de8bd';
                 ctx.strokeStyle='#ffffff';
@@ -4601,7 +4601,7 @@
 
             draw(ctx) {
                 ctx.save();
-                ctx.shadowBlur = 16;
+                ctx.shadowBlur = getGraphicsBlur(16);
                 ctx.shadowColor = this.color;
                 ctx.strokeStyle = this.color;
                 ctx.lineWidth = 2.5;
@@ -5146,7 +5146,8 @@
         }
 
         function drawLightningArcs() {
-            const dense = lightningBolts.length > 15;
+            const dense = graphicsQuality === 'low' ||
+                lightningBolts.length > (graphicsQuality === 'medium' ? 8 : 15);
             for (const arc of lightningBolts) {
                 const duration = arc.duration || 0.15;
                 const strength = Math.max(0, Math.min(1, arc.life / duration));
@@ -5227,7 +5228,8 @@
         }
 
         function drawWeaponImpacts() {
-            const dense = weaponImpacts.length > 30;
+            const dense = graphicsQuality === 'low' ||
+                weaponImpacts.length > (graphicsQuality === 'medium' ? 15 : 30);
             for (const impact of weaponImpacts) {
                 const life = Math.max(0, Math.min(1, impact.life / impact.duration));
                 const p = 1 - life;
@@ -6611,7 +6613,7 @@
                 ctx.fillRect(x, dy > 0 ? y : y-corner*.65, 2, corner*.65);
             }
 
-            const spacing = 48;
+            const spacing = getGraphicsPreset().gridSpacing;
             ctx.strokeStyle = (player && player.overdriveActive) ? 'rgba(255, 0, 127, 0.14)' : 'rgba(0, 243, 255, 0.08)';
             ctx.lineWidth = 1;
             if (shockwaves.length === 0) {
@@ -6744,7 +6746,9 @@
             const cx = worldWidth / 2, cy = worldHeight / 2;
             ctx.lineWidth = 1;
             ctx.globalAlpha = 0.10 + intensity * 0.10;
-            for (let ring = 0; ring < 3; ring++) {
+            const atmosphereRings = graphicsQuality === 'low' ? 0 :
+                graphicsQuality === 'medium' ? 1 : 3;
+            for (let ring = 0; ring < atmosphereRings; ring++) {
                 const radius = Math.min(worldWidth, worldHeight) * (0.27 + ring * 0.19);
                 const offset = phaseTime * (ring % 2 ? -0.075 : 0.06);
                 ctx.beginPath();
@@ -6858,7 +6862,7 @@
                 ctx.save();
                 ctx.translate(ix, iy);
                 ctx.rotate(angle);
-                ctx.shadowBlur = 10;
+                ctx.shadowBlur = getGraphicsBlur(10);
                 ctx.shadowColor = t.col;
                 ctx.fillStyle = t.col;
                 ctx.beginPath();
@@ -6889,8 +6893,15 @@
             return x >= -extent && x <= worldWidth + extent &&
                 y >= -extent && y <= worldHeight + extent;
         }
-        function drawVisibleFxCollection(items, glowMargin = 0) {
-            for (const item of items) {
+        function drawVisibleFxCollection(items, glowMargin = 0, drawRatio = 1) {
+            // Only thin cosmetic sprites. Harmful shots and collision keep full fidelity.
+            const stride = drawRatio >= 1 ? 1 : Math.max(1, Math.round(1 / drawRatio));
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (i % stride !== 0) {
+                    if (performanceOverlayOn) pc3RenderCounts.skipped++;
+                    continue;
+                }
                 if (isFxInsideViewport(item.x, item.y,
                     item.radius ?? item.size ?? 0, glowMargin)) {
                     item.draw(ctx);
@@ -6952,7 +6963,7 @@
             drawVisibleFxCollection(orbs, 22);
             drawVisibleFxCollection(lootChests, 32);
             drawVisibleFxCollection(powerups, 28);
-            drawVisibleFxCollection(particles, 12);
+            drawVisibleFxCollection(particles, 12, getGraphicsPreset().particleDrawRatio);
             drawVisibleFxCollection(enemyProjectiles, 20);
             const denseVolley = bullets.length > 150;
             for (const b of bullets) b.draw(ctx, denseVolley);
@@ -6992,7 +7003,7 @@
                 ctx.font = `700 ${ft.size}px 'Orbitron', sans-serif`;
                 ctx.fillStyle = ft.color;
                 ctx.textAlign = 'center';
-                ctx.shadowBlur = 6;
+                ctx.shadowBlur = getGraphicsBlur(6);
                 ctx.shadowColor = ft.color;
                 ctx.fillText(ft.text, ft.x, ft.y);
                 ctx.restore();
@@ -8378,6 +8389,7 @@
         document.getElementById('backToMenuBtn').addEventListener('click', returnToMainMenu);
 
         let lastFrameTime = performance.now();
+        let lastCanvasRenderedState = null;
 
         function gameLoop(now) {
             const frameMs = Math.max(0, now - lastFrameTime);
@@ -8409,7 +8421,15 @@
                 }
             }
             const renderCpuStart = performanceOverlayOn ? performance.now() : 0;
-            renderGame();
+            // Keep menu and combat live. Frozen modal backgrounds only need
+            // one redraw when state or render resolution changes.
+            const liveCanvas = gameState === 'PLAYING' || gameState === 'MENU' ||
+                gameState === 'DYING_SEQUENCE';
+            if (liveCanvas || canvasRenderInvalidated || lastCanvasRenderedState !== gameState) {
+                renderGame();
+                canvasRenderInvalidated = false;
+                lastCanvasRenderedState = gameState;
+            }
             capturePc3LongRunSample();
             if (performanceOverlayOn && frameMs > 0) {
                 const renderCpuEnd = performance.now();
@@ -8426,7 +8446,7 @@
                     const frame = getPerformanceFrameStats();
                     const bufferMiB = (canvas.width * canvas.height * 4 / 1048576).toFixed(1);
                     document.getElementById('perfOverlay').textContent =
-                        `FPS ${fps} | Kare Ort/P95 ${frame.avgMs.toFixed(1)}/${frame.p95Ms.toFixed(1)}ms (son ${frame.sampleCount} kare)` +
+                        `Kalite ${graphicsQuality.toUpperCase()} | FPS ${fps} | Kare Ort/P95 ${frame.avgMs.toFixed(1)}/${frame.p95Ms.toFixed(1)}ms (son ${frame.sampleCount} kare)` +
                         ` | CPU Güncelleme/Çizim ${(perfUpdateTotalMs / frames).toFixed(1)}/${(perfRenderTotalMs / frames).toFixed(1)}ms` +
                         ` | Canvas ${canvas.width}x${canvas.height} (~${bufferMiB} MiB / tek RGBA tampon) DPR ${currentDpr.toFixed(2)}` +
                         ` | Düşman ${enemies.length} | Mermi ${bullets.length} | Rakip Atış ${enemyProjectiles.length}` +
