@@ -5872,12 +5872,16 @@
             return available[available.length - 1].type;
         }
 
-        function getDirectorProfile(seconds, currentWave, activeBossCount, nextBossAt, afterBossUntil, hpFraction) {
+        function getDirectorProfile(seconds, currentWave, activeBossCount, nextBossAt, afterBossUntil, hpFraction, normalPhase = null) {
             const cycle = ((seconds % 64) + 64) % 64;
             let phase = cycle < 12 ? 'BUILDUP' : cycle < 34 ? 'PRESSURE' : cycle < 49 ? 'CRISIS' : 'RECOVERY';
+            // Priority is non-negotiable: boss presence, post-boss relief and
+            // telegraphed boss warning cannot be overwritten by adaptive tempo.
             if (activeBossCount > 0) phase = 'BOSS';
             else if (seconds < afterBossUntil) phase = 'RECOVERY';
             else if (Number.isFinite(nextBossAt) && seconds >= nextBossAt - 3.8 && seconds < nextBossAt) phase = 'WARNING';
+            else if (normalPhase && ['BUILDUP', 'PRESSURE', 'CRISIS', 'RECOVERY'].includes(normalPhase))
+                phase = normalPhase;
 
             const def = DIRECTOR_PHASES[phase];
             const hpAssist = hpFraction < 0.30 ? 0.78 : hpFraction < 0.50 ? 0.90 : 1;
@@ -6087,10 +6091,29 @@
             }
         }
 
+        // Gameplay V2 G2: opt-in live tempo via ?tempo=adaptive. Classic remains
+        // the default until real playtests validate stress thresholds and pacing.
+        function getTempoMode(search = '') {
+            return /(?:^|[?&])tempo=adaptive(?:&|$)/i.test(search) ? 'adaptive' : 'classic';
+        }
+        function mapAdaptiveStageToDirectorPhase(stage, age) {
+            if (stage === 'BUILDUP') return age < INTENSITY_OBSERVER.buildupMinimum ?
+                'BUILDUP' : 'PRESSURE';
+            if (stage === 'SUSTAIN') return 'CRISIS';
+            if (stage === 'FADE') return 'BUILDUP';
+            if (stage === 'RELAX') return 'RECOVERY';
+            return null; // BOSS_LOCK: legacy boss/warning/post-boss handling owns the profile.
+        }
+
         class CombatDirector {
             constructor() {
                 this.tokens = 4;
                 this.intensityObserver = new AdaptiveTempoObserver();
+                this.tempoMode = getTempoMode(window.location?.search || '');
+                this.adaptivePhase = null;
+                this.baseProfile = null;
+                this.tempoPhaseSwitches = 0;
+                this.tempoPhaseSeconds = { BUILDUP: 0, PRESSURE: 0, CRISIS: 0, RECOVERY: 0 };
                 this.afterBossUntil = -Infinity;
                 this.lastEliteChestAt = -Infinity;
                 this.lastBossCueEncounter = 0;
@@ -6128,17 +6151,28 @@
             update(dt) {
                 const hpFraction = player ? player.hp / Math.max(1, player.maxHp) : 1;
                 const previous = this.profile.phase;
-                this.profile = getDirectorProfile(totalTime, wave, activeBosses.length,
+                // Always calculate the old director profile separately so
+                // special encounters / arena events keep their legacy eligibility.
+                this.baseProfile = getDirectorProfile(totalTime, wave, activeBosses.length,
                     nextBossTime, this.afterBossUntil, hpFraction);
                 const bossLocked = activeBosses.some(b => !b.dead) ||
                     nextBossTime - totalTime <= 3.8 || totalTime < this.afterBossUntil;
                 this.intensityObserver.observe(dt, totalTime, player, enemies,
                     enemyProjectiles, bossLocked);
-                // Stage 1 is read-only. Do not change profile, tokens, boss timers,
-                // encounter probabilities or existing RNG order until validated.
+                const proposal = this.tempoMode === 'adaptive' && !bossLocked ?
+                    mapAdaptiveStageToDirectorPhase(
+                        this.intensityObserver.previewPhase, this.intensityObserver.previewAge) : null;
+                this.adaptivePhase = proposal;
+                this.profile = proposal ? getDirectorProfile(totalTime, wave, activeBosses.length,
+                    nextBossTime, this.afterBossUntil, hpFraction, proposal) : this.baseProfile;
+                // Normal spawns use the selected profile. The existing shared
+                // token budget and hard caps still apply; no extra spawn paths.
                 this.tokens = Math.min(14, this.tokens + dt * this.profile.tokenRate);
                 this.updateSpecialEncounter(dt);
                 this.updateArenaEvent(dt);
+                if (!bossLocked && this.tempoPhaseSeconds[this.profile.phase] !== undefined)
+                    this.tempoPhaseSeconds[this.profile.phase] += dt;
+                if (!bossLocked && this.profile.phase !== previous) this.tempoPhaseSwitches++;
                 if (this.profile.phase !== previous && this.profile.phase !== 'BOSS' &&
                     this.profile.phase !== 'WARNING') {
                     createFloatingText(player.x, player.y - 52,
@@ -6204,7 +6238,8 @@
                     return;
                 }
                 if (totalTime < this.nextArenaAt || bossApproaching ||
-                    this.pendingEncounter || !['BUILDUP', 'PRESSURE'].includes(this.profile.phase) ||
+                    this.pendingEncounter || !['BUILDUP', 'PRESSURE'].includes(
+                        (this.baseProfile || this.profile).phase) ||
                     wave < 4) return;
                 const kind=chooseArenaEventKind(this.arenaEventIndex,wave);
                 const safeMargin = 115;
@@ -6260,11 +6295,12 @@
                 if(bucket) bucket.cancelled++;
             }
             updateSpecialEncounter(dt) {
-                const inCombat = this.profile.phase === 'PRESSURE' || this.profile.phase === 'CRISIS';
+                const specialProfile = this.baseProfile || this.profile;
+                const inCombat = specialProfile.phase === 'PRESSURE' || specialProfile.phase === 'CRISIS';
                 const bossImminent = activeBosses.length > 0 || nextBossTime - totalTime < 7;
                 if (this.pendingEncounter) {
-                    if (bossImminent || this.profile.phase === 'RECOVERY' || this.profile.phase === 'WARNING' ||
-                        this.profile.phase === 'BOSS') {
+                    if (bossImminent || specialProfile.phase === 'RECOVERY' || specialProfile.phase === 'WARNING' ||
+                        specialProfile.phase === 'BOSS') {
                         this.trackSpecialCancellation(this.pendingEncounter);
                         this.pendingEncounter = null;
                         this.stats.specialCancelled++;
@@ -6275,7 +6311,7 @@
                     return;
                 }
                 if (!inCombat || bossImminent || this.activeArenaEvent || wave < 3 || totalTime < this.nextEncounterAt ||
-                    enemies.length > this.profile.cap - 12 || this.tokens < 8) return;
+                    enemies.length > specialProfile.cap - 12 || this.tokens < 8) return;
                 const side = Math.floor(Math.random() * 4);
                 this.pendingEncounter = getSpecialEncounterPlan(wave, this.profile.theme, side, this.encounterIndex);
                 this.trackSpecialOffer(this.pendingEncounter);
@@ -6295,7 +6331,8 @@
                 let tokensSpent=0;
                 for (const unit of plan.units) {
                     const cost = ENEMY_THREAT_COST[unit.type];
-                    if (this.tokens < cost || enemies.length >= Math.min(MAX_ACTIVE_ENEMIES, this.profile.cap)) break;
+                    if (this.tokens < cost || enemies.length >= Math.min(MAX_ACTIVE_ENEMIES,
+                        (this.baseProfile || this.profile).cap)) break;
                     const pos = formationEdgePoint(unit.side, unit.slot, unit.count);
                     if (spawnEnemy(false, unit.type, false, pos)) {
                         this.tokens -= cost;
@@ -6432,7 +6469,15 @@
                 return {
                     timeSeconds: Math.round(totalTime), wave,
                     phase: this.profile.phase, theme: this.profile.theme,
-                    adaptiveTempo: this.intensityObserver.getSnapshot(),
+                    tempoMode: this.tempoMode,
+                    basePhase: (this.baseProfile || this.profile).phase,
+                    adaptivePhase: this.adaptivePhase,
+                    tempoPhaseSwitches: this.tempoPhaseSwitches,
+                    tempoPhaseSeconds: { ...this.tempoPhaseSeconds },
+                    adaptiveTempo: {
+                        ...this.intensityObserver.getSnapshot(),
+                        mode: this.tempoMode === 'adaptive' ? 'driving-spawns' : 'observe-only'
+                    },
                     threatTokens: Math.round(this.tokens * 10) / 10,
                     pendingEncounter: this.pendingEncounter ? this.pendingEncounter.type : null,
                     warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
