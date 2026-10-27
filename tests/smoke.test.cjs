@@ -46,6 +46,7 @@ function setup(stored = {}, options = {}) {
     addEventListener(type, fn) { on(documentListeners, type, fn); },
   };
   const window = { innerWidth: 1280, innerHeight: 720, devicePixelRatio: 1,
+    location: { search: options.locationSearch || '' },
     addEventListener(type, fn) { on(windowListeners, type, fn); } };
   const storage = {
     getItem: (key) => stored[key] ?? null,
@@ -4284,4 +4285,216 @@ test('Gameplay V2 actual boss kill ignores stress model and keeps guaranteed che
   assert.equal(x.kills,1);
   assert.equal(x.tracked,1);
   assert.equal(x.chests,1);
+});
+
+
+test('Gameplay V2 G2 tempo flag is opt-in and ignores malformed URL parameters',()=>{
+  const {run}=setup();
+  const values=JSON.parse(run(`JSON.stringify({
+    defaultMode:getTempoMode(),
+    optIn:getTempoMode('?tempo=adaptive&perf=1'),
+    secondParam:getTempoMode('?perf=1&tempo=adaptive'),
+    classic:getTempoMode('?tempo=classic'),
+    invalid:getTempoMode('?tempo=adaptive-ish'),
+    lookalike:getTempoMode('?mytempo=adaptive'),
+    caps:getTempoMode('?TEMPO=ADAPTIVE')
+  })`));
+  assert.deepEqual(values,{
+    defaultMode:'classic',optIn:'adaptive',secondParam:'adaptive',
+    classic:'classic',invalid:'classic',lookalike:'classic',caps:'adaptive'
+  });
+});
+
+test('Gameplay V2 G2 classic retains existing 64-second combat profile',()=>{
+  const {run}=setup();
+  const r=JSON.parse(run(`(() => {
+    startNewGame();wave=8;nextBossTime=10000;
+    const values=[];
+    for(const t of [5,20,40,55,65,90]) {
+      totalTime=t;combatDirector.update(.05);
+      const fixed=getDirectorProfile(t,wave,0,nextBossTime,combatDirector.afterBossUntil,1);
+      values.push({t,phase:combatDirector.profile.phase,expected:fixed.phase,
+        interval:combatDirector.profile.interval,fixedInterval:fixed.interval,
+        rate:combatDirector.profile.tokenRate,fixedRate:fixed.tokenRate,
+        base:combatDirector.baseProfile.phase});
+    }
+    const diag=window.getNeonRunDiagnostics();
+    return JSON.stringify({values,mode:diag.tempoMode,
+      observerMode:diag.adaptiveTempo.mode,adaptive:diag.adaptivePhase});
+  })()`));
+  assert.equal(r.mode,'classic');
+  assert.equal(r.observerMode,'observe-only');
+  assert.equal(r.adaptive,null);
+  for(const x of r.values){
+    assert.equal(x.phase,x.expected);
+    assert.equal(x.phase,x.base);
+    assert.equal(x.interval,x.fixedInterval);
+    assert.equal(x.rate,x.fixedRate);
+  }
+  assert.deepEqual(r.values.map(x=>x.phase),
+    ['BUILDUP','PRESSURE','CRISIS','RECOVERY','BUILDUP','PRESSURE']);
+});
+
+test('Gameplay V2 G2 maps all four observer phases into contrasting safe director profiles',()=>{
+  const {run}=setup({}, {locationSearch:'?tempo=adaptive'});
+  const r=JSON.parse(run(`(() => {
+    startNewGame();wave=8;totalTime=25;nextBossTime=1000;
+    const stages=[['BUILDUP',3],['BUILDUP',15],['SUSTAIN',1],
+      ['FADE',1],['RELAX',10],['BOSS_LOCK',0]];
+    const rows=[];
+    for(const [stage,age] of stages) {
+      const o=combatDirector.intensityObserver;
+      o.setPreview(stage);o.previewAge=age;
+      combatDirector.update(.05);
+      rows.push({stage,phase:combatDirector.profile.phase,
+        base:combatDirector.baseProfile.phase,
+        interval:combatDirector.profile.interval,
+        rate:combatDirector.profile.tokenRate,
+        elite:combatDirector.profile.eliteChance,
+        active:combatDirector.adaptivePhase});
+    }
+    return JSON.stringify({rows,mode:combatDirector.tempoMode,
+      diag:window.getNeonRunDiagnostics()});
+  })()`));
+  const rows=r.rows;
+  assert.equal(r.mode,'adaptive');
+  assert.equal(r.diag.adaptiveTempo.mode,'driving-spawns');
+  assert.deepEqual(rows.map(x=>x.phase),
+    ['BUILDUP','PRESSURE','CRISIS','BUILDUP','RECOVERY','BUILDUP']);
+  assert.equal(run("mapAdaptiveStageToDirectorPhase('BOSS_LOCK',0)"),null);
+  assert.ok(rows[2].interval<rows[1].interval);
+  assert.ok(rows[4].interval>rows[2].interval);
+  assert.ok(rows[2].rate>rows[4].rate);
+  assert.equal(rows[4].elite,0);
+  assert.ok(rows.every(x=>x.base==='PRESSURE'));
+  assert.equal(rows[5].active,'BUILDUP');
+});
+
+test('Gameplay V2 G2 high stress triggers a real crisis and preserves director caps and XP rules',()=>{
+  const {run}=setup({}, {locationSearch:'?tempo=adaptive'});
+  const r=JSON.parse(run(`(() => {
+    startNewGame();wave=8;totalTime=25;nextBossTime=1000;
+    const o=combatDirector.intensityObserver;
+    o.eventStress=90;o.refreshIntensity();o.previewAge=7.95;
+    combatDirector.update(.05);
+    const newProfile={...combatDirector.profile};
+    const classic=getDirectorProfile(totalTime,wave,0,nextBossTime,combatDirector.afterBossUntil,1);
+    const chosen=combatDirector.profile.phase;
+    const budget=combatDirector.tokens;
+    return JSON.stringify({chosen,classic:classic.phase,
+      interval:newProfile.interval,oldInterval:classic.interval,
+      maxCap:MAX_ACTIVE_ENEMIES,actualCap:newProfile.cap,
+      hp:player.hp,damage:player.damage,xp:player.xp,tokens:budget});
+  })()`));
+  assert.equal(r.chosen,'CRISIS');
+  assert.equal(r.classic,'PRESSURE');
+  assert.ok(r.interval<r.oldInterval);
+  assert.ok(r.actualCap<=r.maxCap);
+  assert.ok(r.tokens<=14);
+  assert.ok(r.hp>0&&r.damage>0);
+  assert.equal(r.xp,0);
+});
+
+test('Gameplay V2 G2 boss warning, live boss and final-boss recovery override the adaptive peak',()=>{
+  const {run}=setup({}, {locationSearch:'?tempo=adaptive'});
+  const r=JSON.parse(run(`(() => {
+    startNewGame();wave=8;
+    const observer=combatDirector.intensityObserver;
+    observer.setPreview('SUSTAIN');
+    nextBossTime=100;totalTime=96.6;
+    combatDirector.update(.05);
+    const warning={phase:combatDirector.profile.phase,base:combatDirector.baseProfile.phase,
+      stage:observer.previewPhase,active:combatDirector.adaptivePhase};
+    activeBosses=[{dead:false}];totalTime=101;
+    combatDirector.update(.05);
+    const boss={phase:combatDirector.profile.phase,base:combatDirector.baseProfile.phase,
+      active:combatDirector.adaptivePhase};
+    activeBosses=[];nextBossTime=200;combatDirector.afterBossUntil=110;
+    totalTime=105;combatDirector.update(.05);
+    const recover={phase:combatDirector.profile.phase,
+      base:combatDirector.baseProfile.phase,active:combatDirector.adaptivePhase};
+    totalTime=111;combatDirector.update(.05);
+    const resumed={phase:combatDirector.profile.phase,
+      stage:observer.previewPhase,active:combatDirector.adaptivePhase};
+    return JSON.stringify({warning,boss,recover,resumed});
+  })()`));
+  assert.deepEqual(r.warning,{phase:'WARNING',base:'WARNING',stage:'BOSS_LOCK',active:null});
+  assert.deepEqual(r.boss,{phase:'BOSS',base:'BOSS',active:null});
+  assert.deepEqual(r.recover,{phase:'RECOVERY',base:'RECOVERY',active:null});
+  assert.equal(r.resumed.stage,'BUILDUP');
+  assert.equal(r.resumed.active,'BUILDUP');
+  assert.equal(r.resumed.phase,'BUILDUP');
+});
+
+test('Gameplay V2 G2 stress relief cannot start new special raids but honors existing telegraphs',()=>{
+  const {run}=setup({}, {locationSearch:'?tempo=adaptive'});
+  const r=JSON.parse(run(`(() => {
+    startNewGame();totalTime=22;wave=8;nextBossTime=1000;
+    const o=combatDirector.intensityObserver;
+    o.setPreview('RELAX');o.previewAge=3;
+    combatDirector.tokens=14;
+    combatDirector.nextEncounterAt=0;
+    combatDirector.update(.05);
+    const relief={phase:combatDirector.profile.phase,base:combatDirector.baseProfile.phase,
+      offered:combatDirector.stats.specialEncounters,
+      pending:combatDirector.pendingEncounter};
+    combatDirector.pendingEncounter={type:'TEST',warning:1.5,units:[]};
+    combatDirector.update(.05);
+    return JSON.stringify({relief,pendingWarning:combatDirector.pendingEncounter?.warning,
+      cancellationCount:combatDirector.stats.specialCancelled});
+  })()`));
+  assert.equal(r.relief.phase,'RECOVERY');
+  assert.equal(r.relief.base,'PRESSURE');
+  assert.equal(r.relief.pending,null);
+  assert.equal(r.relief.offered,0);
+  assert.ok(r.pendingWarning<1.5 && r.pendingWarning>1.3);
+  assert.equal(r.cancellationCount,0);
+});
+
+test('Gameplay V2 G2 adaptive attempts use actual shorter spawn interval without new spawn routes',()=>{
+  const {run}=setup({}, {locationSearch:'?tempo=adaptive'});
+  const r=JSON.parse(run(`(() => {
+    startNewGame();totalTime=20;wave=8;nextBossTime=1000;
+    const o=combatDirector.intensityObserver;
+    o.setPreview('SUSTAIN');o.previewAge=0;
+    combatDirector.tokens=14;spawnTimer=.01;
+    const before=combatDirector.stats.spawned;
+    updateGame(.05);
+    return JSON.stringify({
+      phase:combatDirector.profile.phase,afterTimer:spawnTimer,
+      interval:combatDirector.profile.interval,spawned:combatDirector.stats.spawned-before,
+      enemies:enemies.length,remainingTokens:combatDirector.tokens
+    });
+  })()`));
+  assert.equal(r.phase,'CRISIS');
+  assert.ok(Math.abs(r.afterTimer-(r.interval-.04))<.001);
+  assert.ok(r.spawned>=0&&r.spawned<=1);
+  assert.ok(r.remainingTokens<=14);
+});
+
+test('Gameplay V2 G2 restores legacy phase on new classic run and reports bounded counters',()=>{
+  const {run}=setup({}, {locationSearch:'?tempo=adaptive'});
+  const r=JSON.parse(run(`(() => {
+    startNewGame();nextBossTime=1000;wave=8;totalTime=25;
+    combatDirector.intensityObserver.setPreview('SUSTAIN');
+    combatDirector.update(.05);
+    const active=window.getNeonRunDiagnostics();
+    startNewGame();
+    const fresh=window.getNeonRunDiagnostics();
+    return JSON.stringify({active:{
+      mode:active.tempoMode,base:active.basePhase,phase:active.phase,
+      switches:active.tempoPhaseSwitches,seconds:active.tempoPhaseSeconds
+    },fresh:{mode:fresh.tempoMode,
+      switches:fresh.tempoPhaseSwitches,seconds:fresh.tempoPhaseSeconds,
+      proposal:fresh.adaptivePhase,stress:fresh.adaptiveTempo.stress}});
+  })()`));
+  assert.equal(r.active.mode,'adaptive');
+  assert.equal(r.active.base,'PRESSURE');
+  assert.equal(r.active.phase,'CRISIS');
+  assert.ok(r.active.switches>=1);
+  assert.equal(r.fresh.mode,'adaptive');
+  assert.equal(r.fresh.switches,0);
+  assert.deepEqual(r.fresh.seconds,{BUILDUP:0,PRESSURE:0,CRISIS:0,RECOVERY:0});
+  assert.equal(r.fresh.proposal,null);
+  assert.equal(r.fresh.stress,0);
 });
