@@ -4360,13 +4360,14 @@ test('Gameplay V2 G2 maps all four observer phases into contrasting safe directo
   assert.equal(r.mode,'adaptive');
   assert.equal(r.diag.adaptiveTempo.mode,'driving-spawns');
   assert.deepEqual(rows.map(x=>x.phase),
-    ['BUILDUP','PRESSURE','CRISIS','BUILDUP','RECOVERY','PRESSURE']);
+    ['BUILDUP','PRESSURE','CRISIS','BUILDUP','RECOVERY','BUILDUP']);
+  assert.equal(run("mapAdaptiveStageToDirectorPhase('BOSS_LOCK',0)"),null);
   assert.ok(rows[2].interval<rows[1].interval);
   assert.ok(rows[4].interval>rows[2].interval);
   assert.ok(rows[2].rate>rows[4].rate);
   assert.equal(rows[4].elite,0);
   assert.ok(rows.every(x=>x.base==='PRESSURE'));
-  assert.equal(rows[5].active,null);
+  assert.equal(rows[5].active,'BUILDUP');
 });
 
 test('Gameplay V2 G2 high stress triggers a real crisis and preserves director caps and XP rules',()=>{
