@@ -6296,7 +6296,12 @@
             }
             updateSpecialEncounter(dt) {
                 const specialProfile = this.baseProfile || this.profile;
-                const inCombat = specialProfile.phase === 'PRESSURE' || specialProfile.phase === 'CRISIS';
+                // Keep classic eligibility windows and never inject a brand-new
+                // raid during adaptive RELAX/FADE. Already telegraphed raids
+                // still resolve as promised unless original boss rules cancel.
+                const inCombat = (specialProfile.phase === 'PRESSURE' || specialProfile.phase === 'CRISIS') &&
+                    (this.tempoMode !== 'adaptive' ||
+                     this.profile.phase === 'PRESSURE' || this.profile.phase === 'CRISIS');
                 const bossImminent = activeBosses.length > 0 || nextBossTime - totalTime < 7;
                 if (this.pendingEncounter) {
                     if (bossImminent || specialProfile.phase === 'RECOVERY' || specialProfile.phase === 'WARNING' ||
