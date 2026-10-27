@@ -1,10 +1,10 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.14 | İlk plan: 18.10.2026 | Durum: 27.10.2026
+Sürüm: 1.15 | İlk plan: 18.10.2026 | Durum: 27.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: PC optimizasyonları ve M6.2-PC4 grafik kalite seçenekleri main'de (265/265 CI PASS). Kullanıcı FPS çalışmalarına ara verdi ve Gameplay V2'de AI Director esinli adaptif tempo istedi. G1 gözlemci uygulaması PR incelemesinde; düşman/boss dengelemesi bu turda değişmiyor.
+Durum: PC optimizasyonları/3 grafik kalitesi ve Gameplay V2 G1 stres-hâkimiyet gözlemcisi main'de (273/273 CI PASS). G2 isteğe bağlı (?tempo=adaptive) gerçek doğuş ritmi PR incelemesinde; klasik varsayılan, boss/ödül koruması sürüyor.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -756,3 +756,34 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
 [EK ÖNERİ] Yüksek mastery aşırı zorluk/HP çarpanı getirmesin;
   bunun yerine okunabilir düşman giriş yönü/karşılaşma çeşitliliği
   ve opsiyonel koşu sonrası tempo görselleştirmesi denenebilir.
+
+
+======================================================================
+28. GAMEPLAY V2 G2 — KONTROLLÜ ADAPTİF SPAWN TEMPOSU
+======================================================================
+
+[GEREKSİNİM] G1 stres/ustalık sensöründen gerçek BUILDUP/PRESSURE/
+  CRISIS/RECOVERY normal düşman dalgasına geç. Önce küçük, geri
+  alınabilir opt-in deney. Oyuncunun yüksek kill sayısı ceza değil.
+[MOD] Varsayılan ?tempo=classic (veya boş), deneme için
+  ?tempo=adaptive. Kullanıcıların mevcut koşusu sessizce değişmez.
+[GERÇEK İŞLEYİŞ] G1 BUILDUP ilk 8 sn BUILDUP; sonraki kısmı
+  PRESSURE; SUSTAIN CRISIS; FADE BUILDUP; RELAX RECOVERY.
+  Gerçek normal enemy spawnTimer/interval, tokenRate, cap, elite
+  chance adaptif evreye göre hesaplanır. Yeni spawn yolu yok.
+[BOSS ÖNCELİĞİ] Aktif boss / 3.8sn yaklaşma uyarısı /
+  boss sonrası eski 4sn nefes dönemleri kesin önce gelir.
+[BASKIN KORUMA] Mevcut klasik evre baskın/arena uygunluğunda
+  baz alınır; adaptif RELAX/FADE boyunca yeni özel baskın
+  teklif edilmez, önceden uyarısı çizilen baskın sebepsiz
+  iptal edilmez. Token bütçesi paylaşıldığı için fiili baskın
+  yoğunluğu dolaylı etkilenebilir, G3'te ölçülmeli.
+[DIAGNOSTICS] getNeonRunDiagnostics(): tempoMode, basePhase,
+  adaptivePhase, tempoPhaseSeconds, tempoPhaseSwitches ve G1
+  ölçümleri. Konsol yerel, ağ veya kalıcı telemetri eklenmedi.
+[TEST] Önceki 273 + yeni 8 = 281 hedef. Klasik eşitlik,
+  gerçek spawn cadence, tüm evreler, boss önceliği, özel baskın,
+  oyuncu ödülleri ve koşu sıfırlama.
+[BELGE] docs/GAMEPLAY_V2_ADAPTIVE_DIRECTOR_G2.md
+[G3] Eşit koşullarda classic/adaptive oynanış testi,
+  eğlence/gerilim/boş kalma/adalet kabulü sonrası açma kararı.
