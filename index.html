@@ -7992,6 +7992,99 @@
         }
 
         const RUN_REPORT_VERSION=1;
+        // Only compact anonymized summaries survive page reloads. No complete
+        // builds, saved economy, RNG state, identifiers or network telemetry.
+        const TEMPO_COMPARE_SAVE_KEY = 'neonCekirdek.tempoCompare.v1';
+        const TEMPO_COMPARE_VERSION = 1;
+        function safeTempoNumber(value, max) {
+            return typeof value === 'number' && Number.isFinite(value) &&
+                value >= 0 && value <= max ? value : 0;
+        }
+        function sanitizeTempoComparisonRun(row, mode) {
+            if (!row || typeof row !== 'object' || row.mode !== mode ||
+                !['VANGUARD','PHANTOM','TITAN'].includes(row.chassis) ||
+                !['high','medium','low'].includes(row.graphicsQuality))
+                return null;
+            const numberFields = {
+                durationSeconds: 86400, wave: 100000, kills: 10000000,
+                damageTaken: 10000000, bossKills: 100000, specialEncounters: 100000,
+                averageStress: 100, peakStress: 100, averageMastery: 100,
+                stressPeaks: 100000, highStressSeconds: 86400,
+                calmSeconds: 86400, longestCalmSeconds: 86400,
+                calmWindows: 100000, reliefEntries: 100000,
+                crisisSeconds: 86400, recoverySeconds: 86400,
+                normalSeconds: 86400, bossProtectedSeconds: 86400
+            };
+            for (const [key,max] of Object.entries(numberFields)) {
+                if (typeof row[key] !== 'number' ||
+                    !Number.isFinite(row[key]) || row[key] < 0 || row[key] > max)
+                    return null;
+            }
+            if (row.wave < 1 || row.highStressSeconds > row.normalSeconds + .1 ||
+                row.calmSeconds > row.normalSeconds + .1 ||
+                row.longestCalmSeconds > row.calmSeconds + .1 ||
+                row.crisisSeconds + row.recoverySeconds > row.normalSeconds + .1)
+                return null;
+            const safe={mode,chassis:row.chassis,graphicsQuality:row.graphicsQuality};
+            for (const key of Object.keys(numberFields)) safe[key]=row[key];
+            return safe;
+        }
+        function readTempoComparison() {
+            const empty={classic:null,adaptive:null};
+            try {
+                const raw=localStorage.getItem(TEMPO_COMPARE_SAVE_KEY);
+                if (!raw) return empty;
+                const data=JSON.parse(raw);
+                if (!data || data.version!==TEMPO_COMPARE_VERSION) return empty;
+                return {
+                    classic:sanitizeTempoComparisonRun(data.classic,'classic'),
+                    adaptive:sanitizeTempoComparisonRun(data.adaptive,'adaptive')
+                };
+            } catch (e) { return empty; }
+        }
+        function makeTempoComparisonRun(report) {
+            if (!report?.tempo) return null;
+            const metrics=report.tempo.metrics;
+            return sanitizeTempoComparisonRun({
+                mode:report.tempo.mode,chassis:report.chassis,
+                graphicsQuality:graphicsQuality,
+                durationSeconds:report.result.durationSeconds,
+                wave:report.result.wave,kills:report.result.kills,
+                damageTaken:report.combat.damageTaken,
+                bossKills:report.combat.bossKills,
+                specialEncounters:report.combat.specialEncounters,
+                averageStress:metrics.averageStress,
+                peakStress:metrics.peakStress,
+                averageMastery:metrics.averageMastery,
+                stressPeaks:metrics.stressPeaks,
+                highStressSeconds:metrics.highStressSeconds,
+                calmSeconds:metrics.calmSeconds,
+                longestCalmSeconds:metrics.longestCalmSeconds,
+                calmWindows:metrics.calmWindows,
+                reliefEntries:metrics.reliefEntries,
+                crisisSeconds:report.tempo.phases.CRISIS,
+                recoverySeconds:report.tempo.phases.RECOVERY,
+                normalSeconds:metrics.normalSeconds,
+                bossProtectedSeconds:metrics.bossProtectedSeconds
+            },report.tempo.mode);
+        }
+        function saveTempoComparisonRun(report) {
+            const current=makeTempoComparisonRun(report);
+            if (!current) return false;
+            const stored=readTempoComparison();
+            stored[current.mode]=current;
+            try {
+                localStorage.setItem(TEMPO_COMPARE_SAVE_KEY,
+                    JSON.stringify({version:TEMPO_COMPARE_VERSION,...stored}));
+                return true;
+            } catch (e) { return false; }
+        }
+        window.getNeonTempoComparison=()=>readTempoComparison();
+        window.clearNeonTempoComparison=()=>{
+            try { localStorage.setItem(TEMPO_COMPARE_SAVE_KEY,'');return true; }
+            catch (e) { return false; }
+        };
+
         function snapshotEndOfRun(reason='CORE_DEPLETED',isNewRecord=false){
             if(finalRunReport) return finalRunReport;
             const economy=combatDirector?combatDirector.getEconomySnapshot():null;
@@ -8133,6 +8226,69 @@
                 detail:'Bu koşu temel savaş verilerini topladı. Bir sonraki koşuda daha fazla görev, modül ve arena olayını keşfedebilirsin.'});
             return notes.slice(0,3);
         }
+        function renderTempoReportMarkup(report) {
+            if (!report?.tempo)
+                return reportEmpty('Bu koşu için tempo verisi bulunmuyor.');
+            const m=report.tempo.metrics;
+            const phases=report.tempo.phases;
+            const mode=report.tempo.mode==='adaptive'?'ADAPTİF':'KLASİK';
+            const normal=Math.max(1,m.normalSeconds);
+            const pct=seconds=>Math.round(100*seconds/normal)+'%';
+            const current=reportBlock('BU KOŞUNUN RİTMİ','fa-wave-square',
+                reportPair('Aktif düzen',mode)+
+                reportPair('Ortalama stres',m.averageStress+' / 100')+
+                reportPair('Stres zirvesi',m.peakStress+' / 100')+
+                reportPair('Zirve sayısı',m.stressPeaks)+
+                reportPair('Yüksek stres süresi',Math.round(m.highStressSeconds)+' sn')+
+                reportPair('Ortalama hâkimiyet',m.averageMastery+' / 100')+
+                reportPair('Yakın tehditsiz sakin süre',Math.round(m.calmSeconds)+' sn')+
+                reportPair('En uzun sakin aralık',Math.round(m.longestCalmSeconds)+' sn')+
+                reportPair('8+ sn sakin aralık',m.calmWindows))+
+                reportBlock('FAZ ZAMANLARI','fa-chart-pie',
+                    reportPair('Hazırlık',Math.round(phases.BUILDUP)+' sn')+
+                    reportPair('Baskı',Math.round(phases.PRESSURE)+' sn')+
+                    reportPair('Kriz',Math.round(phases.CRISIS)+' sn · '+pct(phases.CRISIS))+
+                    reportPair('Nefes',Math.round(phases.RECOVERY)+' sn · '+pct(phases.RECOVERY))+
+                    reportPair('Normal savaş ölçümü',Math.round(m.normalSeconds)+' sn')+
+                    reportPair('Boss korumalı süre',Math.round(m.bossProtectedSeconds)+' sn')+
+                    reportPair('Nefes evresine giriş',m.reliefEntries));
+            const saved=readTempoComparison();
+            let comparison=reportEmpty('Karşılaştırma için her iki modda birer tamamlanmış koşu gerekiyor.');
+            if(saved.classic&&saved.adaptive){
+                const a=saved.adaptive,c=saved.classic;
+                const comparable=a.chassis===c.chassis &&
+                    a.graphicsQuality===c.graphicsQuality &&
+                    Math.min(a.durationSeconds,c.durationSeconds)>=120;
+                const format=row=>
+                    reportPair('Süre',Math.round(row.durationSeconds)+' sn')+
+                    reportPair('Dalga',row.wave)+
+                    reportPair('İmha / dk',((row.kills/Math.max(1,row.durationSeconds))*60).toFixed(1))+
+                    reportPair('HP kaybı / dk',((row.damageTaken/Math.max(1,row.durationSeconds))*60).toFixed(1))+
+                    reportPair('Ortalama stres',row.averageStress)+
+                    reportPair('Kriz oranı',Math.round(100*row.crisisSeconds/Math.max(1,row.normalSeconds))+'%')+
+                    reportPair('Nefes oranı',Math.round(100*row.recoverySeconds/Math.max(1,row.normalSeconds))+'%')+
+                    reportPair('Sakin aralık sayısı',row.calmWindows)+
+                    reportPair('Özel baskın',row.specialEncounters)+
+                    reportPair('Boss imhası',row.bossKills);
+                comparison=reportBlock('KLASİK · SON KOŞU','fa-clock',format(c))+
+                    reportBlock('ADAPTİF · SON KOŞU','fa-bolt',format(a))+
+                    reportBlock('KARŞILAŞTIRMA GÜVENİ','fa-scale-balanced',
+                        reportPair('Şasi aynı mı',a.chassis===c.chassis?'EVET':'HAYIR')+
+                        reportPair('Grafik kalitesi aynı mı',
+                            a.graphicsQuality===c.graphicsQuality?'EVET':'HAYIR')+
+                        reportPair('İki koşu da 2+ dk mı',
+                            Math.min(a.durationSeconds,c.durationSeconds)>=120?'EVET':'HAYIR')+
+                        '<p class="report-micro">'+(comparable?
+                        'Benzer koşul kontrolü sağlandı; farklı build, şans ve oyuncu kararları sonucu etkiler. Tek çift sonuç, daha eğlenceli olduğunu kanıtlamaz.':
+                        'Koşullar farklı veya süre kısa. Sayılar görülebilir fakat sonuçlardan denge/oyuncu memnuniyeti hükmü çıkarılmamalı.')+
+                        '</p>',true);
+            }
+            return '<div class="report-grid">'+current+
+                reportBlock('SON KLASİK / ADAPTİF KOŞU','fa-code-compare',
+                    '<p class="report-micro">Her modun son tamamlanan koşusunun kısa özeti yalnızca bu tarayıcıda tutulur. Tam oyun raporu veya kişisel veri gönderilmez. Bu ölçümler oyun keyfi/retention kanıtı değildir.</p>',true)+
+                comparison+'</div>';
+        }
+
         function renderRunReport(r=finalRunReport){
             if(!r) return false;
             const el=id=>document.getElementById(id);
@@ -8277,6 +8433,7 @@
                             reportPair(id.replaceAll('_',' '),reportNumber(n))).join(''):
                         reportEmpty('Bu koşuda henüz boss karşılaşması kaydedilmedi.'),true);
             el('reportObjectivesContent').innerHTML='<div class="report-grid">'+objectives+'</div>';
+            el('reportTempoContent').innerHTML=renderTempoReportMarkup(r);
             showRunReportTab('summary');
             return true;
         }
@@ -8315,6 +8472,8 @@
             }
             saveMetaProgress();
             snapshotEndOfRun(reason,isNewRecord);
+            // Once per completed run; no writes during combat or card choices.
+            saveTempoComparisonRun(finalRunReport);
 
             document.getElementById('newRecordBadge').classList.toggle('hidden', !isNewRecord);
             document.getElementById('finalScoreText').textContent = score.toLocaleString('tr-TR');
