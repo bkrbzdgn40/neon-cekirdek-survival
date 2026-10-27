@@ -1,10 +1,10 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.16 | İlk plan: 18.10.2026 | Durum: 27.10.2026
+Sürüm: 1.17 | İlk plan: 18.10.2026 | Durum: 28.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: PC optimizasyonları, üç grafik kalitesi ve Gameplay V2 G1/G2 main'de (281/281 CI PASS). Zorluk kullanıcı testinde iyi bulundu. G3 gerçek koşu ritmi ve klasik/adaptif karşılaştırma raporu PR incelemesinde; mevcut zorluk ve klasik varsayılan korunur.
+Durum: Gameplay V2 G1/G2/G3, üç grafik kalite profili ve 289/289 CI PASS main'de. Kullanıcı artık öğrenen oyuncu modeli istedi; MLP1 gerçek online SGD oyuncu risk tahmini gözlem pilotu PR incelemesinde. Düşman dengesi/model yönetimi ayrı kabul aşamasına ayrıldı.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -823,3 +823,37 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
   tekrar oynanabilirlik için yeni düşman yönleri/davranışları
   ve kademeli içerik yeniliği geliştir; adaptifi veri olmadan
   varsayılan yapma.
+
+
+======================================================================
+30. GAMEPLAY V2 MLP1 — GERÇEK ÖĞRENEN OYUNCU RİSK MODELİ
+======================================================================
+
+[AMAÇ] G1/G2 sabit stres eşikleri öğrenen AI değildir.
+  Oyuncunun kısa gelecek hasar riskini kendi oyunundan
+  öğrenen, kalıcı parametreleri güncelleyen gerçek model kur.
+[ALGORİTMA] 8s'lik normal savaş penceresinin başlangıcında
+  sekiz sayısal bağlam özelliği; bitişte gelecek HP-kaybettiren
+  en az bir isabet oldu mu etiketi. Online logistic regression
+  ve SGD ile ağırlık güncellenir, sonraki pencerede tahmin.
+[OP-İN] ?learn=on ile açık. ?tempo=adaptive&learn=on
+  mevcut G2 adaptif savaşına eklenebilir. Default classic
+  ve mevcut adaptive aynı, model yalnızca gölgede öğrenir.
+[BOSS] Boss uyarı/karşılaşma/sonrası pencereler dışarıda.
+  Pause ve kart seçiminde ilerlemez; bitmeyen örnek atılır.
+[HAFIZA] Şasiye göre ayrı küçük ağırlık/istatistik seti
+  neonCekirdek.playerLearner.v1 anahtarına sadece GAME_OVER
+  sonunda yazılır. Oyuncu kimliği, ham telemetri, ağ yok.
+[DOĞRULAMA] Pre-update Brier model/historik baseline
+  karşılaştırması; tek sentetik PASS başarı kanıtı sayılmaz.
+[DIAGNOSTICS] getNeonPlayerLearner(),
+  clearNeonPlayerLearner(). controlsSpawns=false.
+[TEST] 289 mevcut + 10 yeni = 299 hedef. Etiket-leak
+  güvenliği, çevrim içi ağırlık güncellemesi, sınıf ayrımı,
+  boss/pause izolasyonu, kalıcılık, şasi ayrımı, storage ve
+  savaş kurallarına etkisizlik.
+[BELGE] docs/GAMEPLAY_V2_MLP1_ONLINE_PLAYER_LEARNER.md
+[MLP2] Gerçek oyuncu verisiyle tahminin sürekli daha iyi
+  hale geldiğini ve pozitif/negatif sınıf dengesini kontrol et.
+[MLP3] Ancak yeterli doğrulamayla güvenli, feature-flag
+  arkasında öğrenen modele gerçek tempo kararı yetkisi ver.

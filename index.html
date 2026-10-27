@@ -6191,11 +6191,190 @@
             }
         }
 
+
+        // MLP1: Genuine online SGD learning, but predictions have NO spawn authority.
+        // Learn P(at least one actual HP-loss hit in the next 8 game seconds)
+        // from a feature snapshot taken BEFORE observing the outcome.
+        const PLAYER_LEARNER_SAVE_KEY = 'neonCekirdek.playerLearner.v1';
+        const PLAYER_LEARNER_VERSION = 1;
+        const PLAYER_LEARNER_WINDOW = 8;
+        const PLAYER_LEARNER_FEATURES = Object.freeze([
+            'bias', 'nearEnemies', 'nearProjectiles', 'hpDeficit',
+            'currentStress', 'mastery', 'previousKills', 'previousHits'
+        ]);
+        const PLAYER_LEARNER_CHASSIS = Object.freeze(['VANGUARD', 'PHANTOM', 'TITAN']);
+        const clampLearner01 = v => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
+        function isPlayerLearningEnabled(search = '') {
+            return /(?:^|[?&])learn=on(?:&|$)/i.test(search);
+        }
+        function validPlayerLearnerState(row) {
+            if (!row || typeof row !== 'object' || !Array.isArray(row.weights) ||
+                row.weights.length !== PLAYER_LEARNER_FEATURES.length ||
+                !row.weights.every(n=>typeof n==='number' && Number.isFinite(n) && Math.abs(n)<=8))
+                return false;
+            if (!Number.isSafeInteger(row.samples) || row.samples<0 || row.samples>1000000 ||
+                !Number.isSafeInteger(row.positives) || row.positives<0 || row.positives>row.samples)
+                return false;
+            for(const key of ['modelBrier','baselineBrier']) {
+                if (typeof row[key]!=='number' || !Number.isFinite(row[key]) ||
+                    row[key]<0 || row[key]>row.samples+.0001) return false;
+            }
+            return true;
+        }
+        function readPlayerLearnerBank() {
+            const models={};
+            try {
+                const row=JSON.parse(localStorage.getItem(PLAYER_LEARNER_SAVE_KEY)||'null');
+                if (row?.version!==PLAYER_LEARNER_VERSION || !row.models ||
+                    typeof row.models!=='object') return models;
+                for (const chassis of PLAYER_LEARNER_CHASSIS) {
+                    if (validPlayerLearnerState(row.models[chassis]))
+                        models[chassis]={
+                            weights:[...row.models[chassis].weights],
+                            samples:row.models[chassis].samples,
+                            positives:row.models[chassis].positives,
+                            modelBrier:row.models[chassis].modelBrier,
+                            baselineBrier:row.models[chassis].baselineBrier
+                        };
+                }
+            } catch (e) { /* Invalid or blocked storage starts a clean learner. */ }
+            return models;
+        }
+        class OnlinePlayerLearner {
+            constructor(chassis, enabled = false) {
+                this.chassis = PLAYER_LEARNER_CHASSIS.includes(chassis) ? chassis : 'VANGUARD';
+                this.enabled = enabled;
+                const stored=enabled?readPlayerLearnerBank()[this.chassis]:null;
+                this.weights=stored?[...stored.weights]:new Array(PLAYER_LEARNER_FEATURES.length).fill(0);
+                this.samples=stored?.samples||0;
+                this.positives=stored?.positives||0;
+                this.modelBrier=stored?.modelBrier||0;
+                this.baselineBrier=stored?.baselineBrier||0;
+                this.startSamples=this.samples;
+                this.pending=null;
+                this.previousKills=0;
+                this.previousHits=0;
+                this.skippedWindows=0;
+                this.lastPrediction=null;
+                this.lastOutcome=null;
+            }
+            features(actor, observer) {
+                return [
+                    1,
+                    clampLearner01(observer.nearbyEnemies/12),
+                    clampLearner01(observer.nearbyProjectiles/8),
+                    clampLearner01(1-actor.hp/Math.max(1,actor.maxHp)),
+                    clampLearner01(observer.intensity/100),
+                    clampLearner01(observer.mastery/100),
+                    clampLearner01(this.previousKills/20),
+                    clampLearner01(this.previousHits/3)
+                ];
+            }
+            predict(features) {
+                let z=0;
+                for(let i=0;i<this.weights.length;i++) z+=this.weights[i]*features[i];
+                z=Math.max(-12,Math.min(12,z));
+                return 1/(1+Math.exp(-z));
+            }
+            train(features, outcome) {
+                if (!Array.isArray(features) || features.length!==this.weights.length ||
+                    !features.every(v=>typeof v==='number' && Number.isFinite(v) && v>=0 && v<=1) ||
+                    (outcome!==0 && outcome!==1)) return false;
+                // Evaluate BEFORE updating, against a simple prior-prevalence baseline.
+                const probability=this.predict(features);
+                const baseline=(this.positives+1)/(this.samples+2);
+                this.modelBrier=Math.min(1000000,this.modelBrier+(probability-outcome)**2);
+                this.baselineBrier=Math.min(1000000,this.baselineBrier+(baseline-outcome)**2);
+                const rate=.18/Math.sqrt(1+this.samples/24);
+                for(let i=0;i<this.weights.length;i++) {
+                    const next=this.weights[i]*(1-rate*.002)+rate*(outcome-probability)*features[i];
+                    this.weights[i]=Math.max(-8,Math.min(8,next));
+                }
+                this.samples=Math.min(1000000,this.samples+1);
+                this.positives=Math.min(this.samples,this.positives+outcome);
+                this.lastOutcome=outcome;
+                return true;
+            }
+            observe(dt, seconds, actor, observer, bossLocked, hitCount, killCount, bossAt) {
+                if (!this.enabled || !(dt>0) || !actor) return;
+                // A boss warning/encounter interrupts the label window. Do not
+                // train on boss outcomes or pretend a truncated window is valid.
+                if (bossLocked || actor.hp<=0 || bossAt-seconds<=PLAYER_LEARNER_WINDOW+.2) {
+                    if (this.pending) this.skippedWindows++;
+                    this.pending=null;
+                    this.previousKills=0;
+                    this.previousHits=0;
+                    return;
+                }
+                if (!this.pending) {
+                    const features=this.features(actor,observer);
+                    this.lastPrediction=this.predict(features);
+                    this.pending={started:seconds,hits:hitCount,kills:killCount,features};
+                    return;
+                }
+                if (seconds-this.pending.started<PLAYER_LEARNER_WINDOW) return;
+                const finished=this.pending;
+                const hits=Math.max(0,hitCount-finished.hits);
+                this.previousHits=hits;
+                this.previousKills=Math.max(0,killCount-finished.kills);
+                this.train(finished.features,hits>0?1:0);
+                // The next window is a new prediction, not retroactive leakage.
+                const features=this.features(actor,observer);
+                this.lastPrediction=this.predict(features);
+                this.pending={started:seconds,hits:hitCount,kills:killCount,features};
+            }
+            exportState() {
+                return {
+                    weights:[...this.weights], samples:this.samples,
+                    positives:this.positives, modelBrier:this.modelBrier,
+                    baselineBrier:this.baselineBrier
+                };
+            }
+            getSnapshot() {
+                const ready=this.samples>=24 && this.positives>=4 &&
+                    this.samples-this.positives>=4;
+                return {
+                    enabled:this.enabled,
+                    mode:this.enabled?'online-training-shadow':'off',
+                    learnsFrom:'actual HP-loss hit in next 8 game seconds',
+                    chassis:this.chassis,
+                    trainedWindows:this.samples,
+                    thisRunWindows:this.samples-this.startSamples,
+                    positiveWindows:this.positives,
+                    skippedWindows:this.skippedWindows,
+                    readyForEvaluation:ready,
+                    // These are pre-update Brier scores, not retrospective training accuracy.
+                    preUpdateBrier:this.samples?+(this.modelBrier/this.samples).toFixed(4):null,
+                    baselineBrier:this.samples?+(this.baselineBrier/this.samples).toFixed(4):null,
+                    predictedRisk:this.lastPrediction===null?null:
+                        +this.lastPrediction.toFixed(3),
+                    previousOutcome:this.lastOutcome,
+                    weights:[...this.weights],
+                    featureNames:[...PLAYER_LEARNER_FEATURES],
+                    controlsSpawns:false
+                };
+            }
+            save() {
+                if (!this.enabled || this.samples<=this.startSamples) return false;
+                const models=readPlayerLearnerBank();
+                models[this.chassis]=this.exportState();
+                try {
+                    localStorage.setItem(PLAYER_LEARNER_SAVE_KEY,
+                        JSON.stringify({version:PLAYER_LEARNER_VERSION,models}));
+                    this.startSamples=this.samples;
+                    return true;
+                } catch (e) { return false; }
+            }
+        }
+
         class CombatDirector {
             constructor() {
                 this.tokens = 4;
                 this.intensityObserver = new AdaptiveTempoObserver();
                 this.tempoRunMetrics = new TempoRunMetrics();
+                this.playerLearner = new OnlinePlayerLearner(
+                    player?.chassis || selectedChassis,
+                    isPlayerLearningEnabled(window.location?.search || ''));
                 this.tempoMode = getTempoMode(window.location?.search || '');
                 this.adaptivePhase = null;
                 this.baseProfile = null;
@@ -6246,6 +6425,8 @@
                     nextBossTime - totalTime <= 3.8 || totalTime < this.afterBossUntil;
                 this.intensityObserver.observe(dt, totalTime, player, enemies,
                     enemyProjectiles, bossLocked);
+                this.playerLearner.observe(dt,totalTime,player,this.intensityObserver,
+                    bossLocked,runMetrics.hitsTaken,kills,nextBossTime);
                 const proposal = this.tempoMode === 'adaptive' && !bossLocked ?
                     mapAdaptiveStageToDirectorPhase(
                         this.intensityObserver.previewPhase, this.intensityObserver.previewAge) : null;
@@ -6569,6 +6750,7 @@
                     tempoPhaseSwitches: this.tempoPhaseSwitches,
                     tempoPhaseSeconds: { ...this.tempoPhaseSeconds },
                     tempoRunMetrics: this.tempoRunMetrics.getSnapshot(),
+                    playerLearner: this.playerLearner.getSnapshot(),
                     adaptiveTempo: {
                         ...this.intensityObserver.getSnapshot(),
                         mode: this.tempoMode === 'adaptive' ? 'driving-spawns' : 'observe-only'
@@ -8474,6 +8656,9 @@
             snapshotEndOfRun(reason,isNewRecord);
             // Once per completed run; no writes during combat or card choices.
             saveTempoComparisonRun(finalRunReport);
+            // Training updates occurred during completed normal combat windows;
+            // save the tiny weight vector only at end of a finished run.
+            combatDirector?.playerLearner.save();
 
             document.getElementById('newRecordBadge').classList.toggle('hidden', !isNewRecord);
             document.getElementById('finalScoreText').textContent = score.toLocaleString('tr-TR');
@@ -9006,6 +9191,17 @@
             return records;
         };
         window.getNeonRunDiagnostics = () => combatDirector ? combatDirector.getDiagnostics() : null;
+        window.getNeonPlayerLearner = () => combatDirector ?
+            combatDirector.playerLearner.getSnapshot() : null;
+        window.clearNeonPlayerLearner = () => {
+            try {
+                localStorage.setItem(PLAYER_LEARNER_SAVE_KEY,'');
+                if (combatDirector) combatDirector.playerLearner =
+                    new OnlinePlayerLearner(player?.chassis||selectedChassis,
+                        combatDirector.playerLearner.enabled);
+                return true;
+            } catch (e) { return false; }
+        };
         window.getNeonIntensityHistory = () => combatDirector ?
             combatDirector.intensityObserver.getHistory() : [];
         window.getNeonEconomySnapshot = () => combatDirector ? combatDirector.getEconomySnapshot() : null;

@@ -4680,3 +4680,211 @@ test('Gameplay V2 G3 last-of-each-mode overwrite is isolated and comparison retu
   assert.equal(x.adaptive.mode,'adaptive');
   assert.equal(x.classic.mode,'classic');
 });
+
+
+test('Gameplay V2 MLP1 learner flag is opt-in, not confused with adaptivity',()=>{
+  const {run}=setup();
+  const v=JSON.parse(run(`JSON.stringify({
+    default:isPlayerLearningEnabled(),
+    enabled:isPlayerLearningEnabled('?tempo=adaptive&learn=on'),
+    reordered:isPlayerLearningEnabled('?learn=on&tempo=classic'),
+    malformed:isPlayerLearningEnabled('?learn=only'),
+    unrelated:isPlayerLearningEnabled('?mylearn=on'),
+    off:isPlayerLearningEnabled('?learn=off')
+  })`));
+  assert.deepEqual(v,{default:false,enabled:true,reordered:true,malformed:false,
+    unrelated:false,off:false});
+  const off=setup().run("(()=>{startNewGame();return window.getNeonPlayerLearner().mode})()");
+  assert.equal(off,'off');
+});
+
+test('Gameplay V2 MLP1 online SGD learns from labeled outcomes and separates high from low risk inputs',()=>{
+  const {run}=setup();
+  const v=JSON.parse(run(`(() => {
+    const l=new OnlinePlayerLearner('VANGUARD',true);
+    const low=[1,0,0,0,0,0,0,0],high=[1,1,1,.7,.9,0,0,0];
+    const initial=[l.predict(low),l.predict(high)];
+    for(let i=0;i<100;i++){
+      l.train(high,1);l.train(low,0);
+    }
+    const after=[l.predict(low),l.predict(high)];
+    return JSON.stringify({initial,after,weights:l.weights,snap:l.getSnapshot()});
+  })()`));
+  assert.deepEqual(v.initial,[.5,.5]);
+  assert.ok(v.after[0]<.5);
+  assert.ok(v.after[1]>.5);
+  assert.ok(v.after[1]>v.after[0]+.35);
+  assert.equal(v.snap.trainedWindows,200);
+  assert.equal(v.snap.positiveWindows,100);
+  assert.equal(v.snap.readyForEvaluation,true);
+  assert.equal(v.snap.controlsSpawns,false);
+  assert.ok(v.weights.every(x=>Math.abs(x)<=8));
+  assert.ok(v.snap.preUpdateBrier<v.snap.baselineBrier,
+    'learner must outperform naive running prevalence on separable labels');
+});
+
+test('Gameplay V2 MLP1 labels only completed future 8s HP-loss windows',()=>{
+  const {run}=setup({}, {locationSearch:'?tempo=adaptive&learn=on'});
+  const v=JSON.parse(run(`(() => {
+    startNewGame();nextBossTime=1000;totalTime=1;
+    combatDirector.update(.05);
+    const l=combatDirector.playerLearner;
+    const originalFeatures=[...l.pending.features], initialPrediction=l.lastPrediction;
+    runMetrics.hitsTaken=1;totalTime=7;combatDirector.update(.05);
+    const premature=l.getSnapshot();
+    totalTime=9.1;combatDirector.update(.05);
+    const complete=l.getSnapshot();
+    return JSON.stringify({
+      initialPrediction,originalFeatures,premature,complete,
+      trainingUsesOldFeatures:l.pending.features!==originalFeatures,
+      nextStartsAt:l.pending.started
+    });
+  })()`));
+  assert.equal(v.premature.thisRunWindows,0);
+  assert.equal(v.complete.thisRunWindows,1);
+  assert.equal(v.complete.positiveWindows,1);
+  assert.equal(v.complete.previousOutcome,1);
+  assert.equal(v.originalFeatures[0],1);
+  assert.equal(v.nextStartsAt,9.1);
+});
+
+test('Gameplay V2 MLP1 excludes interrupted boss warning and boss combat windows',()=>{
+  const {run}=setup({}, {locationSearch:'?learn=on'});
+  const v=JSON.parse(run(`(() => {
+    startNewGame();nextBossTime=1000;totalTime=1;combatDirector.update(.05);
+    const l=combatDirector.playerLearner;
+    nextBossTime=12;totalTime=5;combatDirector.update(.05);
+    const dropped={skipped:l.skippedWindows,samples:l.samples,pending:!!l.pending};
+    activeBosses=[{dead:false}];totalTime=6;combatDirector.update(.05);
+    const boss={samples:l.samples,pending:!!l.pending};
+    activeBosses=[];nextBossTime=1000;totalTime=20;combatDirector.update(.05);
+    runMetrics.hitsTaken=1;totalTime=28.1;combatDirector.update(.05);
+    return JSON.stringify({dropped,boss,finished:l.getSnapshot()});
+  })()`));
+  assert.deepEqual(v.dropped,{skipped:1,samples:0,pending:false});
+  assert.deepEqual(v.boss,{samples:0,pending:false});
+  assert.equal(v.finished.trainedWindows,1);
+  assert.equal(v.finished.positiveWindows,1);
+});
+
+test('Gameplay V2 MLP1 game pause/upgrade freezes training and new run discards incomplete window',()=>{
+  const {run}=setup({}, {locationSearch:'?learn=on'});
+  const v=JSON.parse(run(`(() => {
+    startNewGame();nextBossTime=1000;totalTime=1;combatDirector.update(.05);
+    const firstPending=combatDirector.playerLearner.pending.started;
+    gameState='LEVEL_UP';lastFrameTime=0;
+    gameLoop(100);gameLoop(200);gameLoop(300);
+    const before=combatDirector.playerLearner.getSnapshot();
+    startNewGame();
+    const after=combatDirector.playerLearner.getSnapshot();
+    return JSON.stringify({firstPending,before,after});
+  })()`));
+  assert.equal(v.firstPending,1);
+  assert.equal(v.before.trainedWindows,0);
+  assert.equal(v.after.trainedWindows,0);
+  assert.equal(v.after.thisRunWindows,0);
+  assert.equal(v.after.predictedRisk,null);
+});
+
+test('Gameplay V2 MLP1 saves only after game-over and resumes same chassis with learned weights',()=>{
+  const storage={};
+  const a=setup(storage,{locationSearch:'?tempo=adaptive&learn=on'});
+  a.run(`startNewGame();nextBossTime=1000;totalTime=1;combatDirector.update(.05);
+    totalTime=9.1;runMetrics.hitsTaken=1;combatDirector.update(.05);`);
+  assert.equal(Object.hasOwn(storage,'neonCekirdek.playerLearner.v1'),false,
+    'do not persist during gameplay');
+  const first=JSON.parse(a.run('JSON.stringify(window.getNeonPlayerLearner())'));
+  a.run('triggerGameOver()');
+  const stored=JSON.parse(storage['neonCekirdek.playerLearner.v1']);
+  assert.equal(stored.version,1);
+  assert.equal(stored.models.VANGUARD.samples,1);
+  assert.equal(stored.models.VANGUARD.positives,1);
+  assert.equal(JSON.stringify(stored).includes('nearbyEnemies'),false,
+    'no raw gameplay events in persisted model');
+  const b=setup(storage,{locationSearch:'?learn=on'});
+  const second=JSON.parse(b.run("(()=>{startNewGame();return JSON.stringify(window.getNeonPlayerLearner())})()"));
+  assert.equal(first.trainedWindows,second.trainedWindows);
+  assert.deepEqual(first.weights,second.weights);
+  assert.equal(second.thisRunWindows,0);
+  assert.equal(second.mode,'online-training-shadow');
+});
+
+test('Gameplay V2 MLP1 stores independent chassis models, not cross-chassis weights',()=>{
+  const storage={};
+  const a=setup(storage,{locationSearch:'?learn=on'});
+  a.run(`startNewGame();nextBossTime=1000;totalTime=1;combatDirector.update(.05);
+    runMetrics.hitsTaken=1;totalTime=9.1;combatDirector.update(.05);triggerGameOver();`);
+  const b=setup(storage,{locationSearch:'?learn=on'});
+  const x=JSON.parse(b.run(`(() => {
+    selectedChassis='PHANTOM';startNewGame();
+    const model=combatDirector.playerLearner.getSnapshot();
+    nextBossTime=1000;totalTime=1;combatDirector.update(.05);
+    totalTime=9.1;combatDirector.update(.05);triggerGameOver();
+    return JSON.stringify(model);
+  })()`));
+  assert.equal(x.chassis,'PHANTOM');
+  assert.equal(x.trainedWindows,0);
+  const bank=JSON.parse(storage['neonCekirdek.playerLearner.v1']);
+  assert.equal(bank.models.VANGUARD.positives,1);
+  assert.equal(bank.models.PHANTOM.positives,0);
+  assert.equal(bank.models.PHANTOM.samples,1);
+});
+
+test('Gameplay V2 MLP1 corrupt state and storage failures never break gameplay',()=>{
+  const key='neonCekirdek.playerLearner.v1';
+  const storage={[key]:JSON.stringify({version:1,models:{VANGUARD:{
+    weights:[Infinity,999],samples:500,positives:500,modelBrier:0,baselineBrier:0
+  }}})};
+  const {run}=setup(storage,{locationSearch:'?learn=on'});
+  assert.equal(run("(()=>{startNewGame();return combatDirector.playerLearner.samples})()"),0);
+  const p=JSON.parse(run(`(() => {
+    nextBossTime=1000;totalTime=1;combatDirector.update(.05);
+    runMetrics.hitsTaken=1;totalTime=9.1;combatDirector.update(.05);
+    localStorage.setItem=()=>{throw Error('storage denied')};
+    const save=combatDirector.playerLearner.save();
+    return JSON.stringify({save,model:window.getNeonPlayerLearner(),canSpawn:!!combatDirector});
+  })()`));
+  assert.equal(p.save,false);
+  assert.equal(p.model.trainedWindows,1);
+  assert.equal(p.canSpawn,true);
+});
+
+test('Gameplay V2 MLP1 never alters adaptive boss precedence, tokens, or actual spawn profile',()=>{
+  const a=setup({}, {locationSearch:'?tempo=adaptive'});
+  const b=setup({}, {locationSearch:'?tempo=adaptive&learn=on'});
+  const expr=`(() => {
+    startNewGame();wave=8;totalTime=25;nextBossTime=1000;
+    const observer=combatDirector.intensityObserver;
+    observer.setPreview('SUSTAIN');observer.previewAge=1;
+    combatDirector.tokens=4;
+    combatDirector.update(.05);
+    return JSON.stringify({profile:combatDirector.profile,
+      tokens:combatDirector.tokens,phase:combatDirector.profile.phase,
+      bossAt:nextBossTime,learning:combatDirector.playerLearner.enabled});
+  })()`;
+  const normal=JSON.parse(a.run(expr)),learning=JSON.parse(b.run(expr));
+  assert.equal(normal.learning,false);
+  assert.equal(learning.learning,true);
+  assert.deepEqual(normal.profile,learning.profile);
+  assert.equal(normal.tokens,learning.tokens);
+  assert.equal(normal.bossAt,learning.bossAt);
+});
+
+test('Gameplay V2 MLP1 reset clears weights without disturbing graphics, meta or G3 A/B records',()=>{
+  const storage={};
+  const {run}=setup(storage,{locationSearch:'?learn=on'});
+  const r=JSON.parse(run(`(() => {
+    startNewGame();nextBossTime=1000;totalTime=1;combatDirector.update(.05);
+    runMetrics.hitsTaken=1;totalTime=9.1;combatDirector.update(.05);
+    const learned=window.getNeonPlayerLearner();
+    const cleared=window.clearNeonPlayerLearner();
+    const fresh=window.getNeonPlayerLearner();
+    return JSON.stringify({learned,cleared,fresh});
+  })()`));
+  assert.equal(r.learned.trainedWindows,1);
+  assert.equal(r.cleared,true);
+  assert.equal(r.fresh.trainedWindows,0);
+  assert.ok(r.fresh.weights.every(x=>x===0));
+  assert.equal(storage['neonCekirdek.playerLearner.v1'],'');
+  assert.ok(!Object.hasOwn(storage,'neonCekirdek.tempoCompare.v1'));
+});
