@@ -1,10 +1,10 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.15 | İlk plan: 18.10.2026 | Durum: 27.10.2026
+Sürüm: 1.16 | İlk plan: 18.10.2026 | Durum: 27.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: PC optimizasyonları/3 grafik kalitesi ve Gameplay V2 G1 stres-hâkimiyet gözlemcisi main'de (273/273 CI PASS). G2 isteğe bağlı (?tempo=adaptive) gerçek doğuş ritmi PR incelemesinde; klasik varsayılan, boss/ödül koruması sürüyor.
+Durum: PC optimizasyonları, üç grafik kalitesi ve Gameplay V2 G1/G2 main'de (281/281 CI PASS). Zorluk kullanıcı testinde iyi bulundu. G3 gerçek koşu ritmi ve klasik/adaptif karşılaştırma raporu PR incelemesinde; mevcut zorluk ve klasik varsayılan korunur.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -787,3 +787,39 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
 [BELGE] docs/GAMEPLAY_V2_ADAPTIVE_DIRECTOR_G2.md
 [G3] Eşit koşullarda classic/adaptive oynanış testi,
   eğlence/gerilim/boş kalma/adalet kabulü sonrası açma kararı.
+
+
+======================================================================
+29. GAMEPLAY V2 G3 — GERÇEK RİTİM ÖLÇÜMÜ VE A/B KOŞU RAPORU
+======================================================================
+
+[KULLANICI GERİ BİLDİRİMİ] G2 zorluğu iyi. G3'te zorluğu,
+  normal spawn ve boss parametrelerini tekrar değiştirme.
+[ÖLÇÜM] CombatDirector içindeki G3 TempoRunMetrics, gerçek
+  4 fazın sürelerini ve normal savaşın zaman ağırlıklı stres/
+  hâkimiyet ortalamasını, stres zirvelerini, yoğun saniyeleri,
+  yerel tehdit yokluğunda sakin saniyeleri ve 8+sn sakin
+  aralıkları sayar. Boss kilidindeki süre ayrıdır.
+[FAZ RAPORU] Oyun sonunda erişilebilir RİTİM sekmesi; bu
+  koşunun nabzı ve gerçek CRISIS/RECOVERY saniye/oranları.
+[A/B] ?tempo=classic ve ?tempo=adaptive ile biten son birer
+  koşunun minimum özetleri ayrı localStorage anahtarında
+  tutulur. Süre/dalga/kill-dk/hasar-dk/special boss ve
+  kriz/nefes oranları kıyaslanır. Kayıt sunucuya gitmez.
+[KARŞILAŞTIRMA] Aynı şasi ve grafik profili, iki koşu da
+  120+sn durumları gösterilir; olumlu grafik tek başına
+  daha iyi deneyim, gerçek retention veya adil zorluk kanıtı
+  değildir. Kullanıcıdan heyecan/adalet/sıkılma hissi alınır.
+[API] getNeonRunDiagnostics().tempoRunMetrics,
+  getNeonFinalReport().tempo, getNeonTempoComparison(),
+  clearNeonTempoComparison() (yalnız G3 kıyas kaydı).
+[TEST] 281 mevcut + 8 yeni = 289 hedef. Stres zirve
+  histerezisi, sakin süre/8sn sınırı, boss dışlama, final
+  rapor, iki modda kalıcılık, bozuk depolama ve sıfırlama.
+[BELGE] docs/GAMEPLAY_V2_ADAPTIVE_DIRECTOR_G3.md
+[MANUEL] Aynı cihazda klasik/adaptif ABBA, 10+ dk koşu,
+  boss46+ uyarı/ateş, özel baskınlar, oyuncu değerlendirmesi.
+[SONRA] Önce birkaç gerçek koşu sonucu değerlendir, sonra
+  tekrar oynanabilirlik için yeni düşman yönleri/davranışları
+  ve kademeli içerik yeniliği geliştir; adaptifi veri olmadan
+  varsayılan yapma.
