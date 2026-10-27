@@ -1519,6 +1519,7 @@
                 <button id="reportTabBuild" type="button" class="report-tab" data-report-tab="build" role="tab" aria-controls="reportBuildContent" aria-selected="false">BUILD</button>
                 <button id="reportTabEconomy" type="button" class="report-tab" data-report-tab="economy" role="tab" aria-controls="reportEconomyContent" aria-selected="false">EKONOMİ</button>
                 <button id="reportTabObjectives" type="button" class="report-tab" data-report-tab="objectives" role="tab" aria-controls="reportObjectivesContent" aria-selected="false">GÖREV / ARENA</button>
+                <button id="reportTabTempo" type="button" class="report-tab" data-report-tab="tempo" role="tab" aria-controls="reportTempoContent" aria-selected="false">RİTİM</button>
             </nav>
 
             <main class="report-main" id="reportMain">
@@ -1527,6 +1528,7 @@
                 <section id="reportBuildContent" class="report-panel hidden" role="tabpanel" aria-labelledby="reportTabBuild"></section>
                 <section id="reportEconomyContent" class="report-panel hidden" role="tabpanel" aria-labelledby="reportTabEconomy"></section>
                 <section id="reportObjectivesContent" class="report-panel hidden" role="tabpanel" aria-labelledby="reportTabObjectives"></section>
+                <section id="reportTempoContent" class="report-panel hidden" role="tabpanel" aria-labelledby="reportTabTempo"></section>
             </main>
 
             <footer class="report-actions" aria-label="Koşu sonrası işlemler">
@@ -6105,10 +6107,95 @@
             return null; // BOSS_LOCK: legacy boss/warning/post-boss handling owns the profile.
         }
 
+        // G3: cumulative, allocation-free measurements. These never make
+        // decisions about spawning, rewards, gameplay physics or difficulty.
+        const TEMPO_RUN_THRESHOLDS = Object.freeze({
+            highStress: 68, rearmStress: 38, calmStress: 20, calmWindowSeconds: 8
+        });
+        class TempoRunMetrics {
+            constructor() {
+                this.normalSeconds = 0;
+                this.bossProtectedSeconds = 0;
+                this.stressWeightedTotal = 0;
+                this.masteryWeightedTotal = 0;
+                this.peakStress = 0;
+                this.highStressSeconds = 0;
+                this.stressPeaks = 0;
+                this.peakArmed = true;
+                this.calmSeconds = 0;
+                this.currentCalmSeconds = 0;
+                this.longestCalmSeconds = 0;
+                this.calmWindows = 0;
+                this.reliefEntries = 0;
+                this.previousNormalPhase = null;
+            }
+            finishCalmWindow() {
+                this.longestCalmSeconds = Math.max(this.longestCalmSeconds, this.currentCalmSeconds);
+                if (this.currentCalmSeconds >= TEMPO_RUN_THRESHOLDS.calmWindowSeconds)
+                    this.calmWindows++;
+                this.currentCalmSeconds = 0;
+            }
+            observe(dt, observer, phase, bossLocked) {
+                if (!(dt > 0)) return;
+                if (bossLocked) {
+                    this.bossProtectedSeconds += dt;
+                    this.finishCalmWindow();
+                    this.previousNormalPhase = null;
+                    return;
+                }
+                const stress = observer.intensity, mastery = observer.mastery;
+                this.normalSeconds += dt;
+                this.stressWeightedTotal += stress * dt;
+                this.masteryWeightedTotal += mastery * dt;
+                this.peakStress = Math.max(this.peakStress, stress);
+                if (stress >= TEMPO_RUN_THRESHOLDS.highStress) {
+                    this.highStressSeconds += dt;
+                    if (this.peakArmed) {
+                        this.stressPeaks++;
+                        this.peakArmed = false;
+                    }
+                } else if (stress <= TEMPO_RUN_THRESHOLDS.rearmStress) {
+                    this.peakArmed = true;
+                }
+                if (phase === 'RECOVERY' && this.previousNormalPhase !== 'RECOVERY')
+                    this.reliefEntries++;
+                this.previousNormalPhase = phase;
+                // This measures low *local* threat, not a claim that the arena
+                // has no enemies. Avoid calling it true empty/dead playtime.
+                const calm = stress < TEMPO_RUN_THRESHOLDS.calmStress &&
+                    observer.nearbyEnemies === 0 && observer.nearbyProjectiles === 0;
+                if (calm) {
+                    this.calmSeconds += dt;
+                    this.currentCalmSeconds += dt;
+                } else {
+                    this.finishCalmWindow();
+                }
+            }
+            getSnapshot() {
+                const normal = this.normalSeconds;
+                return {
+                    normalSeconds: +normal.toFixed(2),
+                    bossProtectedSeconds: +this.bossProtectedSeconds.toFixed(2),
+                    averageStress: normal ? +(this.stressWeightedTotal / normal).toFixed(1) : 0,
+                    averageMastery: normal ? +(this.masteryWeightedTotal / normal).toFixed(1) : 0,
+                    peakStress: +this.peakStress.toFixed(1),
+                    highStressSeconds: +this.highStressSeconds.toFixed(2),
+                    stressPeaks: this.stressPeaks,
+                    calmSeconds: +this.calmSeconds.toFixed(2),
+                    longestCalmSeconds: +Math.max(this.longestCalmSeconds,
+                        this.currentCalmSeconds).toFixed(2),
+                    calmWindows: this.calmWindows +
+                        (this.currentCalmSeconds >= TEMPO_RUN_THRESHOLDS.calmWindowSeconds ? 1 : 0),
+                    reliefEntries: this.reliefEntries
+                };
+            }
+        }
+
         class CombatDirector {
             constructor() {
                 this.tokens = 4;
                 this.intensityObserver = new AdaptiveTempoObserver();
+                this.tempoRunMetrics = new TempoRunMetrics();
                 this.tempoMode = getTempoMode(window.location?.search || '');
                 this.adaptivePhase = null;
                 this.baseProfile = null;
@@ -6172,6 +6259,8 @@
                 this.updateArenaEvent(dt);
                 if (!bossLocked && this.tempoPhaseSeconds[this.profile.phase] !== undefined)
                     this.tempoPhaseSeconds[this.profile.phase] += dt;
+                this.tempoRunMetrics.observe(dt, this.intensityObserver,
+                    this.profile.phase, bossLocked);
                 if (!bossLocked && this.profile.phase !== previous) this.tempoPhaseSwitches++;
                 if (this.profile.phase !== previous && this.profile.phase !== 'BOSS' &&
                     this.profile.phase !== 'WARNING') {
@@ -6479,6 +6568,7 @@
                     adaptivePhase: this.adaptivePhase,
                     tempoPhaseSwitches: this.tempoPhaseSwitches,
                     tempoPhaseSeconds: { ...this.tempoPhaseSeconds },
+                    tempoRunMetrics: this.tempoRunMetrics.getSnapshot(),
                     adaptiveTempo: {
                         ...this.intensityObserver.getSnapshot(),
                         mode: this.tempoMode === 'adaptive' ? 'driving-spawns' : 'observe-only'
@@ -7934,7 +8024,13 @@
                     expired:director.arenaExpired,cancelled:director.arenaCancelled,
                     byKind:director.arenaByKind}:{offered:0,completed:0,expired:0,cancelled:0,byKind:{}},
                 encounters:director?{bossByPattern:director.bossByPattern,
-                    specialByKind:director.specialByKind}:{bossByPattern:{},specialByKind:{}}
+                    specialByKind:director.specialByKind}:{bossByPattern:{},specialByKind:{}},
+                tempo:director?{
+                    mode:director.tempoMode,
+                    metrics:director.tempoRunMetrics,
+                    phases:director.tempoPhaseSeconds,
+                    switches:director.tempoPhaseSwitches
+                }:null
             };
             // A serialization boundary prevents later game mutations and UI references
             // from ever modifying the finished run. Reports remain in this session only.
@@ -7944,11 +8040,11 @@
         window.getNeonFinalReport=()=>finalRunReport?
             JSON.parse(JSON.stringify(finalRunReport)):null;
 
-        const REPORT_TABS=Object.freeze(['summary','combat','build','economy','objectives']);
+        const REPORT_TABS=Object.freeze(['summary','combat','build','economy','objectives','tempo']);
         const REPORT_TAB_IDS=Object.freeze({
             summary:'reportSummaryContent',combat:'reportCombatContent',
             build:'reportBuildContent',economy:'reportEconomyContent',
-            objectives:'reportObjectivesContent'
+            objectives:'reportObjectivesContent',tempo:'reportTempoContent'
         });
         const REPORT_EFFECT_NAMES=Object.freeze({
             railShots:'Ray atışı',clusterBursts:'Küme patlaması',
