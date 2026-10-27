@@ -2753,6 +2753,7 @@
                 if (this.hasShield && this.shieldActive) {
                     this.shieldActive = false;
                     runMetrics.shieldBlocks++;
+                    combatDirector?.intensityObserver.recordShieldBreak();
                     this.shieldCooldown = this.shieldMaxCooldown;
                     this.invulnTimer = 0.8;
                     audio.playExplosion(false);
@@ -2791,6 +2792,7 @@
                 if(damageLost>0){
                     runMetrics.damageTaken+=damageLost;
                     runMetrics.hitsTaken++;
+                    combatDirector?.intensityObserver.recordDamage(damageLost, this.maxHp);
                 }
                 resetFlawlessQuest();
                 this.invulnTimer = 0.65;
@@ -4208,6 +4210,7 @@
 
             die() {
                 this.dead = true;
+                combatDirector?.intensityObserver.recordKill(this, player);
                 kills++;
                 advanceQuest('KILLS',1);
                 if(this.isElite) advanceQuest('ELITE_HUNT',1);
@@ -5889,9 +5892,205 @@
             };
         }
 
+
+        // Gameplay V2, stage 1: observe real player pressure without changing spawns.
+        // High kill counts alone never imply panic. Nearby combat and damage do.
+        const INTENSITY_OBSERVER = Object.freeze({
+            nearbyEnemyRadius: 170, nearbyShotRadius: 125,
+            scanSeconds: .25, historySeconds: 1, historyCapacity: 180,
+            peakThreshold: 68, buildupMinimum: 8, buildupMaximum: 36,
+            sustainSeconds: 4, fadeSeconds: 4, relaxMinimum: 12,
+            relaxMaximum: 24, relaxThreshold: 38
+        });
+        const INTENSITY_PREVIEW_STAGES = Object.freeze([
+            'BUILDUP', 'SUSTAIN', 'FADE', 'RELAX', 'BOSS_LOCK'
+        ]);
+        const clampIntensity = value => Math.max(0, Math.min(100, value));
+        class AdaptiveTempoObserver {
+            constructor() {
+                this.eventStress = 0;
+                this.localPressure = 0;
+                this.intensity = 0;
+                this.mastery = 0;
+                this.nearbyEnemies = 0;
+                this.nearbyProjectiles = 0;
+                this.shieldBreaks = 0;
+                this.hpHits = 0;
+                this.nearKills = 0;
+                this.kills = 0;
+                this.lastDamageAt = -Infinity;
+                this.scanElapsed = 0;
+                this.previewPhase = 'BUILDUP';
+                this.previewAge = 0;
+                this.previewTransitions = 0;
+                this.history = new Float32Array(INTENSITY_OBSERVER.historyCapacity * 6);
+                this.historyNext = 0;
+                this.historyCount = 0;
+                this.nextHistoryAt = 0;
+            }
+
+            refreshIntensity() {
+                this.intensity = clampIntensity(this.eventStress + this.localPressure);
+            }
+
+            recordShieldBreak() {
+                this.shieldBreaks++;
+                this.eventStress = clampIntensity(this.eventStress + 12);
+                this.mastery = clampIntensity(this.mastery - 5);
+                this.lastDamageAt = totalTime;
+                this.refreshIntensity();
+            }
+
+            recordDamage(lost, maximumHp) {
+                if (!(lost > 0)) return;
+                this.hpHits++;
+                const hpFraction = lost / Math.max(1, maximumHp);
+                this.eventStress = clampIntensity(this.eventStress +
+                    Math.min(34, 15 + hpFraction * 110));
+                this.mastery = clampIntensity(this.mastery - 16);
+                this.lastDamageAt = totalTime;
+                this.refreshIntensity();
+            }
+
+            recordKill(enemy, survivor) {
+                if (enemy.isBoss) return; // Boss rewards and recovery have their own rules.
+                this.kills++;
+                // Safe ranged kills represent control, not an overwhelming attack.
+                this.mastery = clampIntensity(this.mastery +
+                    (totalTime - this.lastDamageAt >= 4 ? 2 : .8));
+                if (!survivor) return;
+                const distance = Math.hypot(enemy.x - survivor.x, enemy.y - survivor.y);
+                if (distance <= INTENSITY_OBSERVER.nearbyEnemyRadius) {
+                    this.nearKills++;
+                    this.eventStress = clampIntensity(this.eventStress +
+                        (enemy.isElite ? 4 : 2.5));
+                    this.refreshIntensity();
+                }
+            }
+
+            setPreview(phase) {
+                if (phase === this.previewPhase) return;
+                this.previewPhase = phase;
+                this.previewAge = 0;
+                this.previewTransitions++;
+            }
+
+            advancePreview(dt, bossLocked) {
+                if (bossLocked) {
+                    this.setPreview('BOSS_LOCK');
+                    return;
+                }
+                if (this.previewPhase === 'BOSS_LOCK') this.setPreview('BUILDUP');
+                this.previewAge += dt;
+                const age = this.previewAge;
+                switch (this.previewPhase) {
+                    case 'BUILDUP':
+                        if (age >= INTENSITY_OBSERVER.buildupMinimum &&
+                            (this.intensity >= INTENSITY_OBSERVER.peakThreshold ||
+                             age >= INTENSITY_OBSERVER.buildupMaximum)) this.setPreview('SUSTAIN');
+                        break;
+                    case 'SUSTAIN':
+                        if (age >= INTENSITY_OBSERVER.sustainSeconds) this.setPreview('FADE');
+                        break;
+                    case 'FADE':
+                        if (age >= INTENSITY_OBSERVER.fadeSeconds) this.setPreview('RELAX');
+                        break;
+                    case 'RELAX':
+                        if (age >= INTENSITY_OBSERVER.relaxMaximum ||
+                            (age >= INTENSITY_OBSERVER.relaxMinimum &&
+                             this.intensity <= INTENSITY_OBSERVER.relaxThreshold))
+                            this.setPreview('BUILDUP');
+                        break;
+                }
+            }
+
+            observe(dt, seconds, survivor, foes, hostileShots, bossLocked) {
+                if (!(dt > 0)) return;
+                const elapsed = Math.min(dt, .1);
+                this.scanElapsed += elapsed;
+                if (this.scanElapsed >= INTENSITY_OBSERVER.scanSeconds) {
+                    this.scanElapsed %= INTENSITY_OBSERVER.scanSeconds;
+                    let closeEnemies = 0, closeShots = 0;
+                    if (survivor) {
+                        const enemyRangeSq = INTENSITY_OBSERVER.nearbyEnemyRadius ** 2;
+                        const shotRangeSq = INTENSITY_OBSERVER.nearbyShotRadius ** 2;
+                        for (const enemy of foes) {
+                            if (enemy.dead) continue;
+                            const dx = enemy.x - survivor.x, dy = enemy.y - survivor.y;
+                            if (dx * dx + dy * dy <= enemyRangeSq) closeEnemies++;
+                        }
+                        for (const shot of hostileShots) {
+                            if (shot.dead) continue;
+                            const dx = shot.x - survivor.x, dy = shot.y - survivor.y;
+                            if (dx * dx + dy * dy <= shotRangeSq) closeShots++;
+                        }
+                    }
+                    this.nearbyEnemies = closeEnemies;
+                    this.nearbyProjectiles = closeShots;
+                    this.localPressure = Math.min(54, closeEnemies * 3.8 + closeShots * 2.7);
+                }
+                // Pressure does not instantly disappear during close combat.
+                const inDanger = this.nearbyEnemies > 0 || this.nearbyProjectiles > 0;
+                this.eventStress = Math.max(0, this.eventStress -
+                    elapsed * (inDanger ? .7 : 5));
+                this.mastery = Math.max(0, this.mastery - elapsed * .55);
+                this.refreshIntensity();
+                this.advancePreview(elapsed, bossLocked);
+                if (seconds >= this.nextHistoryAt) {
+                    this.nextHistoryAt = seconds + INTENSITY_OBSERVER.historySeconds;
+                    const start = this.historyNext * 6;
+                    this.history[start] = seconds;
+                    this.history[start + 1] = this.intensity;
+                    this.history[start + 2] = this.mastery;
+                    this.history[start + 3] = this.nearbyEnemies;
+                    this.history[start + 4] = this.nearbyProjectiles;
+                    this.history[start + 5] = INTENSITY_PREVIEW_STAGES.indexOf(this.previewPhase);
+                    this.historyNext = (this.historyNext + 1) % INTENSITY_OBSERVER.historyCapacity;
+                    this.historyCount = Math.min(INTENSITY_OBSERVER.historyCapacity, this.historyCount + 1);
+                }
+            }
+
+            getSnapshot() {
+                return {
+                    mode: 'observe-only',
+                    stress: Math.round(this.intensity),
+                    mastery: Math.round(this.mastery),
+                    nearbyEnemies: this.nearbyEnemies,
+                    nearbyProjectiles: this.nearbyProjectiles,
+                    proposedPhase: this.previewPhase,
+                    proposedPhaseAge: +this.previewAge.toFixed(1),
+                    transitions: this.previewTransitions,
+                    hpHits: this.hpHits,
+                    shieldBreaks: this.shieldBreaks,
+                    kills: this.kills,
+                    nearKills: this.nearKills,
+                    historySamples: this.historyCount
+                };
+            }
+
+            getHistory() {
+                const rows = [];
+                for (let i = 0; i < this.historyCount; i++) {
+                    const index = (this.historyNext - this.historyCount +
+                        i + INTENSITY_OBSERVER.historyCapacity) % INTENSITY_OBSERVER.historyCapacity;
+                    const k = index * 6;
+                    rows.push({
+                        second: +this.history[k].toFixed(1),
+                        stress: +this.history[k + 1].toFixed(1),
+                        mastery: +this.history[k + 2].toFixed(1),
+                        nearbyEnemies: this.history[k + 3],
+                        nearbyProjectiles: this.history[k + 4],
+                        proposedPhase: INTENSITY_PREVIEW_STAGES[this.history[k + 5]]
+                    });
+                }
+                return rows;
+            }
+        }
+
         class CombatDirector {
             constructor() {
                 this.tokens = 4;
+                this.intensityObserver = new AdaptiveTempoObserver();
                 this.afterBossUntil = -Infinity;
                 this.lastEliteChestAt = -Infinity;
                 this.lastBossCueEncounter = 0;
@@ -5931,6 +6130,12 @@
                 const previous = this.profile.phase;
                 this.profile = getDirectorProfile(totalTime, wave, activeBosses.length,
                     nextBossTime, this.afterBossUntil, hpFraction);
+                const bossLocked = activeBosses.some(b => !b.dead) ||
+                    nextBossTime - totalTime <= 3.8 || totalTime < this.afterBossUntil;
+                this.intensityObserver.observe(dt, totalTime, player, enemies,
+                    enemyProjectiles, bossLocked);
+                // Stage 1 is read-only. Do not change profile, tokens, boss timers,
+                // encounter probabilities or existing RNG order until validated.
                 this.tokens = Math.min(14, this.tokens + dt * this.profile.tokenRate);
                 this.updateSpecialEncounter(dt);
                 this.updateArenaEvent(dt);
@@ -6227,6 +6432,7 @@
                 return {
                     timeSeconds: Math.round(totalTime), wave,
                     phase: this.profile.phase, theme: this.profile.theme,
+                    adaptiveTempo: this.intensityObserver.getSnapshot(),
                     threatTokens: Math.round(this.tokens * 10) / 10,
                     pendingEncounter: this.pendingEncounter ? this.pendingEncounter.type : null,
                     warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
@@ -8495,6 +8701,8 @@
             return records;
         };
         window.getNeonRunDiagnostics = () => combatDirector ? combatDirector.getDiagnostics() : null;
+        window.getNeonIntensityHistory = () => combatDirector ?
+            combatDirector.intensityObserver.getHistory() : [];
         window.getNeonEconomySnapshot = () => combatDirector ? combatDirector.getEconomySnapshot() : null;
         window.getNeonBuildSnapshot = () => player ? {
             modules: { ...player.upgradeCounts },

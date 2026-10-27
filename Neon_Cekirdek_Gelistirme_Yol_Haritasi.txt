@@ -1,10 +1,10 @@
 NEON ÇEKİRDEK: HAYATTA KAL
 KAPSAMLI GELİŞTİRME YOL HARİTASI
-Sürüm: 1.13 | İlk plan: 18.10.2026 | Durum: 25.10.2026
+Sürüm: 1.14 | İlk plan: 18.10.2026 | Durum: 27.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: M6.2-PC3 main'de (259/259 CI PASS). 46 dalga FPS gözlemi olumlu, PC46 yeniden kabulü açık. M6.2-PC4 üç kademeli grafik profili ve kart ekranı performans iyileştirmesi PR incelemesinde. PC öncelikli, mobil ertelendi.
+Durum: PC optimizasyonları ve M6.2-PC4 grafik kalite seçenekleri main'de (265/265 CI PASS). Kullanıcı FPS çalışmalarına ara verdi ve Gameplay V2'de AI Director esinli adaptif tempo istedi. G1 gözlemci uygulaması PR incelemesinde; düşman/boss dengelemesi bu turda değişmiyor.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -725,3 +725,34 @@ hayatta kalma dengesi kanıtı olarak yorumlanmamalıdır.
   kontrast/okunurluk ve arkadaşın PC'sindeki FPS/P95 farkı.
 [SONRA] Profile göre kart menülerindeki diğer animasyonların
   ölçümü ve 20–30 dakika GC/heap kabul testi, ardından PC V2.
+
+
+======================================================================
+27. GAMEPLAY V2 — ADAPTİF SAVAŞ YÖNETMENİ (LEFT 4 DEAD ESİNLİ)
+======================================================================
+
+[KULLANICI İSTEĞİ] Çok kill alanı doğrudan cezalandırmadan,
+  oyuncunun yaşadığı baskıyı ölç ve savaş temposunu gerilim /
+  rahatlama dalgaları halinde çeşitlendir. Öncelik Gameplay V2.
+[G1, GÖZLEMCİ] Mevcut CombatDirector'a AdaptiveTempoObserver
+  eklenir. Gerçek hasar, kalkan kırılması, yakın sıradan düşman
+  ölümü ve yakın tehdidi kaydeder. Uzak güvenli öldürmeleri ayrı
+  mastery ölçümüne işler.
+[MODE] observe-only. 64 saniyelik gerçek director profile,
+  tokenRate/interval/elite chance/spawn/RNG/boss/loot aynı kalır.
+[GÖLGE TEMPO] BUILDUP(8–36s) > SUSTAIN(4s) > FADE(4s)
+  > RELAX(12–24s), boss öncesi/boss/boss sonrası BOSS_LOCK.
+[TANILAMA] window.getNeonRunDiagnostics().adaptiveTempo ve
+  window.getNeonIntensityHistory(). Geçici, yalnızca yerel,
+  yaklaşık 180 saniyelik sabit tampon; her koşuda sıfırlanır.
+[TEST] Mevcut 265 + 8 yeni smoke = 273 hedef. Gerçek hasar,
+  kalkan, öldürme, yakın baskı/sönüm, boss kilidi, sabit spawn,
+  oturum sıfırlama ve bounded history.
+[BELGE] docs/GAMEPLAY_V2_ADAPTIVE_DIRECTOR_G1.md
+[G2] Gözlemlere göre bir feature flag arkasından normal doğuş
+  ritmini adaptif hâle getir; boss ve ödül kuralları korunmalı.
+[G3] Sabit ve adaptif koşulara ait tepe/dinlenme süreleri,
+  oyun hissi, ölüm oranı ve teknik performansı karşılaştır.
+[EK ÖNERİ] Yüksek mastery aşırı zorluk/HP çarpanı getirmesin;
+  bunun yerine okunabilir düşman giriş yönü/karşılaşma çeşitliliği
+  ve opsiyonel koşu sonrası tempo görselleştirmesi denenebilir.

@@ -4087,3 +4087,201 @@ test('M6.2-PC4 card overlay has low-cost backdrop and animation rules by quality
   assert.ok(!html.includes('renderGame()\n            capturePc3LongRunSample()'),
     'frozen modal must not call canvas render every frame');
 });
+
+
+test('Gameplay V2 intensity observer reports read-only state while director phase and economy stay unchanged', () => {
+  const {run}=setup();
+  const data=JSON.parse(run(`(() => {
+    startNewGame(); wave=8; totalTime=23; nextBossTime=200;
+    enemies=[]; enemyProjectiles=[];
+    const expected=getDirectorProfile(totalTime,wave,0,nextBossTime,combatDirector.afterBossUntil,1);
+    combatDirector.tokens=4;
+    combatDirector.intensityObserver.recordDamage(35,100);
+    combatDirector.update(.05);
+    const diag=window.getNeonRunDiagnostics();
+    return JSON.stringify({
+      phase:combatDirector.profile.phase,interval:combatDirector.profile.interval,
+      rate:combatDirector.profile.tokenRate,
+      expectedPhase:expected.phase,expectedInterval:expected.interval,
+      expectedRate:expected.tokenRate,
+      tokens:combatDirector.tokens,
+      stress:diag.adaptiveTempo.stress,preview:diag.adaptiveTempo.proposedPhase,
+      mode:diag.adaptiveTempo.mode, bossAt:nextBossTime
+    });
+  })()`));
+  assert.equal(data.phase,data.expectedPhase);
+  assert.equal(data.interval,data.expectedInterval);
+  assert.equal(data.rate,data.expectedRate);
+  assert.ok(data.tokens>4);
+  assert.ok(data.stress>0);
+  assert.equal(data.preview,'BUILDUP');
+  assert.equal(data.mode,'observe-only');
+  assert.equal(data.bossAt,200);
+});
+
+test('Gameplay V2 real shield break and HP loss feed stress but retain existing damage counters', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    player.invulnTimer=0; player.hasShield=true;player.shieldActive=true;
+    player.takeDamage(20);
+    const blocked=window.getNeonRunDiagnostics().adaptiveTempo;
+    player.invulnTimer=0;player.hasShield=false;
+    const before=player.hp;
+    player.takeDamage(12);
+    const result=window.getNeonRunDiagnostics().adaptiveTempo;
+    return JSON.stringify({blocked,result,hpLost:before-player.hp,
+      shieldCount:runMetrics.shieldBlocks,hitCount:runMetrics.hitsTaken,
+      damageCount:runMetrics.damageTaken});
+  })()`));
+  assert.equal(x.blocked.shieldBreaks,1);
+  assert.equal(x.blocked.hpHits,0);
+  assert.equal(x.result.hpHits,1);
+  assert.ok(x.result.stress>x.blocked.stress);
+  assert.equal(x.hpLost,12);
+  assert.equal(x.shieldCount,1);
+  assert.equal(x.hitCount,1);
+  assert.equal(x.damageCount,12);
+});
+
+test('Gameplay V2 nearby kills add pressure but long range kills primarily raise mastery', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();
+    const obs=combatDirector.intensityObserver;
+    const far=new Enemy(player.x+400,player.y,'SWARM');
+    const close=new Enemy(player.x+45,player.y,'SWARM');
+    obs.recordKill(far,player);
+    const distant=obs.getSnapshot();
+    obs.recordKill(close,player);
+    const nearby=obs.getSnapshot();
+    close.die();
+    return JSON.stringify({distant,nearby,live:obs.getSnapshot(),
+      gameKills:kills,questKills:questStats.byType.KILLS?.completed||0});
+  })()`));
+  assert.equal(x.distant.nearKills,0);
+  assert.equal(x.distant.stress,0);
+  assert.ok(x.distant.mastery>0);
+  assert.equal(x.nearby.nearKills,1);
+  assert.ok(x.nearby.stress>x.distant.stress);
+  assert.equal(x.live.nearKills,2);
+  assert.equal(x.live.kills,3);
+  assert.equal(x.gameKills,1);
+});
+
+test('Gameplay V2 proximity measures real nearby threats and decays after the arena clears', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame();nextBossTime=1000;
+    const o=combatDirector.intensityObserver;
+    enemies=[new Enemy(player.x+24,player.y,'SWARM'),
+      new Enemy(player.x+700,player.y,'SWARM')];
+    enemyProjectiles=[new EnemyProjectile(player.x,player.y+30,5,0,4,2)];
+    for(let i=0;i<5;i++)o.observe(.05,i*.05,player,enemies,enemyProjectiles,false);
+    const withEnemies=o.getSnapshot();
+    enemies=[];enemyProjectiles=[];
+    for(let i=0;i<60;i++)o.observe(.05,.25+i*.05,player,enemies,enemyProjectiles,false);
+    const cleared=o.getSnapshot();
+    return JSON.stringify({withEnemies,cleared});
+  })()`));
+  assert.equal(x.withEnemies.nearbyEnemies,1);
+  assert.equal(x.withEnemies.nearbyProjectiles,1);
+  assert.ok(x.withEnemies.stress>=6);
+  assert.equal(x.cleared.nearbyEnemies,0);
+  assert.equal(x.cleared.nearbyProjectiles,0);
+  assert.ok(x.cleared.stress<x.withEnemies.stress);
+});
+
+test('Gameplay V2 preview models buildup peak fade relax and boss lock without combat changes', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    const o=new AdaptiveTempoObserver();
+    o.intensity=82;
+    o.advancePreview(8,false);
+    const peak=o.previewPhase;
+    o.advancePreview(4,false);
+    const fade=o.previewPhase;
+    o.advancePreview(4,false);
+    const relief=o.previewPhase;
+    o.intensity=10;o.advancePreview(12,false);
+    const buildup=o.previewPhase;
+    o.advancePreview(.05,true);
+    const locked=o.previewPhase;
+    o.advancePreview(100,true);
+    const stillLocked=o.previewPhase;
+    o.advancePreview(.05,false);
+    const resumed=o.previewPhase;
+    return JSON.stringify({peak,fade,relief,buildup,locked,stillLocked,resumed,
+      transitions:o.previewTransitions});
+  })()`));
+  assert.deepEqual(x,{
+    peak:'SUSTAIN',fade:'FADE',relief:'RELAX',buildup:'BUILDUP',
+    locked:'BOSS_LOCK',stillLocked:'BOSS_LOCK',resumed:'BUILDUP',transitions:6
+  });
+});
+
+test('Gameplay V2 telemetry has fixed last-180 sample ring and copies are mutation-safe', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame(); const o=combatDirector.intensityObserver;
+    for(let i=0;i<220;i++)o.observe(.05,i+1,player,[],[],false);
+    const old=o.getHistory(),first=old[0].second,last=old[old.length-1].second;
+    old[0].stress=999;old.push({second:99999});
+    const diag=window.getNeonRunDiagnostics();
+    diag.adaptiveTempo.stress=999;
+    const safe=window.getNeonIntensityHistory();
+    return JSON.stringify({length:safe.length,first,last,safeFirst:safe[0].stress,
+      internalStress:o.getSnapshot().stress,internalSamples:o.historyCount,
+      backingLength:o.history.length});
+  })()`));
+  assert.equal(x.length,180);
+  assert.equal(x.first,41);
+  assert.equal(x.last,220);
+  assert.notEqual(x.safeFirst,999);
+  assert.notEqual(x.internalStress,999);
+  assert.equal(x.internalSamples,180);
+  assert.equal(x.backingLength,1080);
+});
+
+test('Gameplay V2 observer pauses with gameplay and completely resets at new run', () => {
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame(); nextBossTime=1000;
+    combatDirector.intensityObserver.recordDamage(15,100);
+    const before=combatDirector.intensityObserver.getSnapshot();
+    gameState='LEVEL_UP';lastFrameTime=0;
+    gameLoop(100);gameLoop(200);gameLoop(300);
+    const frozen=combatDirector.intensityObserver.getSnapshot();
+    gameState='PLAYING';gameLoop(350);
+    const advanced=combatDirector.intensityObserver.getSnapshot();
+    startNewGame();
+    return JSON.stringify({before,frozen,advanced,reset:window.getNeonRunDiagnostics().adaptiveTempo});
+  })()`));
+  assert.equal(x.frozen.stress,x.before.stress);
+  assert.equal(x.frozen.historySamples,0);
+  assert.ok(x.advanced.historySamples>=1);
+  assert.equal(x.reset.stress,0);
+  assert.equal(x.reset.mastery,0);
+  assert.equal(x.reset.hpHits,0);
+  assert.equal(x.reset.historySamples,0);
+  assert.equal(x.reset.proposedPhase,'BUILDUP');
+});
+
+test('Gameplay V2 actual boss kill ignores stress model and keeps guaranteed chest accounting',()=>{
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    startNewGame(); spawnBossEncounter();
+    const boss=activeBosses[0];boss.hp=1;
+    const prior=combatDirector.intensityObserver.getSnapshot();
+    boss.takeDamage(99999,0,0,false,false);
+    const after=combatDirector.intensityObserver.getSnapshot();
+    return JSON.stringify({prior,after,kills,tracked:combatDirector.stats.bossKills,
+      chests:combatDirector.stats.chestDrops.boss});
+  })()`));
+  assert.equal(x.after.kills,x.prior.kills);
+  assert.equal(x.after.nearKills,x.prior.nearKills);
+  assert.equal(x.after.stress,x.prior.stress);
+  assert.equal(x.kills,1);
+  assert.equal(x.tracked,1);
+  assert.equal(x.chests,1);
+});
