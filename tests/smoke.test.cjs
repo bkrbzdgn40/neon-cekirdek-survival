@@ -4498,3 +4498,185 @@ test('Gameplay V2 G2 restores legacy phase on new classic run and reports bounde
   assert.equal(r.fresh.proposal,null);
   assert.equal(r.fresh.stress,0);
 });
+
+
+test('Gameplay V2 G3 hysteresis counts separated stress peaks, not every high-stress frame',()=>{
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    const m=new TempoRunMetrics();
+    const o={intensity:80,mastery:40,nearbyEnemies:3,nearbyProjectiles:2};
+    for(let i=0;i<10;i++)m.observe(.1,o,'CRISIS',false);
+    const one=m.getSnapshot();
+    o.intensity=52;m.observe(.5,o,'PRESSURE',false);
+    o.intensity=75;m.observe(.1,o,'CRISIS',false);
+    const notRearmed=m.getSnapshot();
+    o.intensity=34;m.observe(.5,o,'RECOVERY',false);
+    o.intensity=83;m.observe(.1,o,'CRISIS',false);
+    const twice=m.getSnapshot();
+    return JSON.stringify({one,notRearmed,twice});
+  })()`));
+  assert.equal(x.one.stressPeaks,1);
+  assert.equal(x.notRearmed.stressPeaks,1);
+  assert.equal(x.twice.stressPeaks,2);
+  assert.equal(x.twice.peakStress,83);
+  assert.ok(Math.abs(x.one.normalSeconds-1)<.001);
+  assert.ok(x.twice.averageStress>0 && x.twice.averageStress<=100);
+  assert.equal(x.twice.reliefEntries,1);
+});
+
+test('Gameplay V2 G3 calm-window metric only counts 8+ seconds near-threat-free and excludes boss periods',()=>{
+  const {run}=setup();
+  const x=JSON.parse(run(`(() => {
+    const m=new TempoRunMetrics();
+    const o={intensity:8,mastery:35,nearbyEnemies:0,nearbyProjectiles:0};
+    for(let i=0;i<90;i++)m.observe(.1,o,'RECOVERY',false);
+    const running=m.getSnapshot();
+    m.observe(2,o,'BOSS',true);
+    const afterBoss=m.getSnapshot();
+    for(let i=0;i<40;i++)m.observe(.1,o,'BUILDUP',false);
+    o.nearbyProjectiles=1;
+    m.observe(.1,o,'PRESSURE',false);
+    const ended=m.getSnapshot();
+    return JSON.stringify({running,afterBoss,ended});
+  })()`));
+  assert.equal(x.running.calmWindows,1);
+  assert.ok(Math.abs(x.running.longestCalmSeconds-9)<.001);
+  assert.equal(x.afterBoss.calmWindows,1);
+  assert.equal(x.afterBoss.bossProtectedSeconds,2);
+  assert.equal(x.ended.calmWindows,1);
+  assert.ok(Math.abs(x.ended.normalSeconds-13.1)<.001);
+  assert.ok(Math.abs(x.ended.calmSeconds-13)<.001);
+  assert.equal(x.ended.reliefEntries,1);
+});
+
+test('Gameplay V2 G3 diagnostics expose independent normal/boss durations without modifying phase',()=>{
+  const {run}=setup({}, {locationSearch:'?tempo=adaptive'});
+  const x=JSON.parse(run(`(() => {
+    startNewGame();wave=7;totalTime=25;nextBossTime=200;
+    combatDirector.intensityObserver.setPreview('SUSTAIN');
+    combatDirector.update(.05);
+    const normal=window.getNeonRunDiagnostics();
+    activeBosses=[{dead:false}];combatDirector.update(.05);
+    const boss=window.getNeonRunDiagnostics();
+    return JSON.stringify({normalPhase:normal.phase,normal:normal.tempoRunMetrics,
+      bossPhase:boss.phase,boss:boss.tempoRunMetrics});
+  })()`));
+  assert.equal(x.normalPhase,'CRISIS');
+  assert.equal(x.bossPhase,'BOSS');
+  assert.ok(x.normal.normalSeconds>0);
+  assert.equal(x.normal.bossProtectedSeconds,0);
+  assert.ok(x.boss.bossProtectedSeconds>0);
+  assert.equal(x.boss.normalSeconds,x.normal.normalSeconds);
+});
+
+test('Gameplay V2 G3 end-of-run rhythm report integrates safely into existing tab controls',()=>{
+  const {run}=setup({}, {locationSearch:'?tempo=adaptive'});
+  const x=JSON.parse(run(`(() => {
+    startNewGame();nextBossTime=9999;
+    combatDirector.intensityObserver.recordDamage(14,player.maxHp);
+    combatDirector.update(.05);
+    triggerGameOver();
+    const report=window.getNeonFinalReport();
+    const html=document.getElementById('reportTempoContent').innerHTML;
+    const activated=showRunReportTab('tempo');
+    return JSON.stringify({mode:report.tempo.mode,metrics:report.tempo.metrics,
+      phases:report.tempo.phases,html,activated,activeTab:activeReportTab,
+      reportTabs:REPORT_TABS,version:report.version});
+  })()`));
+  assert.equal(x.mode,'adaptive');
+  assert.equal(x.version,1);
+  assert.ok(x.metrics.averageStress>0);
+  assert.equal(x.activated,true);
+  assert.equal(x.activeTab,'tempo');
+  assert.ok(x.reportTabs.includes('tempo'));
+  assert.match(x.html,/BU KOŞUNUN RİTMİ/);
+  assert.match(x.html,/ADAPTİF/);
+  assert.match(x.html,/FAZ ZAMANLARI/);
+  assert.match(html,/id="reportTabTempo"[^>]*data-report-tab="tempo"/);
+  assert.match(html,/id="reportTempoContent"[^>]*role="tabpanel"/);
+});
+
+test('Gameplay V2 G3 only completed runs write compact compare data; reload keeps both modes',()=>{
+  const store={};
+  let a=setup(store,{locationSearch:'?tempo=classic'});
+  a.run(`startNewGame();totalTime=145;wave=10;kills=160;
+    combatDirector.tempoRunMetrics.observe(5,combatDirector.intensityObserver,'BUILDUP',false);`);
+  assert.equal(Object.hasOwn(store,'neonCekirdek.tempoCompare.v1'),false);
+  a.run('triggerGameOver()');
+  let b=setup(store,{locationSearch:'?tempo=adaptive'});
+  b.run(`startNewGame();totalTime=180;wave=12;kills=190;
+    combatDirector.tempoRunMetrics.observe(7,combatDirector.intensityObserver,'CRISIS',false);`);
+  b.run('triggerGameOver()');
+  const c=setup(store);
+  const x=JSON.parse(c.run('JSON.stringify(window.getNeonTempoComparison())'));
+  assert.equal(x.classic.mode,'classic');
+  assert.equal(x.adaptive.mode,'adaptive');
+  assert.equal(x.classic.durationSeconds,145);
+  assert.equal(x.adaptive.durationSeconds,180);
+  assert.equal(x.classic.wave,10);
+  assert.equal(x.adaptive.wave,12);
+  const raw=store['neonCekirdek.tempoCompare.v1'];
+  assert.ok(!raw.includes('modules'));
+  assert.ok(!raw.includes('upgrades'));
+  assert.ok(!raw.includes('email'));
+  assert.ok(!raw.includes('goldBySource'));
+});
+
+test('Gameplay V2 G3 A/B comparison shows both modes and warns against false conclusions',()=>{
+  const store={};
+  let a=setup(store,{locationSearch:'?tempo=classic'});
+  a.run('startNewGame();totalTime=130;wave=9;triggerGameOver()');
+  let b=setup(store,{locationSearch:'?tempo=adaptive'});
+  const x=JSON.parse(b.run(`(() => {
+    startNewGame();totalTime=140;wave=10;
+    triggerGameOver();
+    const txt=document.getElementById('reportTempoContent').innerHTML;
+    return JSON.stringify({txt,summary:window.getNeonTempoComparison()});
+  })()`));
+  assert.ok(x.txt.includes('KLASİK'));
+  assert.ok(x.txt.includes('ADAPTİF'));
+  assert.ok(x.txt.includes('KARŞILAŞTIRMA GÜVENİ'));
+  assert.ok(x.txt.includes('Benzer koşul kontrolü sağlandı'));
+  assert.equal(x.summary.classic.wave,9);
+  assert.equal(x.summary.adaptive.wave,10);
+});
+
+test('Gameplay V2 G3 malformed comparison storage is ignored and results can be cleared',()=>{
+  const storage={'neonCekirdek.tempoCompare.v1':'{"version":1,"classic":{"mode":"classic","chassis":"ATTACK","graphicsQuality":"high","durationSeconds":400},"adaptive":{}}'};
+  const {run}=setup(storage);
+  const x=JSON.parse(run(`(() => {
+    const corrupted=window.getNeonTempoComparison();
+    const cleared=window.clearNeonTempoComparison();
+    const after=window.getNeonTempoComparison();
+    return JSON.stringify({corrupted,cleared,after});
+  })()`));
+  assert.deepEqual(x.corrupted,{classic:null,adaptive:null});
+  assert.equal(x.cleared,true);
+  assert.deepEqual(x.after,{classic:null,adaptive:null});
+  const blocked=setup();
+  const y=JSON.parse(blocked.run(`(() => {
+    startNewGame();localStorage.setItem=()=>{throw Error('no storage')};
+    const result=saveTempoComparisonRun(snapshotEndOfRun());
+    return JSON.stringify({result,stillRuns:!!combatDirector});
+  })()`));
+  assert.equal(y.result,false);
+  assert.equal(y.stillRuns,true);
+});
+
+test('Gameplay V2 G3 last-of-each-mode overwrite is isolated and comparison returns copies',()=>{
+  const storage={};
+  let a=setup(storage,{locationSearch:'?tempo=adaptive'});
+  a.run('startNewGame();totalTime=140;wave=8;triggerGameOver()');
+  a.run('startNewGame();totalTime=165;wave=11;triggerGameOver()');
+  let b=setup(storage,{locationSearch:'?tempo=classic'});
+  b.run('startNewGame();totalTime=185;wave=13;triggerGameOver()');
+  const x=JSON.parse(b.run(`(() => {
+    const first=window.getNeonTempoComparison();
+    first.classic.wave=99999;first.adaptive.mode='broken';
+    return JSON.stringify(window.getNeonTempoComparison());
+  })()`));
+  assert.equal(x.adaptive.wave,11);
+  assert.equal(x.classic.wave,13);
+  assert.equal(x.adaptive.mode,'adaptive');
+  assert.equal(x.classic.mode,'classic');
+});
