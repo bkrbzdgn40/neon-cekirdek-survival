@@ -5929,11 +5929,16 @@
                 this.nextHistoryAt = 0;
             }
 
+            refreshIntensity() {
+                this.intensity = clampIntensity(this.eventStress + this.localPressure);
+            }
+
             recordShieldBreak() {
                 this.shieldBreaks++;
                 this.eventStress = clampIntensity(this.eventStress + 12);
                 this.mastery = clampIntensity(this.mastery - 5);
                 this.lastDamageAt = totalTime;
+                this.refreshIntensity();
             }
 
             recordDamage(lost, maximumHp) {
@@ -5944,6 +5949,7 @@
                     Math.min(34, 15 + hpFraction * 110));
                 this.mastery = clampIntensity(this.mastery - 16);
                 this.lastDamageAt = totalTime;
+                this.refreshIntensity();
             }
 
             recordKill(enemy, survivor) {
@@ -5958,6 +5964,7 @@
                     this.nearKills++;
                     this.eventStress = clampIntensity(this.eventStress +
                         (enemy.isElite ? 4 : 2.5));
+                    this.refreshIntensity();
                 }
             }
 
@@ -6027,7 +6034,7 @@
                 this.eventStress = Math.max(0, this.eventStress -
                     elapsed * (inDanger ? .7 : 5));
                 this.mastery = Math.max(0, this.mastery - elapsed * .55);
-                this.intensity = clampIntensity(this.eventStress + this.localPressure);
+                this.refreshIntensity();
                 this.advancePreview(elapsed, bossLocked);
                 if (seconds >= this.nextHistoryAt) {
                     this.nextHistoryAt = seconds + INTENSITY_OBSERVER.historySeconds;
