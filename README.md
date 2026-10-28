@@ -10,7 +10,7 @@ Tarayıcıda çalışan, tek dosyalı bir Canvas 2D arena-survival oyunu. Kodun 
 python -m http.server 8000
 ```
 
-Ardından `http://localhost:8000` adresine gidin. Oyun için `npm install`, derleme, ayrı bir API veya veritabanı gerekmiyor. Ancak görünüm için kullanılan **Tailwind CDN**, **Font Awesome CDN** ve **Google Fonts** internet bağlantısı ister; tam çevrimdışı sunum garanti edilmez.
+Ardından `http://localhost:8000` adresine gidin. Oyun için `npm install`, derleme, ayrı bir API veya veritabanı gerekmiyor. Ancak görünüm için kullanılan **Tailwind CDN**, **Font Awesome CDN** ve **Google Fonts** internet bağlantısı ister; tam çevrimdışı sunum garanti edilmez. CDN yüklenemezse temel oyun/menü durumları yerel CSS ile çalışır; ayrıntılı Tailwind tasarımı ve ikon/font görünümü eksik olabilir.
 
 ## Çalışma modları
 
@@ -22,7 +22,7 @@ Ardından `http://localhost:8000` adresine gidin. Oyun için `npm install`, derl
 | `?tempo=adaptive&learn=on` | Adaptif tempo ve birbirinden ayrı gölge öğrenme |
 | `?perf=1` | Performans telemetrisi seçeneği; masaüstünde F3 ile panel açılıp kapatılabilir |
 
-Altın, meta yükseltmeler, grafik ayarları ve isteğe bağlı karşılaştırma/öğrenme kayıtları tarayıcının `localStorage` alanında tutulur. Sunucu hesabına senkronize edilmez; site verileri silinirse kayıtlar kaybolabilir.
+Altın, meta yükseltmeler, grafik ayarları ve isteğe bağlı karşılaştırma/öğrenme kayıtları tarayıcının `localStorage` alanında tutulur. Sunucu hesabına senkronize edilmez; site verileri silinirse kayıtlar kaybolabilir. **Başlangıç menüsündeki YEDEK AL / YEDEK YÜKLE**, altın, rekor, dalga, kalıcı geliştirmeler ve grafik profilini JSON dosyasıyla **elle** aktarır. Öğrenen model ve tempo karşılaştırma kayıtları bu yedeğe dahil değildir. Yedek dosyası güvenli bir yerde saklanmalıdır.
 
 ## Geliştirici notları
 

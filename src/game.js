@@ -460,6 +460,102 @@
             updateMenuCounters();
         }
 
+        // Portable backup is an explicit, local-only alternative to unavailable cloud sync.
+        // Only meta progression and the graphics preference are exported. No raw telemetry,
+        // identity or learned model weights are included.
+        const PROGRESS_BACKUP_FORMAT = 'neon-cekirdek-progress';
+        const PROGRESS_BACKUP_VERSION = 1;
+        const PROGRESS_BACKUP_MAX_BYTES = 16384;
+
+        function createProgressBackup() {
+            return {
+                format: PROGRESS_BACKUP_FORMAT,
+                version: PROGRESS_BACKUP_VERSION,
+                exportedAt: new Date().toISOString(),
+                progress: {
+                    version: META_SAVE_VERSION,
+                    highScore: savedHighScore,
+                    maxWave: savedMaxWave,
+                    gold: totalGold,
+                    upgrades: { ...metaUpgrades }
+                },
+                graphics: graphicsQuality
+            };
+        }
+
+        function parseProgressBackup(raw) {
+            if (typeof raw !== 'string' || raw.length > PROGRESS_BACKUP_MAX_BYTES) return null;
+            try {
+                const backup = JSON.parse(raw);
+                if (!backup || backup.format !== PROGRESS_BACKUP_FORMAT ||
+                    backup.version !== PROGRESS_BACKUP_VERSION ||
+                    !isValidGraphicsQuality(backup.graphics)) return null;
+                const data = backup.progress;
+                if (!data || data.version !== META_SAVE_VERSION || !data.upgrades ||
+                    typeof data.upgrades !== 'object') return null;
+                const limits = { highScore: 1000000000, maxWave: 100000, gold: 1000000000 };
+                for (const [key, maximum] of Object.entries(limits)) {
+                    if (!Number.isSafeInteger(data[key]) || data[key] < (key === 'maxWave' ? 1 : 0) ||
+                        data[key] > maximum) return null;
+                }
+                const upgrades = {};
+                for (const [key, maximum] of Object.entries(META_UPGRADE_LIMITS)) {
+                    const level = data.upgrades[key];
+                    if (!Number.isSafeInteger(level) || level < 0 || level > maximum) return null;
+                    upgrades[key] = level;
+                }
+                return {
+                    progress: {
+                        version: META_SAVE_VERSION,
+                        highScore: data.highScore,
+                        maxWave: data.maxWave,
+                        gold: data.gold,
+                        upgrades
+                    },
+                    graphics: backup.graphics
+                };
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function restoreProgressBackup(raw) {
+            const backup = parseProgressBackup(raw);
+            // Never replace persistent progress during an active run.
+            if (!backup || gameState !== 'MENU') return false;
+            let oldMeta, oldGraphics;
+            try {
+                oldMeta = localStorage.getItem(META_SAVE_KEY);
+                oldGraphics = localStorage.getItem(GRAPHICS_SAVE_KEY);
+                localStorage.setItem(META_SAVE_KEY, JSON.stringify(backup.progress));
+                localStorage.setItem(GRAPHICS_SAVE_KEY, backup.graphics);
+            } catch (error) {
+                // If one write fails, make a best-effort rollback before touching live state.
+                try {
+                    if (oldMeta !== undefined) {
+                        if (oldMeta === null) localStorage.removeItem(META_SAVE_KEY);
+                        else localStorage.setItem(META_SAVE_KEY, oldMeta);
+                    }
+                    if (oldGraphics !== undefined) {
+                        if (oldGraphics === null) localStorage.removeItem(GRAPHICS_SAVE_KEY);
+                        else localStorage.setItem(GRAPHICS_SAVE_KEY, oldGraphics);
+                    }
+                } catch (rollbackError) {
+                    console.warn('Kayıt geri alma girişimi tamamlanamadı.', rollbackError);
+                }
+                console.warn('Yedek geri yüklenemedi; oturumdaki ilerleme korundu.', error);
+                return false;
+            }
+
+            savedHighScore = backup.progress.highScore;
+            savedMaxWave = backup.progress.maxWave;
+            totalGold = backup.progress.gold;
+            metaUpgrades = { ...backup.progress.upgrades };
+            applyGraphicsQuality(backup.graphics, false);
+            updateMenuCounters();
+            return true;
+        }
+
         const META_SHOP_ITEMS = [
             {
                 key: 'baseDamage',
@@ -7547,6 +7643,52 @@
                 ? 'HİBRİT · M'
                 : 'KLAVYE · M';
         }
+
+        const backupStatusText = document.getElementById('backupStatusText');
+        document.getElementById('backupExportBtn').addEventListener('click', () => {
+            let url = null;
+            try {
+                const json = JSON.stringify(createProgressBackup(), null, 2);
+                url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'neon-cekirdek-kayit.json';
+                link.click();
+                backupStatusText.textContent = 'YEDEK İNDİRİLDİ';
+            } catch (error) {
+                console.warn('Kayıt yedeği indirilemedi.', error);
+                backupStatusText.textContent = 'YEDEK ALINAMADI';
+            } finally {
+                if (url) setTimeout(() => URL.revokeObjectURL(url), 0);
+            }
+        });
+        const backupImportInput = document.getElementById('backupImportInput');
+        document.getElementById('backupImportBtn').addEventListener('click', () => backupImportInput.click());
+        backupImportInput.addEventListener('change', async () => {
+            const file = backupImportInput.files?.[0];
+            backupImportInput.value = '';
+            if (!file) return;
+            if (file.size > PROGRESS_BACKUP_MAX_BYTES) {
+                backupStatusText.textContent = 'YEDEK BOYUTU GEÇERSİZ';
+                return;
+            }
+            try {
+                const json = await file.text();
+                if (!parseProgressBackup(json)) {
+                    backupStatusText.textContent = 'YEDEK DOSYASI GEÇERSİZ';
+                    return;
+                }
+                if (!window.confirm('Bu yedek mevcut altın, rekor ve kalıcı yükseltmelerin üzerine yazacak. Devam edilsin mi?')) {
+                    backupStatusText.textContent = 'İŞLEM İPTAL EDİLDİ';
+                    return;
+                }
+                backupStatusText.textContent = restoreProgressBackup(json) ?
+                    'YEDEK GERİ YÜKLENDİ' : 'GERİ YÜKLEME BAŞARISIZ';
+            } catch (error) {
+                console.warn('Yedek dosyası okunamadı.', error);
+                backupStatusText.textContent = 'YEDEK OKUNAMADI';
+            }
+        });
 
         document.getElementById('startBtn').addEventListener('click', startNewGame);
         document.getElementById('restartBtn').addEventListener('click', startNewGame);

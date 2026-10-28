@@ -56,6 +56,7 @@ function setup(stored = {}, options = {}) {
   const storage = {
     getItem: (key) => stored[key] ?? null,
     setItem: (key, value) => { stored[key] = value; },
+    removeItem: (key) => { delete stored[key]; },
   };
   const sandbox = {
     window, document, localStorage: storage, console: { warn: noop, log: console.log },
@@ -5032,4 +5033,80 @@ test('static page loads extracted CSS and classic game script in the correct ord
   assert.equal(pageHtml.includes('class Player'), false);
   assert.ok(gameCss.includes('#gameCanvas'));
   assert.ok(gameCode.includes('window.onload = function'));
+});
+
+test('portable save backup round-trips meta and graphics with strict schema', () => {
+  const { run, stored } = setup();
+  const result = JSON.parse(run(`(() => {
+    savedHighScore = 7450; savedMaxWave = 19; totalGold = 250;
+    metaUpgrades.baseDamage = 7;
+    metaUpgrades.defibrillator = 2;
+    applyGraphicsQuality('low', false);
+    const backup = JSON.stringify(createProgressBackup());
+    savedHighScore = 0; savedMaxWave = 1; totalGold = 0;
+    metaUpgrades.baseDamage = 0; metaUpgrades.defibrillator = 0;
+    applyGraphicsQuality('high', false);
+    const restored = restoreProgressBackup(backup);
+    return JSON.stringify({
+      restored, gold: totalGold, score: savedHighScore, wave: savedMaxWave,
+      baseDamage: metaUpgrades.baseDamage, defibrillator: metaUpgrades.defibrillator,
+      graphics: graphicsQuality, backup: JSON.parse(backup)
+    });
+  })()`));
+  assert.equal(result.restored, true);
+  assert.equal(result.gold, 250);
+  assert.equal(result.score, 7450);
+  assert.equal(result.wave, 19);
+  assert.equal(result.baseDamage, 7);
+  assert.equal(result.defibrillator, 2);
+  assert.equal(result.graphics, 'low');
+  assert.equal(result.backup.format, 'neon-cekirdek-progress');
+  assert.equal(result.backup.version, 1);
+  assert.equal(JSON.parse(stored['neonCekirdek.meta.v1']).gold, 250);
+  assert.equal(stored['neonCekirdek.graphics.v1'], 'low');
+  assert.ok(!JSON.stringify(result.backup).includes('playerLearner'));
+});
+
+test('portable backup rejects invalid, oversized or in-game replacements without changes', () => {
+  const { run, stored } = setup();
+  const checks = JSON.parse(run(`(() => {
+    totalGold = 444;
+    const valid = JSON.stringify(createProgressBackup());
+    const wrong = JSON.parse(valid);
+    wrong.progress.gold = -5;
+    const invalid = restoreProgressBackup(JSON.stringify(wrong));
+    const oversize = restoreProgressBackup(valid + ' '.repeat(17000));
+    const unknownVersion = restoreProgressBackup(valid.replace('neon-cekirdek-progress', 'alien-save'));
+    startNewGame();
+    const duringGame = restoreProgressBackup(valid);
+    return JSON.stringify({ invalid, oversize, unknownVersion, duringGame, gold:totalGold });
+  })()`));
+  assert.deepEqual(checks, { invalid:false, oversize:false, unknownVersion:false, duringGame:false, gold:444 });
+  assert.equal(stored['neonCekirdek.meta.v1'], undefined);
+});
+
+test('portable backup rolls back persistence on partial storage failure', () => {
+  const stored = {};
+  const { run } = setup(stored);
+  const result = JSON.parse(run(`(() => {
+    totalGold = 360;
+    const valid = JSON.stringify(createProgressBackup());
+    const previous = JSON.stringify({version:1, gold:22, highScore:2, maxWave:1,
+      upgrades:{baseDamage:0,maxHp:0,speedDash:0,greed:0,defibrillator:0}});
+    localStorage.setItem(META_SAVE_KEY,previous);
+    localStorage.setItem(GRAPHICS_SAVE_KEY,'high');
+    const original=localStorage.setItem;
+    localStorage.setItem=(key,value) => {
+      if (key===GRAPHICS_SAVE_KEY && value==='low') throw Error('quota');
+      return original(key,value);
+    };
+    const updated=JSON.parse(valid);
+    updated.graphics='low';
+    const ok=restoreProgressBackup(JSON.stringify(updated));
+    localStorage.setItem=original;
+    return JSON.stringify({ok,liveGold:totalGold,
+      savedGold:JSON.parse(localStorage.getItem(META_SAVE_KEY)).gold,
+      graphics:localStorage.getItem(GRAPHICS_SAVE_KEY)});
+  })()`));
+  assert.deepEqual(result,{ok:false,liveGold:360,savedGold:22,graphics:'high'});
 });
