@@ -20,3 +20,7 @@ Bu belge **yapılmış ölçüm değildir**. [GitHub Actions](../.github/workflo
 - Yalnızca CI smoke başarısı **60 FPS**, 30 dakikalık stabilite, adil zorluk veya görsel doğruluk garantisi değildir.
 
 Takip: [#44](https://github.com/bkrbzdgn40/neon-cekirdek-survival/issues/44).
+
+## Otomatik süreli Chromium kontrolü
+
+[neon-soak.yml](../.github/workflows/neon-soak.yml) içindeki ayrı job, bu dosyalardaki PR değişikliğinde 25 saniye, haftalık veya manuel tetiklemede 90 saniye **gerçek zamanlı** örnek alır. Dalga 16, gövdeye hasar vermeyen izole bir test fikstürü ve gerçek CombatDirector spawn akışı kullanılır. Her çalışmada sayım limitleri, Canvas, P95 kare süresi, zaman ilerlemesi, runtime JS hataları ve son ekran görüntüsü doğrulanır. 90 saniyelik otomasyon **30–60 dakika gerçek cihaz benchmarkı değildir**. Donanım ve oyun hissi testi ayrı yapılmalıdır.

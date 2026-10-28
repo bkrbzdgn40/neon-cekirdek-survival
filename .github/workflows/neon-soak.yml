@@ -1,0 +1,44 @@
+name: Neon extended browser soak
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * 1'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tests/*.soak.spec.cjs'
+      - 'playwright.soak.config.cjs'
+      - '.github/workflows/neon-soak.yml'
+permissions:
+  contents: read
+concurrency:
+  group: neon-soak-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      NEON_SOAK_MS: ${{ github.event_name == 'pull_request' && '25000' || '90000' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install Playwright
+        run: npm install --no-save --no-package-lock @playwright/test@1.56.1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Extended real-frame render and entity-budget soak
+        run: npx playwright test --config=playwright.soak.config.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: neon-soak-evidence
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
