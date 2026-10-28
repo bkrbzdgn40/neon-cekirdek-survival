@@ -35,7 +35,7 @@ Altın, meta yükseltmeler, grafik ayarları ve isteğe bağlı karşılaştırm
 node --test tests/smoke.test.cjs
 ```
 
-**Doğrulama sınırı:** Node smoke seti oyun mantığını sınar. GitHub Actions içindeki Playwright, gerçek Chromium'da masaüstü ve mobil viewport ile temel menü/oyun etkileşimlerini sınar. Ekran görüntüsü baseline karşılaştırması ve uzun oturum gerçek cihaz FPS ölçümü henüz kapsamda değildir. Yerel tarayıcı testleri için `npm install --no-save --no-package-lock @playwright/test@1.56.1`, `npx playwright install chromium`, `npx playwright test` komutları kullanılabilir.
+**Doğrulama sınırı:** Node smoke seti oyun mantığını sınar. GitHub Actions içindeki Playwright, gerçek Chromium'da masaüstü ve mobil viewport ile temel menü/oyun etkileşimlerini sınar. Masaüstü/mobil temel akışlar, üç viewport'ta yatay taşma ve kısa canlı savaş/çizim ilerlemesi CI kapsamındadır. Ekran görüntüsü baseline karşılaştırması ve uzun oturum gerçek cihaz FPS ölçümü henüz kapsamda değildir; [cihaz QA protokolü](docs/DEVICE_QA.md) uygulanmalıdır. Yerel tarayıcı testleri için `npm install --no-save --no-package-lock @playwright/test@1.56.1`, `npx playwright install chromium`, `npx playwright test` komutları kullanılabilir.
 
 ## Katkı düzeni
 
