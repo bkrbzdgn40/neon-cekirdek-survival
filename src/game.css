@@ -912,6 +912,19 @@
         }
         @media(prefers-reduced-motion:reduce){.report-tab{transition:none}}
 
+        /* The utility CDN normally supplies fixed/inset/z-index and pointer classes.
+           A failed CDN must not put the fixed canvas on top of the start menu. */
+        #startModal, #pauseModal, #upgradeModal, #reviveModal,
+        #gameOverModal, #shopModal {
+            position: fixed;
+            inset: 0;
+            z-index: 30;
+            overflow-y: auto;
+        }
+        #reviveModal, #gameOverModal { z-index: 40; }
+        #hud { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+        #pauseBtn, #dashBtn, #novaBtn, #fullscreenBtn,
+        #soundToggleBtn, #musicToggleBtn { pointer-events: auto; }
         /* Fallback for critical modal states if a utility CSS CDN is blocked.
            Full responsive styling still needs Tailwind; gameplay remains operable. */
         #startModal.hidden, #pauseModal.hidden, #upgradeModal.hidden,
