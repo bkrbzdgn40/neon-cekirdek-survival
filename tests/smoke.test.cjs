@@ -3019,7 +3019,7 @@ test('M5.4 wave gates progressively unlock tactical formation families',()=>{
  assert.equal(x[3].length,4);
  assert.deepEqual(x[4],['PINCER','SPEARHEAD','ESCORT','INTERCEPT','CORRIDOR']);
  assert.deepEqual(x[6],['PINCER','SPEARHEAD','ESCORT','INTERCEPT','CORRIDOR','BREACH','CROSSLOCK']);
- assert.deepEqual(x[7],x[6]);
+ assert.deepEqual(x[7],[...x[6],'PINWHEEL']);
 });
 
 test('M5.4 invasion plans include visible attack roles, sides and exact threat costs',()=>{
@@ -5122,4 +5122,44 @@ test('offline static styles, icon assets and font files are shipped locally', ()
   assert.ok(asset('src/vendor/fontawesome/webfonts/fa-solid-900.woff2') > 10000);
   assert.ok(asset('src/vendor/fonts/orbitron-latin-700-normal.woff2') > 1000);
   assert.ok(asset('src/vendor/fonts/rajdhani-latin-600-normal.woff2') > 1000);
+});
+
+
+test('PINWHEEL wave16 gate and BLACKOUT early unlock preserve old formations', () => {
+  const {run}=setup();
+  const info=JSON.parse(run("(()=>{const before=getSpecialEncounterKinds(15).map(x=>x.type);const at16=getSpecialEncounterKinds(16).map(x=>x.type);activeContractId='BLACKOUT';const early=getSpecialEncounterKinds(15).map(x=>x.type);return JSON.stringify({before,at16,early});})()"));
+  assert.equal(info.before.includes('PINWHEEL'),false);
+  assert.equal(info.at16.at(-1),'PINWHEEL');
+  assert.deepEqual(info.early,info.at16);
+});
+
+test('PINWHEEL offers four roles on four unique sides and weak SWARM escape', () => {
+  const {run}=setup();
+  const plans=JSON.parse(run("JSON.stringify([0,1,2,3].map(side=>{const p=getSpecialEncounterPlan(16,'HUNT',side,7);return {type:p.type,label:p.label,side,warning:p.warning,roles:p.units.map(u=>u.type),sides:p.units.map(u=>u.side),cost:p.threatCost,realCost:p.units.reduce((n,u)=>n+ENEMY_THREAT_COST[u.type],0)};}))"));
+  for(const p of plans) {
+    assert.equal(p.type,'PINWHEEL');
+    assert.equal(p.label,'DÖRT CEPHE KIRILMASI');
+    assert.equal(p.warning,1.65);
+    assert.deepEqual(p.roles,['SHIELD_BEARER','SHOOTER','DASHER','SWARM']);
+    assert.deepEqual(p.sides,[p.side,(p.side+1)%4,(p.side+2)%4,(p.side+3)%4]);
+    assert.equal(new Set(p.sides).size,4);
+    assert.ok(Math.abs(p.cost-7.6)<.001 && Math.abs(p.realCost-p.cost)<.001);
+  }
+});
+
+test('PINWHEEL actual Director respects warning, threat budget and boss cancellation', () => {
+  const {run}=setup();
+  const out=JSON.parse(run("(()=>{startNewGame();wave=16;totalTime=40;nextBossTime=500;combatDirector.encounterIndex=7;combatDirector.nextEncounterAt=0;combatDirector.tokens=14;combatDirector.update(.02);const kind=combatDirector.pendingEncounter.type;const blocked=combatDirector.trySpawn();combatDirector.update(1.7);const a=combatDirector.getDiagnostics().specialByKind.PINWHEEL;const first={kind,blocked,spawned:enemies.length,spent:a.tokensSpent,units:a.units,offered:a.offered,resolved:a.resolved,left:combatDirector.tokens};startNewGame();wave=16;totalTime=40;nextBossTime=500;combatDirector.encounterIndex=7;combatDirector.nextEncounterAt=0;combatDirector.tokens=14;combatDirector.update(.02);combatDirector.onBossEncounter();return JSON.stringify({first,pending:combatDirector.pendingEncounter,cancel:combatDirector.getDiagnostics().specialByKind.PINWHEEL});})()"));
+  assert.equal(out.first.kind,'PINWHEEL');
+  assert.equal(out.first.blocked,false);
+  assert.equal(out.first.spawned,4);
+  assert.equal(out.first.spent,7.6);
+  assert.equal(out.first.units,4);
+  assert.equal(out.first.offered,1);
+  assert.equal(out.first.resolved,1);
+  assert.ok(out.first.left>=0 && out.first.left<14);
+  assert.equal(out.pending,null);
+  assert.equal(out.cancel.cancelled,1);
+  assert.equal(out.cancel.units,0);
+  assert.equal(out.cancel.tokensSpent,0);
 });

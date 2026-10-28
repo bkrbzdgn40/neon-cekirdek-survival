@@ -4042,7 +4042,8 @@
             Object.freeze({type:'INTERCEPT',from:10,label:'İKİ YÖNLÜ AVCI BASKINI',color:'#77dcff'}),
             Object.freeze({type:'CORRIDOR',from:6,label:'KAÇIŞ KORİDORU KİLİDİ',color:'#8cf0c8'}),
             Object.freeze({type:'BREACH',from:13,label:'AĞIR HAT YARMA',color:'#ffac70'}),
-            Object.freeze({type:'CROSSLOCK',from:12,label:'ÇAPRAZ HEDEF KİLİDİ',color:'#c6a0ff'})
+            Object.freeze({type:'CROSSLOCK',from:12,label:'ÇAPRAZ HEDEF KİLİDİ',color:'#c6a0ff'}),
+            Object.freeze({type:'PINWHEEL',from:16,label:'DÖRT CEPHE KIRILMASI',color:'#77e0ff'})
         ]);
         function getSpecialEncounterKinds(currentWave){
             const unlockWave = activeContractId === 'BLACKOUT' ? currentWave + 1 : currentWave;
@@ -4078,10 +4079,16 @@
                 // Two offset lines leave the arena centre open as a readable escape lane.
                 units=[unit('SHIELD_BEARER',side,0,3),unit('SWARM',side,2,3),
                     unit('SHIELD_BEARER',opposite,0,3),unit('SWARM',opposite,2,3)];
-            }else{
+            }else if(kind.type==='CROSSLOCK'){
                 // Shooters anchor two perpendicular edges; dashers force the target choice.
                 units=[unit('SHOOTER',side,0,3),unit('DASHER',side,2,3),
                     unit('SHOOTER',offset,0,3),unit('ASSASSIN',offset,2,3)];
+            }else{
+                // PINWHEEL gives four clear approach directions and a weaker SWARM exit.
+                units=[unit('SHIELD_BEARER',side,0,1),
+                    unit('SHOOTER',offset,0,1),
+                    unit('DASHER',opposite,0,1),
+                    unit('SWARM',(side+3)%4,0,1)];
             }
             return {
                 type:kind.type,side,label:kind.label,color:kind.color,
