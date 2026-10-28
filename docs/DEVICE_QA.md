@@ -1,6 +1,6 @@
 # Neon Çekirdek: gerçek cihaz ve uzun oturum QA protokolü
 
-Bu belge **yapılmış ölçüm değildir**. [GitHub Actions](../.github/workflows/neon-smoke.yml) yalnızca Node VM regresyonları ve kısa Chromium smoke senaryoları çalıştırır. Görsel snapshot baseline karşılaştırması ve uzun süreli oyun hissi/performans sonuçları mevcut değildir.
+Bu belge **yapılmış ölçüm değildir**. [GitHub Actions](../.github/workflows/neon-smoke.yml) yalnızca Node VM regresyonları ve kısa Chromium smoke senaryoları çalıştırır. Görsel snapshot baseline karşılaştırması ve uzun süreli gerçek cihaz oyun hissi/performans sonuçları mevcut değildir. CI'da temel piksel doluluğu, 12 saniyelik gerçek Chromium oyun döngüsü ve entity sınırları denetlenir; bunlar görsel referans fotoğrafı ya da uzun süreli performans kanıtı değildir.
 
 ## Test matrisi
 

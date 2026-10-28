@@ -136,3 +136,72 @@ test('a short real-time combat sample renders frames and advances game time', as
   expect(sample.activeEnemies).toBeLessThanOrEqual(160);
   expect(errors).toEqual([]);
 });
+
+test('real browser game-over, menu return and restart remain fully navigable', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await page.locator('#startBtn').click();
+  await page.evaluate(() => triggerGameOver());
+  await expect(page.locator('#gameOverModal')).toBeVisible();
+  await page.locator('#backToMenuBtn').click();
+  await expect(page.locator('#gameOverModal')).toBeHidden();
+  await expect(page.locator('#startModal')).toBeVisible();
+  await page.locator('#startBtn').click();
+  await expect(page.locator('#hud')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => gameState)).toBe('PLAYING');
+  expect(errors).toEqual([]);
+});
+
+test('Canvas produces nonblank pixels in menu and active combat', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await expect.poll(() => page.evaluate(() => {
+    const node = document.querySelector('#gameCanvas');
+    if (!node || !node.width || !node.height) return 0;
+    const { data } = node.getContext('2d').getImageData(0, 0, node.width, node.height);
+    let lit = 0;
+    const stride = Math.max(4, Math.floor(data.length / 128 / 4) * 4);
+    for (let i = 0; i < data.length; i += stride) {
+      if (data[i] + data[i+1] + data[i+2] > 60) lit++;
+    }
+    return lit;
+  })).toBeGreaterThan(0);
+  await page.locator('#startBtn').click();
+  await expect.poll(() => page.evaluate(() => {
+    const node = document.querySelector('#gameCanvas');
+    const { data } = node.getContext('2d').getImageData(0, 0, node.width, node.height);
+    let lit = 0;
+    const stride = Math.max(4, Math.floor(data.length / 128 / 4) * 4);
+    for (let i = 0; i < data.length; i += stride) {
+      if (data[i] + data[i+1] + data[i+2] > 60) lit++;
+    }
+    return lit;
+  })).toBeGreaterThan(0);
+});
+
+test('extended browser game loop avoids runtime errors and stays within entity budgets', async ({ page }) => {
+  test.setTimeout(45_000);
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/index.html?perf=1', { waitUntil: 'domcontentloaded' });
+  await page.locator('#startBtn').click();
+  await page.evaluate(() => {
+    // Keep the player alive without modifying gameplay source or affecting another test.
+    player.invulnerable = true;
+    nextBossTime = Infinity;
+  });
+  await page.waitForTimeout(12_000);
+  const result = await page.evaluate(() => ({
+    gameState, elapsed: totalTime, diagnostics: window.getNeonPerformanceSnapshot(),
+    enemies: enemies.length, bullets: bullets.length, orbs: orbs.length, particles: particles.length
+  }));
+  expect(result.gameState).toBe('PLAYING');
+  expect(result.elapsed).toBeGreaterThan(8);
+  expect(result.diagnostics.frame.sampleCount).toBeGreaterThan(20);
+  expect(result.diagnostics.frame.p95Ms).toBeGreaterThan(0);
+  expect(result.enemies).toBeLessThanOrEqual(160);
+  expect(result.bullets).toBeLessThanOrEqual(260);
+  expect(result.orbs).toBeLessThanOrEqual(240);
+  expect(result.particles).toBeLessThanOrEqual(420);
+  expect(errors).toEqual([]);
+});
