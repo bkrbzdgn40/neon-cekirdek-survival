@@ -3004,25 +3004,27 @@ test('M5.3.1 original boss movement and defense mechanics remain in code',()=>{
 });
 
 
-test('M5.4 wave gates progressively unlock sniper escort, interceptor and breacher',()=>{
+test('M5.4 wave gates progressively unlock tactical formation families',()=>{
  const {run}=setup();
  const x=JSON.parse(run("JSON.stringify([3,7,8,9,10,12,13,20].map(w=>getSpecialEncounterKinds(w).map(p=>p.type)))"));
  assert.deepEqual(x[0],['PINCER','SPEARHEAD']);
- assert.deepEqual(x[1],x[0]);
- assert.deepEqual(x[2],['PINCER','SPEARHEAD','ESCORT']);
- assert.equal(x[3].length,3);
- assert.deepEqual(x[4],['PINCER','SPEARHEAD','ESCORT','INTERCEPT']);
- assert.deepEqual(x[6],['PINCER','SPEARHEAD','ESCORT','INTERCEPT','BREACH']);
+ assert.deepEqual(x[1],['PINCER','SPEARHEAD','CORRIDOR']);
+ assert.deepEqual(x[2],['PINCER','SPEARHEAD','ESCORT','CORRIDOR']);
+ assert.equal(x[3].length,4);
+ assert.deepEqual(x[4],['PINCER','SPEARHEAD','ESCORT','INTERCEPT','CORRIDOR']);
+ assert.deepEqual(x[6],['PINCER','SPEARHEAD','ESCORT','INTERCEPT','CORRIDOR','BREACH','CROSSLOCK']);
  assert.deepEqual(x[7],x[6]);
 });
 
 test('M5.4 invasion plans include visible attack roles, sides and exact threat costs',()=>{
  const {run}=setup();
- const x=JSON.parse(run("JSON.stringify([0,1,2,3,4].map(i=>getSpecialEncounterPlan(14,'SIEGE',1,i)).map(p=>({type:p.type,label:p.label,color:p.color,warning:p.warning,units:p.units,threatCost:p.threatCost,cost:p.units.reduce((v,u)=>v+ENEMY_THREAT_COST[u.type],0)})))"));
- assert.deepEqual(x.map(p=>p.type),['PINCER','SPEARHEAD','ESCORT','INTERCEPT','BREACH']);
+ const x=JSON.parse(run("JSON.stringify([0,1,2,3,4,5,6].map(i=>getSpecialEncounterPlan(14,'SIEGE',1,i)).map(p=>({type:p.type,label:p.label,color:p.color,warning:p.warning,units:p.units,threatCost:p.threatCost,cost:p.units.reduce((v,u)=>v+ENEMY_THREAT_COST[u.type],0)})))"));
+ assert.deepEqual(x.map(p=>p.type),['PINCER','SPEARHEAD','ESCORT','INTERCEPT','CORRIDOR','BREACH','CROSSLOCK']);
  assert.deepEqual(x[2].units.map(u=>u.type),['SWARM','SHIELD_BEARER','SNIPER','SWARM']);
  assert.deepEqual(x[3].units.map(u=>u.type),['DASHER','ASSASSIN','DASHER','SHOOTER']);
- assert.deepEqual(x[4].units.map(u=>u.type),['TANK','SPLITTER','GRAV_WELL','SWARM']);
+ assert.deepEqual(x[4].units.map(u=>u.type),['SHIELD_BEARER','SWARM','SHIELD_BEARER','SWARM']);
+ assert.deepEqual(x[5].units.map(u=>u.type),['TANK','SPLITTER','GRAV_WELL','SWARM']);
+ assert.deepEqual(x[6].units.map(u=>u.type),['SHOOTER','DASHER','SHOOTER','ASSASSIN']);
  assert.deepEqual([...new Set(x[3].units.map(u=>u.side))].sort(),[1,3]);
  for(const p of x){
   assert.ok(p.label.length>10);assert.match(p.color,/^#[0-9a-f]{6}$/i);
@@ -3032,10 +3034,24 @@ test('M5.4 invasion plans include visible attack roles, sides and exact threat c
  }
 });
 
+test('M5.4 new corridor and cross-lock patterns communicate distinct counterplay',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{const corridor=getSpecialEncounterPlan(8,'HUNT',0,3);const cross=getSpecialEncounterPlan(14,'HUNT',0,6);return JSON.stringify({corridor:{type:corridor.type,sides:corridor.units.map(u=>u.side),slots:corridor.units.map(u=>u.slot),roles:corridor.units.map(u=>u.type),cost:corridor.threatCost},cross:{type:cross.type,sides:[...new Set(cross.units.map(u=>u.side))].sort(),roles:cross.units.map(u=>u.type),cost:cross.threatCost}})})()"));
+ assert.equal(x.corridor.type,'CORRIDOR');
+ assert.deepEqual(x.corridor.sides,[0,0,2,2]);
+ assert.deepEqual(x.corridor.slots,[0,2,0,2]);
+ assert.deepEqual(x.corridor.roles,['SHIELD_BEARER','SWARM','SHIELD_BEARER','SWARM']);
+ assert.ok(x.corridor.cost<=9);
+ assert.equal(x.cross.type,'CROSSLOCK');
+ assert.deepEqual(x.cross.sides,[0,1]);
+ assert.deepEqual(x.cross.roles,['SHOOTER','DASHER','SHOOTER','ASSASSIN']);
+ assert.ok(x.cross.cost<=9);
+});
+
 test('M5.4 Director gives each real formation a telegraph and spends only real spawn costs',()=>{
  const {run}=setup();
- const a=JSON.parse(run("(()=>{const out=[];for(let i=0;i<5;i++){startNewGame();wave=14;totalTime=30;nextBossTime=500;combatDirector.encounterIndex=i;combatDirector.nextEncounterAt=0;combatDirector.tokens=14;combatDirector.update(.02);const p=combatDirector.pendingEncounter;const stopped=combatDirector.trySpawn();combatDirector.update(1.7);const d=combatDirector.getDiagnostics(),m=d.specialByKind[p.type];out.push({kind:p.type,stopped,spawned:enemies.length,offered:m.offered,resolved:m.resolved,units:m.units,spent:m.tokensSpent,cost:p.threatCost,old:d.specialEncounters});}return JSON.stringify(out);})()"));
- assert.deepEqual(a.map(x=>x.kind),['PINCER','SPEARHEAD','ESCORT','INTERCEPT','BREACH']);
+ const a=JSON.parse(run("(()=>{const out=[];for(let i=0;i<7;i++){startNewGame();wave=14;totalTime=30;nextBossTime=500;combatDirector.encounterIndex=i;combatDirector.nextEncounterAt=0;combatDirector.tokens=14;combatDirector.update(.02);const p=combatDirector.pendingEncounter;const stopped=combatDirector.trySpawn();combatDirector.update(1.7);const d=combatDirector.getDiagnostics(),m=d.specialByKind[p.type];out.push({kind:p.type,stopped,spawned:enemies.length,offered:m.offered,resolved:m.resolved,units:m.units,spent:m.tokensSpent,cost:p.threatCost,old:d.specialEncounters});}return JSON.stringify(out);})()"));
+ assert.deepEqual(a.map(x=>x.kind),['PINCER','SPEARHEAD','ESCORT','INTERCEPT','CORRIDOR','BREACH','CROSSLOCK']);
  for(const x of a){
   assert.equal(x.stopped,false);assert.equal(x.spawned,x.units);
   assert.ok(x.spawned>=3&&x.spawned<=4,x.kind);
@@ -3072,7 +3088,7 @@ test('M5.4 boss start cancels a pending assault at most once',()=>{
 test('M5.4 telegraphed special formation names render without changing real enemy physics',()=>{
  const {run}=setup();
  assert.match(html,/ctx\.fillText\(plan\.label,worldWidth\/2/);
- const x=JSON.parse(run("(()=>{startNewGame();gameState='PLAYING';wave=14;combatDirector.pendingEncounter=getSpecialEncounterPlan(14,'HUNT',1,4);drawSpecialEncounterWarning();return JSON.stringify({type:combatDirector.pendingEncounter.type,name:combatDirector.pendingEncounter.label,sides:[...new Set(combatDirector.pendingEncounter.units.map(u=>u.side))]});})()"));
+ const x=JSON.parse(run("(()=>{startNewGame();gameState='PLAYING';wave=14;combatDirector.pendingEncounter=getSpecialEncounterPlan(14,'HUNT',1,5);drawSpecialEncounterWarning();return JSON.stringify({type:combatDirector.pendingEncounter.type,name:combatDirector.pendingEncounter.label,sides:[...new Set(combatDirector.pendingEncounter.units.map(u=>u.side))]});})()"));
  assert.equal(x.type,'BREACH');assert.equal(x.name,'AĞIR HAT YARMA');
  assert.deepEqual(x.sides,[1,2]);
 });
@@ -3130,6 +3146,58 @@ test('M5.4 5/10/20/30-minute fixed-interval plan stress respects enemy/boss budg
   assert.ok(p.maxBoss<=3);assert.equal(p.unique,true);
  }
  console.log('M5.4 fixed-interval plan stress, not real playtime: '+JSON.stringify(x));
+});
+
+test('multi-boss HUD exposes individual identity, phase and health rows',()=>{
+ const {run}=setup();
+ const htmlRows=run(`renderBossIdentityRows([
+   {id:11,bossName:'ALPHA',bossVisual:{tag:'TITAN'},bossPhase:2,hp:500,maxHp:1000,color:'#ff8800'},
+   {id:12,bossName:'BETA',bossVisual:{tag:'VOID'},bossPhase:1,hp:250,maxHp:1000,color:'#b000ff'},
+   {id:13,bossName:'DEAD',bossVisual:{tag:'PRISM'},bossPhase:3,hp:0,maxHp:1000,color:'#00f3ff',dead:true}
+ ])`);
+ assert.match(htmlRows,/data-boss-id="11"/);
+ assert.match(htmlRows,/data-boss-id="12"/);
+ assert.doesNotMatch(htmlRows,/data-boss-id="13"/);
+ assert.match(htmlRows,/50%/);
+ assert.match(htmlRows,/25%/);
+ assert.match(htmlRows,/F2/);
+ assert.match(htmlRows,/F1/);
+ assert.match(htmlRows,/aria-label="TITAN, Faz 2, HP 500 \/ 1000"/);
+});
+
+test('multi-boss target cycling gives players explicit target control',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run(`(()=>{startNewGame();activeBosses=[
+   {id:1,dead:false,x:100,y:100},
+   {id:2,dead:false,x:200,y:100},
+   {id:3,dead:false,x:300,y:100}
+ ];
+ const first=cycleBossTarget(1)?.id;
+ const second=cycleBossTarget(1)?.id;
+ const backwards=cycleBossTarget(-1)?.id;
+ activeBosses[1].dead=true;
+ const skipsDead=cycleBossTarget(1)?.id;
+ return JSON.stringify({first,second,backwards,skipsDead,manual:manualBossTarget?.id});})()`));
+ assert.deepEqual(x,{first:1,second:2,backwards:1,skipsDead:3,manual:3});
+});
+
+test('chassis atmosphere skins stay distinct and cosmetic-only',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("JSON.stringify(['VANGUARD','PHANTOM','TITAN'].map(c=>getChassisAtmosphereSkin(c)))"));
+ assert.deepEqual(x.map(s=>s.id),['AURORA_GRID','VIOLET_GHOST','EMERALD_FURNACE']);
+ assert.equal(new Set(x.map(s=>s.accent)).size,3);
+ assert.ok(x.every(s=>/^#[0-9a-f]{6}$/i.test(s.accent)));
+ assert.ok(x.every(s=>typeof s.label==='string'&&s.label.length>4));
+});
+
+test('neon contracts are selectable, bounded and only modify their declared run modifiers',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run(`(()=>{const list=getNeonContractList();selectNeonContract('REDLINE');startNewGame();const active=getActiveNeonContract();const fast=new Enemy(0,0,'SWARM');return JSON.stringify({ids:list.map(c=>c.id),active:active.id,speed:fast.speed,base:fast.speed/getActiveNeonContract().enemySpeedMult,score:getActiveNeonContract().scoreMultiplier,label:active.label});})()`));
+ assert.deepEqual(x.ids,['STANDARD','REDLINE','BLACKOUT','OVERCHARGE']);
+ assert.equal(x.active,'REDLINE');
+ assert.ok(x.speed>x.base);
+ assert.ok(x.score>1&&x.score<=1.35);
+ assert.ok(x.label.length>5);
 });
 
 

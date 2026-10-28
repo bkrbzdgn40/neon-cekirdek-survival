@@ -176,6 +176,17 @@
         #bossHpBar { background: linear-gradient(90deg,#700d28,#ff0055,#ffbdd5); }
         #bossIdentityStrip .boss-id-chip { display:inline-block; font:700 9px 'Orbitron',sans-serif;
             padding:3px 6px; border:1px solid; border-radius:5px; background:rgba(2,8,20,.88); }
+        #bossIdentityStrip .boss-id-chip { flex:1 1 145px; min-width:132px; }
+        #bossIdentityStrip .boss-id-chip[data-target="true"] { outline:2px solid #67e8f9; outline-offset:1px; }
+        #bossIdentityStrip .boss-id-head { display:flex; justify-content:space-between; gap:8px; }
+        #bossIdentityStrip .boss-id-meter { height:3px; margin-top:3px; border-radius:99px; background:#13243a; overflow:hidden; }
+        #bossIdentityStrip .boss-id-meter > span { display:block; height:100%; border-radius:99px; }
+        #neonContractPanel { border:1px solid rgba(103,232,249,.28); background:rgba(5,13,27,.82); }
+        .neon-contract-card { border:1px solid rgba(117,145,173,.38); background:rgba(10,22,39,.9); transition:transform .16s,border-color .16s,box-shadow .16s; }
+        .neon-contract-card:hover { transform:translateY(-2px); border-color:rgba(103,232,249,.8); }
+        .neon-contract-card.is-selected { border-color:var(--contract-color,#67e8f9); box-shadow:0 0 18px color-mix(in srgb,var(--contract-color,#67e8f9) 28%,transparent); }
+        .neon-contract-card:focus-visible { outline:2px solid #e6fbff; outline-offset:2px; }
+        #activeContractBadge { border-color:rgba(103,232,249,.65); color:#bff8ff; }
         #hudModulesDock { scrollbar-width: thin; }
         @media (max-width: 640px) {
             #bossWarningBanner .warning-pill { font-size: 12px; padding: .5rem .8rem; }
@@ -1011,6 +1022,7 @@
                         <span class="text-[10px] text-gray-400 block leading-none">TEHDİT</span>
                         <span id="directorPhaseText" class="font-cyber text-[10px] font-bold text-yellow-300">HAZIRLIK</span>
                     </div>
+                    <span id="activeContractBadge" class="hidden sm:inline-block text-[9px] font-cyber font-bold border rounded px-1.5 py-1" title="Aktif Neon Sözleşmesi">STANDARD</span>
                 </div>
 
                 <!-- Score, Combo Rank & Pause -->
@@ -1044,7 +1056,7 @@
                     <span id="bossNameText" class="font-cyber text-xs sm:text-sm font-black text-red-400 tracking-wider flex items-center gap-2">
                         <i class="fa-solid fa-triangle-exclamation animate-bounce"></i> MEGA-ÇEKİRDEK YIKICI
                     </span>
-                    <span class="text-right flex flex-col items-end gap-0.5"><span id="bossPhaseText" class="font-cyber text-[9px] text-pink-200">FAZ 1 / 3</span><span id="bossHpText" class="font-cyber text-xs font-bold text-pink-300">2500 / 2500</span></span>
+                    <span class="text-right flex flex-col items-end gap-0.5"><span id="bossPhaseText" class="font-cyber text-[9px] text-pink-200">FAZ 1 / 3</span><span id="bossHpText" class="font-cyber text-xs font-bold text-pink-300">2500 / 2500</span><span class="font-cyber text-[8px] text-cyan-300/80">TAB HEDEF DEĞİŞTİR</span></span>
                 </div>
                 <div class="w-full bg-gray-900 h-3.5 rounded-full overflow-hidden border border-red-500/40 p-0.5">
                     <div id="bossHpBar" class="h-full bg-gradient-to-r from-red-600 via-pink-500 to-yellow-500 rounded-full transition-all duration-100" style="width: 100%;"></div>
@@ -1320,6 +1332,15 @@
                             <p class="text-xs text-gray-300 leading-relaxed"><b>Mega-Yıkıcı</b>, <b>Zırhlı Behemot</b>, <b>Hiçlik Örümceği</b> ve <b>Omega Prizma</b>! İleri safhalarda arenaya <b>aynı anda 2 veya 3 Boss</b> birden iner!</p>
                         </div>
                     </div>
+
+                    <section id="neonContractPanel" class="rounded-xl p-3.5 sm:p-4 text-left">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                            <div class="font-cyber text-xs font-bold text-cyan-200"><i class="fa-solid fa-file-signature mr-2"></i>NEON SÖZLEŞMESİ</div>
+                            <span class="text-[10px] font-cyber text-gray-400">İSTEĞE BAĞLI RİSK / ÖDÜL</span>
+                        </div>
+                        <p class="text-[11px] text-gray-400 mb-2.5">Koşunun karakterini seç. Standart dışı protokoller skor katsayısını ve savaş ritmini değiştirir.</p>
+                        <div id="neonContractOptions" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2"></div>
+                    </section>
 
                     <!-- M4.2.1: Live readiness metrics, next to the Start action -->
                     <div id="preflightReadiness">
@@ -2056,6 +2077,29 @@
         ];
 
         let selectedChassis = 'VANGUARD';
+        const NEON_CONTRACTS = Object.freeze([
+            Object.freeze({id:'STANDARD',label:'STANDART PROTOKOL',short:'GÜVENLİ',color:'#67e8f9',desc:'Mevcut denge. Öğrenmek ve build kurmak için temiz başlangıç.',enemySpeedMult:1,scoreMultiplier:1}),
+            Object.freeze({id:'REDLINE',label:'REDLINE / KIZIL HAT',short:'RİSK',color:'#ff5268',desc:'Normal düşmanlar %8 daha hızlı gelir; skor kazancı %22 artar.',enemySpeedMult:1.08,scoreMultiplier:1.22}),
+            Object.freeze({id:'BLACKOUT',label:'BLACKOUT / KARA KUTU',short:'GİZEM',color:'#b678ff',desc:'Özel formasyonlar bir dalga erken açılır; skor kazancı %16 artar.',enemySpeedMult:1,scoreMultiplier:1.16}),
+            Object.freeze({id:'OVERCHARGE',label:'OVERCHARGE / AŞIRI YÜK',short:'GÜÇ',color:'#ffd166',desc:'Oyuncu ateş temposu %7 hızlanır; düşman mermileri %10 hızlıdır.',enemySpeedMult:1,scoreMultiplier:1.18})
+        ]);
+        let selectedContractId = 'STANDARD';
+        let activeContractId = 'STANDARD';
+        function getNeonContractList() { return NEON_CONTRACTS.map(contract => ({...contract})); }
+        function getActiveNeonContract() {
+            return NEON_CONTRACTS.find(contract => contract.id === activeContractId) || NEON_CONTRACTS[0];
+        }
+        function selectNeonContract(id) {
+            if (!NEON_CONTRACTS.some(contract => contract.id === id)) return false;
+            selectedContractId = id;
+            const cards = document.querySelectorAll?.('[data-neon-contract]') || [];
+            for (const card of cards) {
+                const active = card.getAttribute('data-neon-contract') === id;
+                card.classList.toggle('is-selected', active);
+                card.setAttribute('aria-pressed', active ? 'true' : 'false');
+            }
+            return true;
+        }
         let currentUpgradeChoices = [];
 
         let viewScale = 1;
@@ -2077,6 +2121,7 @@
         let nextBossTime = 55;
         let bossEncounterCount = 0;
         let activeBosses = [];
+        let manualBossTarget = null;
         let bossWarningTimer = 0;
         let kills = 0;
         let screenShake = 0;
@@ -2093,6 +2138,31 @@
         let finalRunReport=null;
         let activeReportTab='summary';
         let gridOffset = { x: 0, y: 0 };
+
+        function cycleBossTarget(direction = 1) {
+            const living = activeBosses.filter(b => b && !b.dead);
+            if (!living.length) {
+                manualBossTarget = null;
+                if (player) player.lockedTarget = null;
+                return null;
+            }
+            const current = living.indexOf(manualBossTarget);
+            const step = direction < 0 ? -1 : 1;
+            if (current < 0) {
+                manualBossTarget = living[step > 0 ? 0 : living.length - 1];
+                if (player) player.lockedTarget = manualBossTarget;
+                return manualBossTarget;
+            }
+            const start = current;
+            const next = (start + step + living.length) % living.length;
+            manualBossTarget = living[next];
+            if (player) {
+                player.lockedTarget = manualBossTarget;
+                player.aimAngle = Math.atan2(manualBossTarget.y - player.y,
+                    manualBossTarget.x - player.x);
+            }
+            return manualBossTarget;
+        }
 
         let menuDemoNodes = [];
         function initMenuDemoNodes() {
@@ -2320,7 +2390,7 @@
 
                 this.damage = 13 * dmgBonus;
                 this.critChance = 0.04 + metaUpgrades.baseDamage * 0.012;
-                this.fireDelay = 0.46;
+                this.fireDelay = 0.46 * (activeContractId === 'OVERCHARGE' ? 0.93 : 1);
                 this.fireTimer = 0;
                 this.shotCounter = 0;
                 this.bulletSpeed = 580;
@@ -2621,13 +2691,26 @@
                     }
                 }
 
-                this.lockedTarget = (closest && minDist <= 540) ? closest : null;
-                if (!closest || minDist > 540) return;
+                if (manualBossTarget && (manualBossTarget.dead || !activeBosses.includes(manualBossTarget))) {
+                    manualBossTarget = null;
+                }
+                let target = closest;
+                if (manualBossTarget && !manualBossTarget.dead) {
+                    const manualDist = Math.hypot(manualBossTarget.x - this.x,
+                        manualBossTarget.y - this.y);
+                    if (manualDist < 540) {
+                        target = manualBossTarget;
+                        minDist = manualDist;
+                    }
+                }
+
+                this.lockedTarget = (target && minDist <= 540) ? target : null;
+                if (!target || minDist > 540) return;
 
                 this.shotCounter++;
                 // One sound per fired salvo even if multiple weapon modules fire.
                 let shotSoundFamily=this.evolutions.has('pierce_ricochet')?'prism':'plasma';
-                const baseAngle = Math.atan2(closest.y - this.y, closest.x - this.x);
+                const baseAngle = Math.atan2(target.y - this.y, target.x - this.x);
                 this.aimAngle = baseAngle;
                 this.muzzleFlash = 1.0;
 
@@ -3841,6 +3924,7 @@
                     this.aimAngle = 0;
                 }
 
+                if (!this.isBoss) this.speed *= getActiveNeonContract().enemySpeedMult;
                 if (this.isElite) {
                     this.radius *= 1.22;
                     this.speed *= 1.12;
@@ -3866,7 +3950,8 @@
                     const dx = player.x - this.x;
                     const dy = player.y - this.y;
                     const dist = Math.hypot(dx, dy) || 1;
-                    const projSpeedScale = Math.min(1.7, 1 + (wave - 1) * 0.042);
+                    const contractProjectileMult = !this.isBoss && activeContractId === 'OVERCHARGE' ? 1.10 : 1;
+                    const projSpeedScale = Math.min(1.7, 1 + (wave - 1) * 0.042) * contractProjectileMult;
                     const enemyDmgScale = Math.min(2.7, 1 + (wave - 1) * 0.08);
 
                     if (this.isBoss) {
@@ -4226,7 +4311,7 @@
                 else if (combo === 30) showDopamineBanner('30 KOMBO', '#ff007f');
                 else if (combo === 50) showDopamineBanner('50 KOMBO', '#ffe600');
 
-                score += Math.round(this.scoreValue * (1 + combo * 0.12));
+                score += Math.round(this.scoreValue * (1 + combo * 0.12) * getActiveNeonContract().scoreMultiplier);
                 player.addOverdrive(this.isBoss ? 45 : (this.isElite ? 16 : 2.8));
 
                 if (player.vampiricHeal > 0 && Math.random() < 0.14 &&
@@ -5422,10 +5507,13 @@
             Object.freeze({type:'SPEARHEAD',from:3,label:'ÖNCÜ HÜCUMU',color:'#ffbf58'}),
             Object.freeze({type:'ESCORT',from:8,label:'KESKİN NİŞANCI KORUMASI',color:'#fa9cd7'}),
             Object.freeze({type:'INTERCEPT',from:10,label:'İKİ YÖNLÜ AVCI BASKINI',color:'#77dcff'}),
-            Object.freeze({type:'BREACH',from:13,label:'AĞIR HAT YARMA',color:'#ffac70'})
+            Object.freeze({type:'CORRIDOR',from:6,label:'KAÇIŞ KORİDORU KİLİDİ',color:'#8cf0c8'}),
+            Object.freeze({type:'BREACH',from:13,label:'AĞIR HAT YARMA',color:'#ffac70'}),
+            Object.freeze({type:'CROSSLOCK',from:12,label:'ÇAPRAZ HEDEF KİLİDİ',color:'#c6a0ff'})
         ]);
         function getSpecialEncounterKinds(currentWave){
-            return SPECIAL_ENCOUNTER_VARIANTS.filter(p=>currentWave>=p.from);
+            const unlockWave = activeContractId === 'BLACKOUT' ? currentWave + 1 : currentWave;
+            return SPECIAL_ENCOUNTER_VARIANTS.filter(p=>unlockWave>=p.from);
         }
         function getSpecialEncounterPlan(currentWave,theme,side,index){
             const available=getSpecialEncounterKinds(currentWave);
@@ -5450,9 +5538,17 @@
             }else if(kind.type==='INTERCEPT'){
                 units=[unit('DASHER',side,0,2),unit('ASSASSIN',side,1,2),
                     unit('DASHER',opposite,0,2),unit('SHOOTER',opposite,1,2)];
-            }else{
+            }else if(kind.type==='BREACH'){
                 units=[unit('TANK',side,0,3),unit('SPLITTER',side,1,3),
                     unit('GRAV_WELL',side,2,3),unit('SWARM',offset,0,1)];
+            }else if(kind.type==='CORRIDOR'){
+                // Two offset lines leave the arena centre open as a readable escape lane.
+                units=[unit('SHIELD_BEARER',side,0,3),unit('SWARM',side,2,3),
+                    unit('SHIELD_BEARER',opposite,0,3),unit('SWARM',opposite,2,3)];
+            }else{
+                // Shooters anchor two perpendicular edges; dashers force the target choice.
+                units=[unit('SHOOTER',side,0,3),unit('DASHER',side,2,3),
+                    unit('SHOOTER',offset,0,3),unit('ASSASSIN',offset,2,3)];
             }
             return {
                 type:kind.type,side,label:kind.label,color:kind.color,
@@ -6743,6 +6839,7 @@
                 const drops = this.stats.chestDrops.elite + this.stats.chestDrops.boss;
                 return {
                     timeSeconds: Math.round(totalTime), wave,
+                    contract: getActiveNeonContract().id,
                     phase: this.profile.phase, theme: this.profile.theme,
                     tempoMode: this.tempoMode,
                     basePhase: (this.baseProfile || this.profile).phase,
@@ -7238,6 +7335,14 @@
             recovery: Object.freeze({ id:'recovery', color:'#39c7a5', accent:'#48a9db', strength:0.32, speed:0.65 }),
             buildup: Object.freeze({ id:'buildup', color:'#25b2d7', accent:'#567ad1', strength:0.39, speed:0.8 })
         });
+        const CHASSIS_ATMOSPHERE_SKINS = Object.freeze({
+            VANGUARD: Object.freeze({id:'AURORA_GRID',label:'AURORA GRID',accent:'#4de7ff',secondary:'#6f8cff',pulse:1.0}),
+            PHANTOM: Object.freeze({id:'VIOLET_GHOST',label:'VIOLET GHOST',accent:'#ff62d0',secondary:'#b678ff',pulse:1.23}),
+            TITAN: Object.freeze({id:'EMERALD_FURNACE',label:'EMERALD FURNACE',accent:'#62ff9a',secondary:'#ffd166',pulse:0.78})
+        });
+        function getChassisAtmosphereSkin(chassis = player?.chassis) {
+            return CHASSIS_ATMOSPHERE_SKINS[chassis] || CHASSIS_ATMOSPHERE_SKINS.VANGUARD;
+        }
         function getArenaAtmosphereProfile(phase, overdrive) {
             if (phase === 'WARNING' || phase === 'BOSS') return ARENA_ATMOSPHERE_PROFILES.danger;
             if (overdrive) return ARENA_ATMOSPHERE_PROFILES.overdrive;
@@ -7255,13 +7360,14 @@
             if (gameState !== 'PLAYING') return;
             const profile = getArenaAtmosphereProfile(combatDirector?.profile?.phase,
                 !!player?.overdriveActive);
+            const skin = getChassisAtmosphereSkin(player?.chassis);
             const phaseTime = PREFERS_REDUCED_VFX_MOTION ? 0 : totalTime;
-            const beat = (1 + Math.sin(phaseTime * profile.speed * 2.1)) * 0.5;
+            const beat = (1 + Math.sin(phaseTime * profile.speed * 2.1 * skin.pulse)) * 0.5;
             const intensity = profile.strength * (0.7 + beat * 0.28);
             const side = Math.min(96, worldWidth * 0.09);
             ctx.save();
             // Peripheral circuitry. Never paint solid light over central projectiles.
-            ctx.strokeStyle = profile.color;
+            ctx.strokeStyle = profile.id === 'danger' ? profile.color : skin.accent;
             ctx.lineWidth = 2;
             ctx.globalAlpha = 0.12 + intensity * 0.15;
             for (const x of [side, worldWidth - side]) {
@@ -7290,7 +7396,7 @@
                 ctx.stroke();
             }
             ctx.globalAlpha = 0.12 + intensity * 0.26;
-            ctx.fillStyle = profile.accent;
+            ctx.fillStyle = profile.id === 'danger' ? profile.accent : skin.secondary;
             const segmentSize = Math.min(95, Math.max(24, worldWidth * 0.06));
             for (const [x, y, sign] of [
                 [20, 24, 1], [worldWidth - 20, 24, -1],
@@ -7363,7 +7469,8 @@
             const targets = [];
 
             for (const b of activeBosses) {
-                if (!b.dead) targets.push({ x: b.x, y: b.y, col: b.color, label: 'BOSS' });
+                if (!b.dead) targets.push({ x: b.x, y: b.y, col: b.color,
+                    label: b.bossVisual?.tag || b.bossName || 'BOSS' });
             }
             if (combatDirector?.activeArenaEvent) {
                 const event = combatDirector.activeArenaEvent;
@@ -7597,12 +7704,29 @@
             }
         }
 
+        function renderNeonContractOptions() {
+            const container = document.getElementById('neonContractOptions');
+            if (!container) return;
+            container.innerHTML = getNeonContractList().map(contract =>
+                `<button type="button" class="neon-contract-card rounded-lg p-2.5 text-left${contract.id === selectedContractId ? ' is-selected' : ''}" data-neon-contract="${contract.id}" aria-pressed="${contract.id === selectedContractId ? 'true' : 'false'}" style="--contract-color:${contract.color}">
+                    <div class="flex items-center justify-between gap-2"><strong class="font-cyber text-[10px]" style="color:${contract.color}">${contract.label}</strong><span class="text-[9px] text-gray-400">${contract.short}</span></div>
+                    <p class="text-[10px] text-gray-300 leading-snug mt-1.5">${contract.desc}</p>
+                </button>`).join('');
+            for (const card of container.querySelectorAll?.('[data-neon-contract]') || []) {
+                card.addEventListener('click', () => {
+                    selectNeonContract(card.getAttribute('data-neon-contract'));
+                    renderNeonContractOptions();
+                });
+            }
+        }
+
         function updateMenuCounters() {
             document.getElementById('menuHighScore').textContent = savedHighScore.toLocaleString('tr-TR');
             document.getElementById('menuMaxWave').textContent = savedMaxWave;
             document.getElementById('menuGoldText').textContent = totalGold.toLocaleString('tr-TR');
             document.getElementById('shopGoldBalance').textContent = totalGold.toLocaleString('tr-TR');
             refreshSelectedChassisDetails();
+            renderNeonContractOptions();
 
             const summaryEl = document.getElementById('menuLoadoutSummary');
             if (summaryEl) {
@@ -7637,8 +7761,61 @@
         // CSS gradients and inline style markup on readback.
         let lastBossGradientColor = null;
         let lastBossIdentityMarkup = null;
+        function renderBossIdentityRows(bosses) {
+            const escape = value => String(value ?? '').replace(/[&<>\"']/g, ch =>
+                ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[ch]));
+            return (bosses || []).filter(b => b && !b.dead).map(b => {
+                const hp = Math.max(0, Number(b.hp) || 0);
+                const maxHp = Math.max(1, Number(b.maxHp) || 1);
+                const pct = Math.max(0, Math.min(100, Math.round(hp / maxHp * 100)));
+                const tag = escape(b.bossVisual?.tag || b.bossName || 'BOSS');
+                const color = /^#[0-9a-f]{6}$/i.test(b.color) ? b.color : '#ff5268';
+                const target = player?.lockedTarget === b;
+                const targetText = target ? ' · TARGET' : '';
+                return '<span class="boss-id-chip" data-boss-id="'+escape(b.id ?? tag)+
+                    '" data-target="'+target+'" aria-current="'+(target?'true':'false')+
+                    '" aria-label="'+tag+', Faz '+(b.bossPhase || 1)+', HP '+Math.ceil(hp)+' / '+
+                    Math.round(maxHp)+'" style="color:'+color+';border-color:'+color+'">'+
+                    '<span class="boss-id-head"><strong>'+tag+' · F'+(b.bossPhase || 1)+
+                    '</strong><span class="boss-id-hp">'+Math.ceil(hp)+'/'+Math.round(maxHp)+targetText+'</span></span>'+
+                    '<span class="boss-id-meter"><span class="boss-id-fill" style="width:'+pct+'%;background:'+color+'"></span></span></span>';
+            }).join('');
+        }
+
+        function getBossIdentityKey(bosses) {
+            return (bosses || []).filter(b => b && !b.dead).map(b =>
+                [b.id ?? b.bossName, b.bossVisual?.tag, b.bossPhase || 1,
+                    b.color, player?.lockedTarget === b].join(':')).join('|');
+        }
+
+        function updateBossIdentityRows(bosses) {
+            const strip = document.getElementById('bossIdentityStrip');
+            if (!strip?.querySelectorAll) return;
+            for (const b of (bosses || []).filter(x => x && !x.dead)) {
+                const row = strip.querySelector('[data-boss-id="'+String(b.id ?? b.bossName).replace(/\"/g, '')+'"]');
+                if (!row) continue;
+                const hp = Math.max(0, Number(b.hp) || 0);
+                const maxHp = Math.max(1, Number(b.maxHp) || 1);
+                const pct = Math.max(0, Math.min(100, Math.round(hp / maxHp * 100)));
+                const hpText = row.querySelector('.boss-id-hp');
+                const fill = row.querySelector('.boss-id-fill');
+                if (hpText) hpText.textContent = Math.ceil(hp)+'/'+Math.round(maxHp)+(player?.lockedTarget === b ? ' · TARGET' : '');
+                if (fill) fill.style.width = pct+'%';
+                row.setAttribute('aria-label', (b.bossVisual?.tag || b.bossName || 'BOSS')+', Faz '+(b.bossPhase || 1)+', HP '+Math.ceil(hp)+' / '+Math.round(maxHp));
+            }
+        }
+
         function updateHUD() {
             if (!player) return;
+
+            const contract = getActiveNeonContract();
+            const contractBadge = document.getElementById('activeContractBadge');
+            if (contractBadge) {
+                contractBadge.textContent = contract.id;
+                contractBadge.style.borderColor = contract.color;
+                contractBadge.style.color = contract.color;
+                contractBadge.title = contract.label + ' · ' + contract.desc;
+            }
 
             const xpPct = Math.min(100, (player.xp / player.xpToNext) * 100);
             document.getElementById('xpBar').style.width = `${xpPct}%`;
@@ -7755,13 +7932,11 @@
                     'FAZ '+(primary?.bossPhase||1)+' / 3';
                 const strip=document.getElementById('bossIdentityStrip');
                 if (strip) {
-                    const nextStrip = living.map(b=>'<span class="boss-id-chip" style="color:'+
-                        b.color+';border-color:'+b.color+'">'+b.bossVisual.tag+' · F'+
-                        b.bossPhase+'</span>').join('');
-                    if (lastBossIdentityMarkup !== nextStrip) {
-                        strip.innerHTML = nextStrip;
-                        lastBossIdentityMarkup = nextStrip;
-                    }
+                    const identityKey = getBossIdentityKey(living);
+                    if (lastBossIdentityMarkup !== identityKey) {
+                        strip.innerHTML = renderBossIdentityRows(living);
+                        lastBossIdentityMarkup = identityKey;
+                    } else updateBossIdentityRows(living);
                 }
             }
 
@@ -7819,6 +7994,7 @@
         function startNewGame() {
             clearGameplayInput();
             resetPc3Telemetry();
+            activeContractId = selectedContractId;
             lastBossGradientColor = null;
             lastBossIdentityMarkup = null;
             audio.init();
@@ -7852,6 +8028,7 @@
             bossEncounterCount = 0;
             combatDirector = new CombatDirector();
             activeBosses = [];
+            manualBossTarget = null;
             bossWarningTimer = 0;
             kills = 0;
             spawnTimer = 0.5;
@@ -8848,6 +9025,9 @@
                     player.triggerNova();
                 } else if (e.code === 'KeyM') {
                     toggleControlMode();
+                } else if (e.code === 'Tab' && activeBosses.some(b => !b.dead)) {
+                    e.preventDefault();
+                    cycleBossTarget(e.shiftKey ? -1 : 1);
                 } else if (e.code === 'Escape' || e.code === 'KeyP') {
                     e.preventDefault();
                     togglePause();
