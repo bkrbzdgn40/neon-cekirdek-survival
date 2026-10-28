@@ -208,7 +208,7 @@ test('extended browser game loop avoids runtime errors and stays within entity b
   expect(errors).toEqual([]);
 });
 
-test('self-hosted assets preserve grid layout and fonts without any external requests', async ({ page }) => {
+test('self-hosted assets preserve responsive layout and fonts without any external requests', async ({ page, isMobile }) => {
   const external = [];
   page.on('request', request => {
     if (/^https?:\/\//.test(request.url()) &&
@@ -224,7 +224,7 @@ test('self-hosted assets preserve grid layout and fonts without any external req
     bodyFont: getComputedStyle(document.body).fontFamily,
     iconFont: getComputedStyle(document.querySelector('.fa-solid')).fontFamily
   }));
-  expect(info.grid).toBe('grid');
+  expect(info.grid).toBe(isMobile ? 'flex' : 'grid');
   expect(info.orbitronLoaded).toBe(true);
   expect(info.bodyFont).toContain('Rajdhani');
   expect(info.iconFont).toContain('Font Awesome');
