@@ -28,15 +28,15 @@ Altın, meta yükseltmeler, grafik ayarları ve isteğe bağlı karşılaştırm
 
 - Oyun mantığı, stil ve markup: [index.html](index.html)
 - Node.js 22 ile çalışan, gerçek oyun kodunu VM sahte DOM ortamında sınayan regresyon seti: [tests/smoke.test.cjs](tests/smoke.test.cjs)
-- Her PR ve `main` push'unda smoke testleri: [.github/workflows/neon-smoke.yml](.github/workflows/neon-smoke.yml)
+- Her PR ve `main` push'unda Node ve Chromium smoke testleri: [.github/workflows/neon-smoke.yml](.github/workflows/neon-smoke.yml)
 - Mimari ve tamamlanan geliştirmelerin ayrıntıları: [docs/](docs/)
 
 ```sh
 node --test tests/smoke.test.cjs
 ```
 
-**Doğrulama sınırı:** Bu smoke testleri gerçek tarayıcıda görsel yerleşimi, giriş gecikmesini, uzun oturum FPS değerlerini veya mobil cihaz davranışını ölçmez. Bu başlıklar için ayrıca gerçek tarayıcı ve cihaz testleri gerekir.
+**Doğrulama sınırı:** Node smoke seti oyun mantığını sınar. GitHub Actions içindeki Playwright, gerçek Chromium'da masaüstü ve mobil viewport ile temel menü/oyun etkileşimlerini sınar. Ekran görüntüsü baseline karşılaştırması ve uzun oturum gerçek cihaz FPS ölçümü henüz kapsamda değildir. Yerel tarayıcı testleri için `npm install --no-save --no-package-lock @playwright/test@1.56.1`, `npx playwright install chromium`, `npx playwright test` komutları kullanılabilir.
 
 ## Katkı düzeni
 
-Değişiklikleri ayrı dalda yapın, etkilenen davranış için regresyon testi ekleyin, GitHub Actions sonucunu kontrol edin ve PR incelemesinden sonra `main` dalına birleştirin. Büyük tek dosyayı parçalara ayırma işi, çalışan oyunu bir defada yeniden yazmadan, bağımsız testlenebilir adımlarla yapılmalıdır.
+HTML, CSS ve klasik JavaScript dosyaları yerel statik yollarla yüklenir; derleme gerekmez. Değişiklikleri ayrı dalda yapın, etkilenen davranış için regresyon testi ekleyin, GitHub Actions sonucunu kontrol edin ve PR incelemesinden sonra `main` dalına birleştirin. Büyük tek dosyayı parçalara ayırma işi, çalışan oyunu bir defada yeniden yazmadan, bağımsız testlenebilir adımlarla yapılmalıdır.

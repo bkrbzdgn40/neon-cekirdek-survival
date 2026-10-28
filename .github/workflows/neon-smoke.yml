@@ -25,3 +25,30 @@ jobs:
           package-manager-cache: false
       - name: Validate game state and mechanics
         run: node --test tests/smoke.test.cjs
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install browser test runner
+        run: npm install --no-save --no-package-lock @playwright/test@1.56.1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Exercise desktop and mobile game flows
+        run: npx playwright test
+      - name: Upload browser test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-browser-test-results
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
