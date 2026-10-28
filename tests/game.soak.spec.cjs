@@ -9,6 +9,7 @@ test('extended stationary desktop combat stays alive and within budgets @soak', 
   await page.evaluate(() => {
     // Benchmark fixture: ignore only player damage while using the real Director.
     player.takeDamage = () => {};
+    player.gainXp = () => {}; // Do not pause the renderer in the level-up modal.
     wave = 16;
     totalTime = 240;
     nextBossTime = Infinity;
