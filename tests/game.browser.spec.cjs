@@ -207,3 +207,26 @@ test('extended browser game loop avoids runtime errors and stays within entity b
   expect(result.particles).toBeLessThanOrEqual(420);
   expect(errors).toEqual([]);
 });
+
+test('self-hosted assets preserve grid layout and fonts without any external requests', async ({ page }) => {
+  const external = [];
+  page.on('request', request => {
+    if (/^https?:\/\//.test(request.url()) &&
+        !request.url().startsWith('http://127.0.0.1:8765/')) external.push(request.url());
+  });
+  await page.route(/^https:\/\//, route => route.abort());
+  await page.goto('/index.html', { waitUntil: 'networkidle' });
+  await page.evaluate(() => document.fonts.ready);
+  await expect(page.locator('#startBtn')).toBeVisible();
+  const info = await page.evaluate(() => ({
+    grid: getComputedStyle(document.querySelector('#preflightDashboard')).display,
+    orbitronLoaded: document.fonts.check('700 20px Orbitron'),
+    bodyFont: getComputedStyle(document.body).fontFamily,
+    iconFont: getComputedStyle(document.querySelector('.fa-solid')).fontFamily
+  }));
+  expect(info.grid).toBe('grid');
+  expect(info.orbitronLoaded).toBe(true);
+  expect(info.bodyFont).toContain('Rajdhani');
+  expect(info.iconFont).toContain('Font Awesome');
+  expect(external).toEqual([]);
+});

@@ -5110,3 +5110,16 @@ test('portable backup rolls back persistence on partial storage failure', () => 
   })()`));
   assert.deepEqual(result,{ok:false,liveGold:360,savedGold:22,graphics:'high'});
 });
+
+test('offline static styles, icon assets and font files are shipped locally', () => {
+  assert.doesNotMatch(pageHtml, /cdn\.tailwindcss\.com|cdnjs\.cloudflare\.com|fonts\.googleapis\.com/);
+  assert.match(pageHtml, /src\/utilities\.css/);
+  assert.match(pageHtml, /src\/vendor\/fontawesome\/css\/all\.min\.css/);
+  assert.match(pageHtml, /src\/vendor\/fonts\.css/);
+  const asset = name => fs.statSync(path.join(__dirname, '..', name)).size;
+  assert.ok(asset('src/utilities.css') > 10000);
+  assert.ok(asset('src/vendor/fontawesome/css/all.min.css') > 10000);
+  assert.ok(asset('src/vendor/fontawesome/webfonts/fa-solid-900.woff2') > 10000);
+  assert.ok(asset('src/vendor/fonts/orbitron-latin-700-normal.woff2') > 1000);
+  assert.ok(asset('src/vendor/fonts/rajdhani-latin-600-normal.woff2') > 1000);
+});
