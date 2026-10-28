@@ -40,3 +40,5 @@ node --test tests/smoke.test.cjs
 ## Katkı düzeni
 
 HTML, CSS ve klasik JavaScript dosyaları yerel statik yollarla yüklenir; derleme gerekmez. Değişiklikleri ayrı dalda yapın, etkilenen davranış için regresyon testi ekleyin, GitHub Actions sonucunu kontrol edin ve PR incelemesinden sonra `main` dalına birleştirin. Büyük tek dosyayı parçalara ayırma işi, çalışan oyunu bir defada yeniden yazmadan, bağımsız testlenebilir adımlarla yapılmalıdır.
+
+Ayrı [haftalık Chromium soak workflow'u](.github/workflows/neon-soak.yml) gerçek 90 saniyelik ileri-dalga render, hata ve entity limitlerini sınar. Bu gerçek mobil/masaüstü cihazda 30–60 dakikalık manuel ölçümün yerine geçmez.
