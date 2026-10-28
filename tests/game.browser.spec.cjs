@@ -53,3 +53,45 @@ test('mobile touchscreen controls and menu viewport stay usable', async ({ page,
   });
   expect(result).toEqual({ active: true, ended: true });
 });
+
+test('portable JSON backup can be downloaded and restored through the menu', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('dialog', dialog => dialog.accept());
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#backupExportBtn')).toBeVisible();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('#backupExportBtn').click()
+  ]);
+  expect(download.suggestedFilename()).toBe('neon-cekirdek-kayit.json');
+  const fs = require('node:fs');
+  const saved = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
+  expect(saved.format).toBe('neon-cekirdek-progress');
+  await page.evaluate(() => { totalGold = 888; saveMetaProgress(); });
+  await expect(page.locator('#menuGoldText')).toHaveText('888');
+  await page.locator('#backupImportInput').setInputFiles({
+    name: 'neon-cekirdek-kayit.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(saved))
+  });
+  await expect(page.locator('#backupStatusText')).toHaveText('YEDEK GERİ YÜKLENDİ');
+  await expect(page.locator('#menuGoldText')).toHaveText('50');
+  expect(errors).toEqual([]);
+});
+
+test('game start and pause remain operable if every external CDN is unavailable', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route(/^https:\/\/(?!127\.0\.0\.1)/, route => route.abort());
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#startBtn')).toBeVisible();
+  await page.locator('#startBtn').click();
+  await expect(page.locator('#startModal')).toBeHidden();
+  await expect(page.locator('#hud')).toBeVisible();
+  await page.locator('#pauseBtn').click();
+  await expect(page.locator('#pauseModal')).toBeVisible();
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('#pauseModal')).toBeHidden();
+  expect(errors).toEqual([]);
+});

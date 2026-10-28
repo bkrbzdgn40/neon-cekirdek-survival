@@ -911,3 +911,13 @@
             .report-kpi strong{font-size:17px}
         }
         @media(prefers-reduced-motion:reduce){.report-tab{transition:none}}
+
+        /* Fallback for critical modal states if a utility CSS CDN is blocked.
+           Full responsive styling still needs Tailwind; gameplay remains operable. */
+        #startModal.hidden, #pauseModal.hidden, #upgradeModal.hidden,
+        #reviveModal.hidden, #gameOverModal.hidden, #shopModal.hidden,
+        #hud.hidden { display: none !important; }
+        #pauseModal:not(.hidden), #upgradeModal:not(.hidden),
+        #reviveModal:not(.hidden), #gameOverModal:not(.hidden),
+        #shopModal:not(.hidden) { display: flex; }
+        #hud:not(.hidden) { display: flex; flex-direction: column; }

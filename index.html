@@ -462,6 +462,12 @@
                     <span class="hidden md:inline text-gray-700">|</span>
                     <span class="hidden md:inline"><b class="text-purple-300">[M]</b> KONTROL MODU</span>
                 </div>
+                <div class="flex flex-wrap items-center justify-end gap-2">
+                    <button id="backupExportBtn" type="button" class="rounded border border-emerald-500/50 px-2.5 py-1 text-[10px] text-emerald-200" title="Altın, rekor, yükseltmeler ve grafik tercihini JSON olarak indir">YEDEK AL</button>
+                    <button id="backupImportBtn" type="button" class="rounded border border-cyan-500/50 px-2.5 py-1 text-[10px] text-cyan-200" title="Önceden kaydedilmiş JSON dosyasından ilerlemeyi geri yükle">YEDEK YÜKLE</button>
+                    <input id="backupImportInput" type="file" accept=".json,application/json" class="hidden" aria-label="İlerleme yedeği dosyası">
+                    <span id="backupStatusText" role="status" aria-live="polite" class="text-[10px] text-emerald-200"></span>
+                </div>
                 <div class="text-cyan-400/90 font-semibold">NEON ÇEKİRDEK</div>
             </footer>
         </div>
