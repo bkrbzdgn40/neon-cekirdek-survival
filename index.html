@@ -8175,9 +8175,19 @@
                 </div>`;
         }
 
+        // In-place Fisher-Yates avoids the biased/non-transitive random sort comparator.
+        // Callers provide a new array, so the canonical upgrade pool keeps its order.
+        function shuffleInPlace(items) {
+            for (let i = items.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [items[i], items[j]] = [items[j], items[i]];
+            }
+            return items;
+        }
+
         function populateUpgradeCards() {
-            const shuffled = UPGRADES_POOL.filter(u =>
-                (player.upgradeCounts[u.id] || 0) < MAX_MODULE_TIER).sort(() => Math.random() - 0.5);
+            const shuffled = shuffleInPlace(UPGRADES_POOL.filter(u =>
+                (player.upgradeCounts[u.id] || 0) < MAX_MODULE_TIER));
             // Keep one near-evolution module visible when possible without removing choice.
             const ready = shuffled.filter(u => (player.upgradeCounts[u.id] || 0) === 2 &&
                 EVOLUTION_DEFS[u.id]);

@@ -4956,3 +4956,66 @@ test('Gameplay V2 MLP1 reset clears weights without disturbing graphics, meta or
   assert.equal(storage['neonCekirdek.playerLearner.v1'],'');
   assert.ok(!Object.hasOwn(storage,'neonCekirdek.tempoCompare.v1'));
 });
+
+
+test('upgrade Fisher-Yates shuffle reaches all six three-item permutations', () => {
+  const { run } = setup();
+  const result = JSON.parse(run(`(() => {
+    const permutations = new Set();
+    const originalRandom = Math.random;
+    let sameReference = true;
+    try {
+      for (let first = 0; first < 3; first++) {
+        for (let second = 0; second < 2; second++) {
+          const draws = [(first + .5) / 3, (second + .5) / 2];
+          let drawIndex = 0;
+          Math.random = () => draws[drawIndex++];
+          const sample = [0, 1, 2];
+          const returned = shuffleInPlace(sample);
+          sameReference = sameReference && returned === sample;
+          permutations.add(sample.join(','));
+        }
+      }
+    } finally {
+      Math.random = originalRandom;
+    }
+    return JSON.stringify({ permutations: [...permutations].sort(), sameReference });
+  })()`));
+  assert.equal(result.sameReference, true);
+  assert.deepEqual(result.permutations, [
+    '0,1,2', '0,2,1', '1,0,2', '1,2,0', '2,0,1', '2,1,0'
+  ]);
+});
+
+test('upgrade draft keeps evolution priority, unique eligible cards and original pool', () => {
+  const { run } = setup();
+  const result = JSON.parse(run(`(() => {
+    startNewGame();
+    for (const upgrade of UPGRADES_POOL) player.upgradeCounts[upgrade.id] = 3;
+    player.upgradeCounts.homing = 2;
+    player.upgradeCounts.firerate = 0;
+    player.upgradeCounts.multishot = 0;
+    player.upgradeCounts.vampiric = 0;
+    const originalIds = UPGRADES_POOL.map(u => u.id);
+    const originalRandom = Math.random;
+    try {
+      Math.random = () => 0;
+      populateUpgradeCards();
+    } finally {
+      Math.random = originalRandom;
+    }
+    return JSON.stringify({
+      offered: currentUpgradeChoices.map(choice => choice.upg.id),
+      rarities: currentUpgradeChoices.map(choice => choice.rarity.id),
+      poolUnchanged: UPGRADES_POOL.every((u, i) => u.id === originalIds[i]),
+      completedOffered: currentUpgradeChoices.some(choice =>
+        player.upgradeCounts[choice.upg.id] >= MAX_MODULE_TIER)
+    });
+  })()`));
+  assert.equal(result.offered.length, 3);
+  assert.equal(result.offered[0], 'homing');
+  assert.equal(new Set(result.offered).size, 3);
+  assert.equal(result.completedOffered, false);
+  assert.equal(result.poolUnchanged, true);
+  assert.deepEqual(result.rarities, ['COMMON', 'COMMON', 'COMMON']);
+});

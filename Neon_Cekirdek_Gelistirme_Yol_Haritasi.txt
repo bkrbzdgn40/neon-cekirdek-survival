@@ -4,7 +4,7 @@ Sürüm: 1.17 | İlk plan: 18.10.2026 | Durum: 28.10.2026
 
 GitHub: https://github.com/bkrbzdgn40/neon-cekirdek-survival
 Temel alınan kaynak: Neon Çekirdek REV 3.6, kullanıcının gönderdiği 4.251 satırlık HTML oyun dosyası.
-Durum: Gameplay V2 G1/G2/G3, üç grafik kalite profili ve 289/289 CI PASS main'de. Kullanıcı artık öğrenen oyuncu modeli istedi; MLP1 gerçek online SGD oyuncu risk tahmini gözlem pilotu PR incelemesinde. Düşman dengesi/model yönetimi ayrı kabul aşamasına ayrıldı.
+Tarihsel not: Bu yol haritasındaki 289/289 test ve MLP1 PR ifadeleri eski planlama anına aittir; canlı durum beyanı değildir. Güncel uygulama için main HEAD, GitHub Actions, index.html ve README.md kontrol edilmelidir.
 Aşağıdaki tarihsel [ ] maddeleri ilk kapsamdır; güncel tamamlanma kaydı sondadır.
 
 ======================================================================
@@ -81,7 +81,7 @@ L. Mevcut güçlü temel korunmalı: otomatik ateş, WASD/fare, dash, EMP,
 3. GITHUB GELİŞTİRME DÜZENİ
 ======================================================================
 
-- Repo: bkrbzdgn40/neon-cekirdek-survival (private).
+- Repo: bkrbzdgn40/neon-cekirdek-survival (public; 28.10.2026 kontrolü).
 - main: son doğrulanmış çalışır sürüm.
 - Başlangıç sürümü: varsa v3.6-baseline etiketini koru; yoksa mevcut
   dosyaya karşılık gelen commit üzerine etiket oluştur.
