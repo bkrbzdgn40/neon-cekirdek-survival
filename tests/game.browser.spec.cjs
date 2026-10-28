@@ -95,3 +95,44 @@ test('game start and pause remain operable if every external CDN is unavailable'
   await expect(page.locator('#pauseModal')).toBeHidden();
   expect(errors).toEqual([]);
 });
+
+test('small, tablet and wide viewports keep the launch action horizontally reachable', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  for (const [width, height] of [[360, 740], [768, 1024], [1920, 1080]]) {
+    await page.setViewportSize({ width, height });
+    const start = page.locator('#startBtn');
+    await expect(start).toBeVisible();
+    const rect = await start.boundingBox();
+    expect(rect).not.toBeNull();
+    expect(rect.width).toBeGreaterThan(60);
+    expect(rect.x).toBeGreaterThanOrEqual(-2);
+    expect(rect.x + rect.width).toBeLessThanOrEqual(width + 2);
+    const scroll = await page.locator('#startModal').evaluate(node => ({
+      content: node.scrollWidth, client: node.clientWidth
+    }));
+    expect(scroll.content, `horizontal overflow in viewport ${width}x${height}`)
+      .toBeLessThanOrEqual(scroll.client + 3);
+  }
+});
+
+test('a short real-time combat sample renders frames and advances game time', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/index.html?perf=1', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#startBtn')).toBeVisible();
+  await page.locator('#startBtn').click();
+  await page.waitForTimeout(4000);
+  const sample = await page.evaluate(() => ({
+    snapshot: window.getNeonPerformanceSnapshot(),
+    totalTime,
+    gameState,
+    activeEnemies: enemies.length
+  }));
+  expect(sample.gameState).toBe('PLAYING');
+  expect(sample.totalTime).toBeGreaterThan(1);
+  expect(sample.snapshot.frame.sampleCount).toBeGreaterThan(5);
+  expect(sample.snapshot.canvasWidth).toBeGreaterThan(0);
+  expect(sample.snapshot.canvasHeight).toBeGreaterThan(0);
+  expect(sample.activeEnemies).toBeLessThanOrEqual(160);
+  expect(errors).toEqual([]);
+});
