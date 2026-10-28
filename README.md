@@ -1,6 +1,6 @@
 # Neon Çekirdek: Hayatta Kal
 
-Tarayıcıda çalışan, tek dosyalı bir Canvas 2D arena-survival oyunu. Kodun ve çalışma davranışının kaynağı GitHub'daki **main** dalında yer alan [index.html](index.html) dosyasıdır. [Geliştirme yol haritası](Neon_Cekirdek_Gelistirme_Yol_Haritasi.txt) tarihsel tasarım ve değişiklik notları da içerir; güncel CI/test sayısını ya da mevcut PR durumunu temsil etmez.
+Tarayıcıda çalışan, statik Canvas 2D arena-survival oyunu. GitHub **main** dalındaki [index.html](index.html) giriş sayfasıdır; gerçek oyun kodu [src/game.js](src/game.js), stil katmanı [src/game.css](src/game.css) ve yerel [src/utilities.css](src/utilities.css) dosyalarındadır. Bunların tamamı birlikte güncel uygulamanın kaynaklarıdır. [Geliştirme yol haritası](Neon_Cekirdek_Gelistirme_Yol_Haritasi.txt) tarihsel tasarım ve değişiklik notları da içerir; güncel CI/test sayısını ya da mevcut PR durumunu temsil etmez.
 
 ## Oyunu çalıştırma
 
