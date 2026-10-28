@@ -1,0 +1,913 @@
+        :root {
+            --neon-cyan: #00f3ff;
+            --neon-pink: #ff007f;
+            --neon-purple: #b000ff;
+            --neon-yellow: #ffe600;
+            --neon-green: #00ff66;
+            --bg-dark: #050816;
+            --surface-glass: rgba(7, 12, 27, 0.91);
+            --surface-line: rgba(59, 190, 214, 0.24);
+            --danger-core: #ff5268;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            background-color: var(--bg-dark);
+            font-family: 'Rajdhani', sans-serif;
+            color: #ffffff;
+            touch-action: none;
+        }
+
+        .font-cyber {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        #gameCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            z-index: 1;
+        }
+
+        .text-glow-cyan {
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.85), 0 0 22px rgba(0, 243, 255, 0.35);
+        }
+        .text-glow-pink {
+            text-shadow: 0 0 10px rgba(255, 0, 127, 0.85), 0 0 22px rgba(255, 0, 127, 0.35);
+        }
+        .text-glow-yellow {
+            text-shadow: 0 0 10px rgba(255, 230, 0, 0.85), 0 0 22px rgba(255, 230, 0, 0.35);
+        }
+
+        .box-glow-cyan {
+            box-shadow: 0 0 25px rgba(0, 243, 255, 0.25), inset 0 0 15px rgba(0, 243, 255, 0.08);
+        }
+        .box-glow-pink {
+            box-shadow: 0 0 25px rgba(255, 0, 127, 0.3), inset 0 0 15px rgba(255, 0, 127, 0.08);
+        }
+        .box-glow-yellow {
+            box-shadow: 0 0 30px rgba(255, 230, 0, 0.25), inset 0 0 15px rgba(255, 230, 0, 0.08);
+        }
+
+        @keyframes low-hp-pulse {
+            0%, 100% { box-shadow: inset 0 0 35px rgba(255, 0, 60, 0.35); }
+            50% { box-shadow: inset 0 0 95px rgba(255, 0, 60, 0.85); }
+        }
+        .low-hp-vignette {
+            animation: low-hp-pulse 0.65s infinite ease-in-out;
+        }
+
+        @keyframes boss-warn {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.35; transform: scale(0.97); }
+        }
+        .animate-boss-warn {
+            animation: boss-warn 0.6s infinite ease-in-out;
+        }
+
+        @keyframes overdrive-pulse {
+            0%, 100% { box-shadow: inset 0 0 45px rgba(255, 0, 127, 0.45), inset 0 0 90px rgba(255, 230, 0, 0.2); }
+            50% { box-shadow: inset 0 0 75px rgba(0, 243, 255, 0.55), inset 0 0 110px rgba(255, 0, 127, 0.35); }
+        }
+        .overdrive-screen-glow {
+            animation: overdrive-pulse 0.45s infinite ease-in-out;
+        }
+
+        @keyframes legendary-glow {
+            0%, 100% { box-shadow: 0 0 25px rgba(234, 179, 8, 0.5), inset 0 0 15px rgba(234, 179, 8, 0.2); border-color: #eab308; }
+            50% { box-shadow: 0 0 45px rgba(234, 179, 8, 0.85), inset 0 0 25px rgba(234, 179, 8, 0.4); border-color: #fef08a; }
+        }
+        .legendary-card-glow {
+            animation: legendary-glow 2s infinite ease-in-out;
+        }
+
+        @keyframes epic-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(236, 72, 153, 0.4); border-color: #ec4899; }
+            50% { box-shadow: 0 0 35px rgba(236, 72, 153, 0.7); border-color: #f9a8d4; }
+        }
+        .epic-card-glow {
+            animation: epic-glow 2.5s infinite ease-in-out;
+        }
+
+        @keyframes spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+            animation: spin-slow 14s linear infinite;
+        }
+
+        @keyframes spin-reverse {
+            from { transform: rotate(360deg); }
+            to { transform: rotate(0deg); }
+        }
+        .animate-spin-reverse {
+            animation: spin-reverse 9s linear infinite;
+        }
+
+        .crt-overlay {
+            background: linear-gradient(transparent 50%, rgba(0, 0, 0, 0.10) 50%);
+            background-size: 100% 5px;
+            opacity: 0.16;
+            pointer-events: none;
+        }
+        .terminal-shell, #hud {
+            color-scheme: dark;
+        }
+        .terminal-shell {
+            border-radius: 0;
+            background: radial-gradient(ellipse at 15% 4%, rgba(0, 200, 245, .10), transparent 40%),
+                        radial-gradient(ellipse at 87% 90%, rgba(210, 44, 130, .10), transparent 46%),
+                        linear-gradient(145deg, #070d1c, #040610);
+        }
+        #hud > div > div[class*="flex-wrap"], #hudModulesDock, #bossHudContainer {
+            border-color: var(--surface-line);
+        }
+        .chassis-card.active {
+            outline: 2px solid var(--neon-cyan);
+            outline-offset: -2px;
+        }
+        .upgrade-card:focus-visible, button:focus-visible, summary:focus-visible {
+            outline: 2px solid #9ceefa;
+            outline-offset: 3px;
+        }
+        .ui-danger { color: #ff758c; border-color: rgba(255, 82, 104, .8); }
+        .ui-risk { color: #ffdb75; border-color: rgba(255, 219, 117, .7); }
+        .ui-calm { color: #8af1eb; border-color: rgba(84, 210, 216, .5); }
+        #bossWarningBanner .warning-pill {
+            background: rgba(42, 8, 25, .95);
+            border: 1px solid #ff5268;
+            letter-spacing: .08em;
+            box-shadow: 0 0 18px rgba(255, 82, 104, .20);
+        }
+        #killstreakBanner .event-pill {
+            background: rgba(8, 13, 27, .96);
+            border: 1px solid rgba(255, 220, 100, .65);
+            box-shadow: 0 0 15px rgba(255, 220, 100, .14);
+        }
+        #bossHudContainer { border-color: #ff0055; box-shadow: 0 0 18px rgba(255, 0, 85, .18); }
+        #bossHpBar { background: linear-gradient(90deg,#700d28,#ff0055,#ffbdd5); }
+        #bossIdentityStrip .boss-id-chip { display:inline-block; font:700 9px 'Orbitron',sans-serif;
+            padding:3px 6px; border:1px solid; border-radius:5px; background:rgba(2,8,20,.88); }
+        #bossIdentityStrip .boss-id-chip { flex:1 1 145px; min-width:132px; }
+        #bossIdentityStrip .boss-id-chip[data-target="true"] { outline:2px solid #67e8f9; outline-offset:1px; }
+        #bossIdentityStrip .boss-id-head { display:flex; justify-content:space-between; gap:8px; }
+        #bossIdentityStrip .boss-id-meter { height:3px; margin-top:3px; border-radius:99px; background:#13243a; overflow:hidden; }
+        #bossIdentityStrip .boss-id-meter > span { display:block; height:100%; border-radius:99px; }
+        #neonContractPanel { border:1px solid rgba(103,232,249,.28); background:rgba(5,13,27,.82); }
+        .neon-contract-card { border:1px solid rgba(117,145,173,.38); background:rgba(10,22,39,.9); transition:transform .16s,border-color .16s,box-shadow .16s; }
+        .neon-contract-card:hover { transform:translateY(-2px); border-color:rgba(103,232,249,.8); }
+        .neon-contract-card.is-selected { border-color:var(--contract-color,#67e8f9); box-shadow:0 0 18px color-mix(in srgb,var(--contract-color,#67e8f9) 28%,transparent); }
+        .neon-contract-card:focus-visible { outline:2px solid #e6fbff; outline-offset:2px; }
+        #activeContractBadge { border-color:rgba(103,232,249,.65); color:#bff8ff; }
+        #hudModulesDock { scrollbar-width: thin; }
+        @media (max-width: 640px) {
+            #bossWarningBanner .warning-pill { font-size: 12px; padding: .5rem .8rem; }
+            #killstreakBanner .event-pill { font-size: 12px; padding: .4rem .7rem; }
+        }
+        /* PC graphic profiles: high retains original presentation. Modal blur
+           and continuously animated card shadows are expensive on weaker GPUs. */
+        .graphics-quality-select { background:#101e32;color:#e5f7ff;border:1px solid #4385a1;
+            border-radius:7px;padding:5px 7px;font:700 11px 'Orbitron',sans-serif;cursor:pointer; }
+        .graphics-quality-select:focus-visible { outline:2px solid #67e8f9;outline-offset:2px; }
+        html[data-graphics-quality="medium"] :is(#startModal,#upgradeModal,#pauseModal,#shopModal,#reviveModal,#gameOverModal),
+        html[data-graphics-quality="medium"] .backdrop-blur-md { backdrop-filter:blur(2px)!important;-webkit-backdrop-filter:blur(2px)!important; }
+        html[data-graphics-quality="low"] :is(#startModal,#upgradeModal,#pauseModal,#shopModal,#reviveModal,#gameOverModal),
+        html[data-graphics-quality="low"] .backdrop-blur-md { backdrop-filter:none!important;-webkit-backdrop-filter:none!important; }
+        html[data-graphics-quality="medium"] .upgrade-card[data-rarity="LEGENDARY"],
+        html[data-graphics-quality="medium"] .upgrade-card[data-rarity="EPIC"],
+        html[data-graphics-quality="medium"] .upgrade-card .upgrade-evolution-orbit,
+        html[data-graphics-quality="medium"] .upgrade-card .upgrade-weapon-scan,
+        html[data-graphics-quality="medium"] .upgrade-card::after { animation:none!important; }
+        html[data-graphics-quality="medium"] .upgrade-card { box-shadow:0 5px 12px rgba(0,0,0,.35)!important; }
+        html[data-graphics-quality="medium"] .upgrade-card:hover,
+        html[data-graphics-quality="medium"] .upgrade-card:focus-visible { box-shadow:0 8px 16px rgba(0,0,0,.44),0 0 7px var(--card-glow)!important; }
+        html[data-graphics-quality="low"] .upgrade-card,
+        html[data-graphics-quality="low"] .upgrade-card *,
+        html[data-graphics-quality="low"] .upgrade-card::before,
+        html[data-graphics-quality="low"] .upgrade-card::after {
+            animation:none!important;transition:none!important;filter:none!important;
+            box-shadow:none!important;text-shadow:none!important; }
+        html[data-graphics-quality="low"] .upgrade-card { background:#0b1525!important;transform:none!important; }
+        html[data-graphics-quality="low"] .upgrade-card:hover,
+        html[data-graphics-quality="low"] .upgrade-card:focus-visible { transform:none!important;outline:2px solid var(--rarity-ink);outline-offset:2px; }
+        html[data-graphics-quality="low"] .upgrade-card::after,
+        html[data-graphics-quality="low"] .upgrade-card .upgrade-evolution-orbit,
+        html[data-graphics-quality="low"] .upgrade-card .upgrade-weapon-scan { display:none!important; }
+        html[data-graphics-quality="low"] .upgrade-card::before { background:none!important; }
+        html[data-graphics-quality="low"] :is(.box-glow-cyan,.box-glow-pink,.box-glow-yellow,
+            .text-glow-cyan,.text-glow-pink,.text-glow-yellow) { box-shadow:none!important;text-shadow:none!important; }
+        html[data-graphics-quality="low"] :is(.animate-spin-slow,.animate-spin-reverse,
+            .legendary-card-glow,.epic-card-glow),
+        html[data-graphics-quality="low"] .menu-core-v2::before { animation:none!important; }
+        html[data-graphics-quality="low"] .upgrade-modal-kicker { background:#101c2b; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .animate-boss-warn, .animate-pulse, .animate-ping, .legendary-card-glow,
+            .epic-card-glow, .animate-spin-slow, .animate-spin-reverse {
+                animation: none !important;
+            }
+            .upgrade-card, .cyber-btn, .cyber-action-btn, .chassis-card { transition: none; }
+        }
+
+        .terminal-shell {
+            background: radial-gradient(ellipse at 15% 4%, rgba(0, 200, 245, .10), transparent 40%),
+                        radial-gradient(ellipse at 87% 90%, rgba(210, 44, 130, .10), transparent 46%),
+                        linear-gradient(145deg, #070d1c, #040610);
+            border: 1px solid rgba(0, 243, 255, 0.22);
+            box-shadow: inset 0 0 50px rgba(0, 243, 255, 0.07);
+            position: relative;
+        }
+
+        .terminal-shell::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink), var(--neon-yellow));
+        }
+
+        .chassis-card {
+            transition: all 0.2s ease;
+            background: rgba(9, 12, 22, 0.88);
+            border: 1px solid rgba(100, 116, 139, 0.4);
+        }
+        .chassis-card:hover {
+            border-color: rgba(0, 243, 255, 0.6);
+            transform: translateY(-2px);
+        }
+        .chassis-card.active {
+            background: rgba(0, 243, 255, 0.14);
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.25), inset 0 0 12px rgba(0, 243, 255, 0.12);
+        }
+
+        .cyber-action-btn {
+            clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .cyber-action-btn:hover {
+            transform: translateY(-2px) scale(1.01);
+            filter: brightness(1.15);
+        }
+        .cyber-action-btn:active {
+            transform: translateY(1px) scale(0.99);
+        }
+
+        .cyber-btn {
+            transition: all 0.2s ease;
+        }
+        .cyber-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            filter: brightness(1.12);
+        }
+        .cyber-btn:active:not(:disabled) {
+            transform: translateY(1px);
+        }
+
+        .upgrade-card {
+            background: linear-gradient(145deg, rgba(12, 17, 32, 0.96), rgba(6, 9, 18, 0.96));
+            transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .upgrade-card:hover {
+            transform: translateY(-6px) scale(1.02);
+        }
+    
+
+        /* M4.3.3: category is orthogonal to rarity; gold is LEGENDARY-exclusive. */
+        #upgradeModal{overscroll-behavior:contain;}
+        .upgrade-modal-kicker{display:inline-flex;align-items:center;justify-content:center;padding:6px 14px;border:1px solid #427c96;border-radius:40px;color:#b7f5ff;background:#0d1c2f;font:700 10px 'Orbitron',sans-serif;letter-spacing:.075em;}
+        .upgrade-card{
+            --card-accent:#82cbdc;--card-glow:rgba(66,157,177,.12);
+            position:relative;isolation:isolate;overflow:hidden;min-width:0;min-height:312px;
+            border:1.5px solid var(--card-accent);color:#edf7ff;
+            background:linear-gradient(150deg,rgba(17,27,45,.97),rgba(5,9,21,.99) 67%);
+            box-shadow:inset 0 1px rgba(243,251,255,.05),0 11px 28px rgba(0,0,0,.33);
+            animation:upgrade-card-enter .34s cubic-bezier(.18,.82,.26,1) backwards;
+            transition:transform .22s ease,box-shadow .22s ease;
+        }
+        .upgrade-card:hover:not(:disabled),.upgrade-card:focus-visible{
+            transform:translateY(-5px);
+            box-shadow:0 16px 34px rgba(0,0,0,.44),0 0 21px var(--card-glow);
+        }
+        .upgrade-card:active:not(:disabled){transform:translateY(-1px) scale(.99);}
+        .upgrade-card::before{content:'';pointer-events:none;position:absolute;inset:0;z-index:-1;opacity:.8;background:radial-gradient(circle at 85% 8%,var(--card-glow),transparent 55%);}
+        .upgrade-card[data-role="weapon"]{
+            --card-accent:#67d6ef;--card-glow:rgba(57,187,223,.23);
+            background:linear-gradient(155deg,rgba(13,35,55,.96),rgba(5,10,22,.99) 70%);
+        }
+        .upgrade-card[data-role="weapon"]::before{
+            background:repeating-linear-gradient(135deg,transparent 0 22px,rgba(77,204,234,.06) 22px 23px,transparent 23px 43px),
+                linear-gradient(180deg,transparent 50%,rgba(57,188,223,.1));
+        }
+        .upgrade-card[data-role="evolution"]{
+            --card-accent:#b78cff;--card-glow:rgba(147,89,233,.30);
+            background:linear-gradient(150deg,rgba(34,17,68,.98),rgba(7,10,28,.98) 73%);
+        }
+        .upgrade-card[data-role="evolution"]::before{
+            background:radial-gradient(ellipse at 84% 9%,rgba(160,104,250,.27),transparent 56%),
+                linear-gradient(146deg,transparent 36%,rgba(32,210,230,.09) 73%,transparent);
+        }
+        .upgrade-card[data-rarity="EPIC"]:not([data-role="evolution"]){--card-accent:#ec9ad8;--card-glow:rgba(229,92,171,.24);}
+        .upgrade-card[data-rarity="LEGENDARY"]{
+            --card-accent:#ffd45a;--card-glow:rgba(255,197,70,.46);
+            border:2px solid #ffce53;
+            animation:upgrade-card-enter .34s cubic-bezier(.18,.82,.26,1) backwards,
+                upgrade-legendary-glow 2.6s ease-in-out .4s infinite;
+        }
+        .upgrade-card[data-rarity="LEGENDARY"]::after{
+            content:'';position:absolute;inset:-30% -160%;z-index:-1;pointer-events:none;
+            background:linear-gradient(105deg,transparent 42%,rgba(255,231,140,.31) 50%,transparent 58%);
+            opacity:0;transform:translateX(-42%) rotate(-8deg);
+            animation:upgrade-legendary-shine 4.2s ease-in-out 1s infinite;
+        }
+        .upgrade-card .upgrade-card-body,.upgrade-card .upgrade-card-footer{position:relative;z-index:2;}
+        .upgrade-card .upgrade-icon{
+            display:grid;place-items:center;flex:none;width:54px;height:54px;border-radius:12px;
+            border:1px solid var(--card-accent);color:var(--card-accent);
+            background:linear-gradient(155deg,rgba(14,37,55,.89),rgba(6,11,25,.94));
+            box-shadow:inset 0 0 14px var(--card-glow);
+        }
+        .upgrade-card[data-role="evolution"] .upgrade-icon{border-radius:17px;transform:rotate(-7deg);}
+        .upgrade-card .upgrade-rarity{
+            display:inline-block;border:1px solid rgba(131,177,203,.45);border-radius:40px;
+            padding:5px 9px;background:rgba(10,25,41,.85);
+            color:#d3ebfa;font:700 10px 'Orbitron',sans-serif;white-space:nowrap;
+        }
+        .upgrade-card[data-rarity="RARE"] .upgrade-rarity{color:#dfcaff;border-color:#9879d8;}
+        .upgrade-card[data-rarity="EPIC"] .upgrade-rarity{color:#ffb9e2;border-color:#dd84bd;}
+        .upgrade-card[data-rarity="LEGENDARY"] .upgrade-rarity{
+            color:#ffeca6;border-color:#ffd65b;background:rgba(87,57,13,.77);
+            text-shadow:0 0 13px rgba(255,215,106,.66);
+        }
+        .upgrade-card .upgrade-role-label{
+            display:inline-flex;align-items:center;gap:6px;border:1px solid var(--card-accent);
+            background:rgba(5,12,27,.81);color:var(--card-accent);padding:5px 8px;border-radius:7px;
+            font:700 9px 'Orbitron',sans-serif;letter-spacing:.06em;
+        }
+        .upgrade-card[data-role="evolution"][data-rarity="LEGENDARY"] .upgrade-role-label{
+            border-color:#aa86f7;color:#d7bcff;
+        }
+        .upgrade-card .upgrade-card-name{color:#f4f9ff;overflow-wrap:anywhere;line-height:1.35;transition:color .18s ease;}
+        .upgrade-card:hover .upgrade-card-name{color:var(--card-accent);}
+        .upgrade-card .upgrade-card-desc{font-size:14px;color:#bfd0df;line-height:1.5;}
+        .upgrade-card .upgrade-tier-track{display:inline-flex;gap:5px;}
+        .upgrade-card .upgrade-tier-step{width:20px;height:4px;border-radius:4px;background:rgba(119,146,168,.31);}
+        .upgrade-card .upgrade-tier-step.filled{background:var(--card-accent);}
+        .upgrade-card .upgrade-tier-step.next{background:var(--card-accent);opacity:.65;}
+        .upgrade-card .upgrade-evolution-benefit{
+            margin-top:12px;padding:11px;border:1px solid rgba(174,126,255,.59);border-radius:10px;
+            color:#e8dbff;background:linear-gradient(120deg,rgba(85,39,142,.3),rgba(5,39,60,.33));
+            font-size:12px;line-height:1.45;
+        }
+        .upgrade-card .upgrade-synergy-benefit{color:#93ebee;font-size:12px;line-height:1.45;margin-top:9px;}
+        .upgrade-card .upgrade-evolution-orbit{
+            position:absolute;right:-30px;top:-42px;z-index:0;pointer-events:none;
+            width:170px;height:170px;border-radius:50%;border:1px solid rgba(180,124,255,.28);
+            box-shadow:inset 0 0 0 15px rgba(145,89,218,.045),0 0 0 13px rgba(54,210,237,.025);
+            animation:upgrade-evolution-orbit 16s linear infinite;
+        }
+        .upgrade-card .upgrade-evolution-orbit::before,.upgrade-card .upgrade-evolution-orbit::after{
+            content:'';position:absolute;top:-4px;left:50%;width:8px;height:8px;border-radius:2px;
+            transform:translateX(-50%) rotate(45deg);background:#b79af7;
+        }
+        .upgrade-card .upgrade-evolution-orbit::after{top:auto;bottom:-4px;background:#79eff5;}
+        .upgrade-card .upgrade-weapon-brackets{
+            position:absolute;inset:14px;z-index:0;pointer-events:none;opacity:.56;
+            background:
+                linear-gradient(var(--card-accent),var(--card-accent)) top left/15px 1.5px no-repeat,
+                linear-gradient(var(--card-accent),var(--card-accent)) top left/1.5px 15px no-repeat,
+                linear-gradient(var(--card-accent),var(--card-accent)) bottom right/15px 1.5px no-repeat,
+                linear-gradient(var(--card-accent),var(--card-accent)) bottom right/1.5px 15px no-repeat;
+        }
+        .upgrade-card .upgrade-weapon-scan{
+            position:absolute;z-index:0;left:14px;right:14px;top:4%;height:2px;opacity:0;
+            pointer-events:none;background:linear-gradient(90deg,transparent,rgba(111,224,247,.72),transparent);
+            animation:upgrade-weapon-scan 3.6s linear .4s infinite;
+        }
+        .upgrade-card .upgrade-card-footer{
+            border-top:1px solid rgba(124,166,194,.25);color:var(--card-accent);
+        }
+        .upgrade-card[data-role="evolution"]:not([data-rarity="LEGENDARY"]) .upgrade-card-footer{color:#d7b7ff;}
+        .upgrade-card[data-role="evolution"][data-rarity="LEGENDARY"] .upgrade-card-footer{color:#d7b7ff;}
+        @keyframes upgrade-card-enter{from{opacity:0;transform:translateY(14px) scale(.98);}to{opacity:1;transform:translateY(0) scale(1);}}
+        @keyframes upgrade-legendary-glow{
+            0%,100%{box-shadow:0 0 20px rgba(255,191,52,.33),inset 0 0 13px rgba(255,204,80,.11);}
+            50%{box-shadow:0 0 48px rgba(255,198,62,.70),inset 0 0 25px rgba(255,214,104,.22);}
+        }
+        @keyframes upgrade-legendary-shine{
+            0%,28%,100%{opacity:0;transform:translateX(-42%) rotate(-8deg);}
+            40%{opacity:.76;}57%{opacity:0;transform:translateX(42%) rotate(-8deg);}
+        }
+        @keyframes upgrade-evolution-orbit{to{transform:rotate(360deg);}}
+        @keyframes upgrade-weapon-scan{
+            0%,12%,94%,100%{opacity:0;top:4%;}
+            23%{opacity:.6;}54%{opacity:.36;top:84%;}65%{opacity:0;top:96%;}
+        }
+        @media(max-width:767px){.upgrade-card{min-height:254px;padding:18px;}}
+        @media(hover:none){.upgrade-card:hover:not(:disabled){transform:none;}}
+        @media(prefers-reduced-motion:reduce){
+            .upgrade-card,.upgrade-card[data-rarity="LEGENDARY"],.upgrade-card::after,
+            .upgrade-card .upgrade-evolution-orbit,.upgrade-card .upgrade-weapon-scan{animation:none!important;}
+            .upgrade-card,.upgrade-card .upgrade-card-name{transition:none!important;}
+            .upgrade-card:hover:not(:disabled){transform:none!important;}
+            .upgrade-card[data-rarity="LEGENDARY"]::after{display:none;}
+        }
+
+
+        /* M4.3.3.1: reward-first rarity hierarchy, with independent weapon/evolution art. */
+        #upgradeCardsContainer{align-items:stretch;}
+        .upgrade-card{
+            --rarity-ink:#53f2a5;--rarity-dark:#092d26;
+            --rarity-halo:rgba(38,220,143,.24);--rarity-spark:rgba(104,255,183,.70);
+            --rarity-rgb:60,238,153;
+            padding-top:24px!important;
+            border-width:2px;
+            background:
+                radial-gradient(ellipse at 83% -12%,var(--rarity-halo),transparent 65%),
+                linear-gradient(155deg,var(--rarity-dark),#081323 53%,#050914);
+            box-shadow:inset 0 2px 0 rgba(255,255,255,.11),0 15px 34px rgba(0,0,0,.40),
+                0 0 19px rgba(var(--rarity-rgb),.19);
+            transition:transform .24s cubic-bezier(.16,1,.3,1),box-shadow .24s ease,filter .24s ease;
+        }
+        .upgrade-card.upgrade-card[data-rarity="COMMON"]{
+            --rarity-ink:#55f7a7;--rarity-dark:#0a342b;--rarity-halo:rgba(38,218,124,.31);
+            --rarity-spark:rgba(149,255,193,.84);--rarity-rgb:57,236,142;
+            --card-accent:#55f7a7;--card-glow:rgba(38,218,124,.30);border-color:#47e898;
+        }
+        .upgrade-card.upgrade-card[data-rarity="RARE"]{
+            --rarity-ink:#67b9ff;--rarity-dark:#0c2252;--rarity-halo:rgba(48,126,255,.36);
+            --rarity-spark:rgba(161,221,255,.92);--rarity-rgb:58,149,255;
+            --card-accent:#67b9ff;--card-glow:rgba(53,148,255,.35);border-color:#4a9eff;
+        }
+        .upgrade-card.upgrade-card[data-rarity="EPIC"]{
+            --rarity-ink:#ff78e4;--rarity-dark:#371348;--rarity-halo:rgba(255,56,193,.37);
+            --rarity-spark:rgba(255,179,241,.95);--rarity-rgb:250,62,194;
+            --card-accent:#ff78e4;--card-glow:rgba(236,57,175,.40);border-color:#ee55d0;
+        }
+
+        /* Make the field behind each card actually change hue, not just its border. */
+        .upgrade-card.upgrade-card[data-rarity="COMMON"]{
+            background:radial-gradient(ellipse at 78% -6%,rgba(37,220,132,.21),transparent 61%),
+                linear-gradient(147deg,#0d332a,#09201f 51%,#050f1b);
+        }
+        .upgrade-card.upgrade-card[data-rarity="RARE"]{
+            background:radial-gradient(ellipse at 78% -6%,rgba(60,154,255,.25),transparent 61%),
+                linear-gradient(147deg,#112952,#0b1b36 51%,#071020);
+        }
+        .upgrade-card.upgrade-card[data-rarity="EPIC"]{
+            background:radial-gradient(ellipse at 78% -6%,rgba(252,64,188,.27),transparent 61%),
+                linear-gradient(147deg,#401547,#22132f 51%,#0a0b1b);
+        }
+        .upgrade-card.upgrade-card[data-rarity="LEGENDARY"]{
+            --rarity-ink:#ffe283;--rarity-dark:#362008;--rarity-halo:rgba(255,200,49,.40);
+            --rarity-spark:rgba(255,248,183,.98);--rarity-rgb:255,193,50;
+            --card-accent:#ffd663;--card-glow:rgba(255,198,51,.48);border-color:#ffd24b;
+            background:
+                radial-gradient(ellipse at 80% -10%,rgba(255,209,65,.36),transparent 65%),
+                linear-gradient(149deg,#422809,#1e1b18 45%,#0b0c17);
+        }
+        /* Colour is always a rarity channel. A purple evolution orbit and
+           blue weapon scanner stay independent of the card's loot tier. */
+        .upgrade-card::before{
+            opacity:1;z-index:0;
+            background:
+                radial-gradient(ellipse at 93% 0%,var(--rarity-halo),transparent 64%),
+                linear-gradient(125deg,rgba(255,255,255,.055),transparent 35%),
+                linear-gradient(10deg,transparent 46%,rgba(var(--rarity-rgb),.075) 100%);
+        }
+        .upgrade-card[data-role="weapon"]::before{
+            background:
+                radial-gradient(ellipse at 87% 0%,var(--rarity-halo),transparent 62%),
+                repeating-linear-gradient(135deg,transparent 0 22px,rgba(78,208,241,.060) 22px 23px,transparent 23px 43px),
+                linear-gradient(170deg,rgba(56,208,238,.08),transparent 65%);
+        }
+        .upgrade-card[data-role="evolution"]::before{
+            background:
+                radial-gradient(ellipse at 86% 3%,var(--rarity-halo),transparent 62%),
+                radial-gradient(ellipse at 18% 96%,rgba(160,100,255,.23),transparent 60%),
+                linear-gradient(145deg,transparent 40%,rgba(64,231,255,.095) 75%,transparent);
+        }
+        .upgrade-card .upgrade-rarity-crown{
+            position:absolute;z-index:0;top:-40px;right:-21px;
+            width:198px;height:171px;pointer-events:none;
+            background:radial-gradient(ellipse,var(--rarity-halo),transparent 70%);
+            opacity:.95;
+        }
+        .upgrade-card .upgrade-rarity-crown::before{
+            content:'';position:absolute;inset:18px;border-radius:50%;
+            border:1px solid rgba(var(--rarity-rgb),.24);
+            transform:rotate(-22deg) scaleX(.85);
+        }
+        .upgrade-card .upgrade-rarity-crown::after{
+            content:'';position:absolute;left:38px;top:20px;width:100px;height:100px;
+            border-radius:50%;border:1px dashed rgba(var(--rarity-rgb),.14);
+        }
+        .upgrade-card[data-rarity="EPIC"] .upgrade-rarity-crown{
+            background:radial-gradient(ellipse,var(--rarity-halo),transparent 70%);
+            animation:upgrade-epic-ambient 3.2s ease-in-out infinite;
+        }
+        .upgrade-card[data-rarity="RARE"] .upgrade-rarity-crown::before{border-style:dashed;}
+        .upgrade-card[data-rarity="LEGENDARY"] .upgrade-rarity-crown::after{border-style:solid;}
+        .upgrade-card .upgrade-rarity-band{
+            position:absolute;inset:0 0 auto;z-index:3;height:6px;pointer-events:none;
+            background:linear-gradient(90deg,transparent 0%,var(--rarity-ink) 15%,
+                var(--rarity-spark) 50%,var(--rarity-ink) 85%,transparent 100%);
+            box-shadow:0 1px 15px rgba(var(--rarity-rgb),.47);
+        }
+        .upgrade-card .upgrade-rarity-gem{
+            position:relative;display:inline-flex;align-items:center;justify-content:center;
+            width:28px;height:28px;border:1px solid rgba(var(--rarity-rgb),.62);
+            border-radius:9px;color:var(--rarity-ink);
+            background:rgba(var(--rarity-rgb),.14);
+            box-shadow:0 0 13px rgba(var(--rarity-rgb),.28);
+        }
+        .upgrade-card .upgrade-rarity-label{
+            display:inline-flex;align-items:center;gap:7px;padding:5px 9px 5px 5px;
+            border:1px solid rgba(var(--rarity-rgb),.78);border-radius:11px;
+            color:var(--rarity-ink);background:rgba(var(--rarity-rgb),.15);
+            box-shadow:inset 0 0 18px rgba(var(--rarity-rgb),.08),
+                0 0 15px rgba(var(--rarity-rgb),.17);
+            font:800 10px 'Orbitron',sans-serif;letter-spacing:.035em;
+        }
+        .upgrade-card .upgrade-rarity-title{font-size:11px;font-weight:900;letter-spacing:.085em;}
+        .upgrade-card .upgrade-role-label{
+            color:#d4dfea;border-color:rgba(177,194,209,.40);
+            background:rgba(7,15,29,.86);
+        }
+        .upgrade-card[data-role="weapon"] .upgrade-role-label{color:#8bdeff;border-color:#428caa;}
+        .upgrade-card[data-role="evolution"] .upgrade-role-label{color:#d3b1ff;border-color:#a979ea;}
+        .upgrade-card .upgrade-icon{
+            width:66px;height:66px;font-size:28px;border:2px solid rgba(var(--rarity-rgb),.75);
+            border-radius:16px;color:var(--rarity-ink);
+            background:
+                radial-gradient(circle at 42% 28%,rgba(var(--rarity-rgb),.25),transparent 74%),
+                linear-gradient(145deg,rgba(var(--rarity-rgb),.17),rgba(6,12,26,.95));
+            box-shadow:0 0 18px rgba(var(--rarity-rgb),.28),inset 0 1px 0 rgba(255,255,255,.14);
+            transition:transform .24s ease,box-shadow .24s ease;
+        }
+        .upgrade-card:hover .upgrade-icon,.upgrade-card:focus-visible .upgrade-icon{
+            transform:translateY(-2px) rotate(-5deg) scale(1.07);
+            box-shadow:0 0 27px rgba(var(--rarity-rgb),.58);
+        }
+        .upgrade-card[data-role="evolution"] .upgrade-icon{
+            border-radius:18px;transform:rotate(-7deg);
+        }
+        .upgrade-card[data-role="evolution"]:hover .upgrade-icon{
+            transform:rotate(4deg) scale(1.08);
+        }
+        .upgrade-card .upgrade-card-name{
+            font-size:clamp(17px,1.5vw,21px);
+            text-shadow:0 0 13px rgba(var(--rarity-rgb),.20);
+        }
+        .upgrade-card:hover .upgrade-card-name{color:var(--rarity-ink);}
+        .upgrade-card .upgrade-card-desc{color:#e0e9f3;font-size:14px;line-height:1.55;}
+        .upgrade-card .upgrade-tier-step{
+            height:6px;width:23px;background:rgba(var(--rarity-rgb),.20);
+        }
+        .upgrade-card .upgrade-tier-step.filled,.upgrade-card .upgrade-tier-step.next{
+            background:var(--rarity-ink);box-shadow:0 0 11px rgba(var(--rarity-rgb),.35);
+        }
+        .upgrade-card .upgrade-card-footer{
+            color:var(--rarity-ink)!important;
+            border-color:rgba(var(--rarity-rgb),.40);
+            background:linear-gradient(90deg,rgba(var(--rarity-rgb),.16),transparent);
+            padding:12px 9px 0;border-radius:0 0 8px 8px;
+        }
+        .upgrade-card .upgrade-card-footer i{transition:transform .2s ease;}
+        .upgrade-card:hover .upgrade-card-footer i{transform:translateX(4px);}
+        .upgrade-card:hover:not(:disabled),.upgrade-card:focus-visible{
+            transform:translateY(-7px) scale(1.015);
+            box-shadow:0 21px 43px rgba(0,0,0,.47),0 0 28px rgba(var(--rarity-rgb),.43),
+                inset 0 0 22px rgba(var(--rarity-rgb),.12);
+        }
+        .upgrade-card:not([data-rarity="LEGENDARY"])::after{
+            content:'';pointer-events:none;position:absolute;inset:0;z-index:0;
+            opacity:0;
+            background:linear-gradient(112deg,transparent 35%,rgba(var(--rarity-rgb),.14) 51%,transparent 65%);
+            transform:translateX(-60%);transition:opacity .18s ease;
+        }
+        .upgrade-card:not([data-rarity="LEGENDARY"]):hover::after{
+            opacity:1;animation:upgrade-color-swish .6s ease-out both;
+        }
+        .upgrade-card .upgrade-evolution-benefit{
+            box-shadow:inset 0 0 24px rgba(150,77,239,.13);
+        }
+        .upgrade-card .upgrade-weapon-brackets{opacity:.83;}
+        .upgrade-card .upgrade-weapon-scan{z-index:1;}
+        @keyframes upgrade-color-swish{
+            from{transform:translateX(-85%);}to{transform:translateX(85%);}
+        }
+        @keyframes upgrade-epic-ambient{
+            0%,100%{opacity:.62;transform:scale(.95);}
+            50%{opacity:1;transform:scale(1.10);}
+        }
+        @media(max-width:767px){
+            .upgrade-card{min-height:282px!important;padding-top:22px!important;}
+            .upgrade-card .upgrade-icon{width:56px;height:56px;font-size:23px;}
+        }
+        @media(hover:none){
+            .upgrade-card:hover:not(:disabled){transform:none;box-shadow:0 0 19px rgba(var(--rarity-rgb),.19);}
+            .upgrade-card:hover .upgrade-icon{transform:none;}
+            .upgrade-card[data-role="evolution"]:hover .upgrade-icon{transform:rotate(-7deg);}
+        }
+        @media(prefers-reduced-motion:reduce){
+            .upgrade-card[data-rarity="EPIC"] .upgrade-rarity-crown,
+            .upgrade-card:not([data-rarity="LEGENDARY"]):hover::after,
+            .upgrade-card .upgrade-icon{animation:none!important;transition:none!important;}
+            .upgrade-card:hover .upgrade-icon{transform:none!important;}
+            .upgrade-card[data-role="evolution"]:hover .upgrade-icon{transform:rotate(-7deg)!important;}
+            .upgrade-card:hover .upgrade-card-footer i{transform:none!important;}
+        }
+
+
+        /* M4.3.3.2: complementary color is the reward's detail channel.
+           Rarity remains the dominant background/border; role art is untouched. */
+        .upgrade-card {
+            --rarity-contrast:#ffac64;
+            --rarity-contrast-rgb:255,172,100;
+        }
+        .upgrade-card.upgrade-card[data-rarity="COMMON"] {
+            --rarity-contrast:#ffae70;  /* peach-orange on emerald */
+            --rarity-contrast-rgb:255,174,112;
+        }
+        .upgrade-card.upgrade-card[data-rarity="RARE"] {
+            --rarity-contrast:#e3a6ff;  /* lilac on electric blue */
+            --rarity-contrast-rgb:227,166,255;
+        }
+        .upgrade-card.upgrade-card[data-rarity="EPIC"] {
+            --rarity-contrast:#8af4ff;  /* ice cyan on magenta */
+            --rarity-contrast-rgb:138,244,255;
+        }
+        .upgrade-card.upgrade-card[data-rarity="LEGENDARY"] {
+            --rarity-contrast:#fff8e6;  /* champagne white on gold */
+            --rarity-contrast-rgb:255,248,230;
+        }
+        .upgrade-card .upgrade-icon {
+            position:relative;
+            background:
+                radial-gradient(circle at 28% 19%,rgba(var(--rarity-contrast-rgb),.25),transparent 51%),
+                linear-gradient(145deg,rgba(var(--rarity-rgb),.19),rgba(6,12,26,.96));
+            box-shadow:0 0 16px rgba(var(--rarity-rgb),.28),
+                inset 0 0 14px rgba(var(--rarity-contrast-rgb),.15);
+        }
+        .upgrade-card .upgrade-icon::before {
+            content:'';pointer-events:none;position:absolute;inset:5px;
+            border:1px solid rgba(var(--rarity-contrast-rgb),.30);
+            border-radius:10px;transform:rotate(-6deg);
+        }
+        .upgrade-card .upgrade-icon::after {
+            content:'';pointer-events:none;position:absolute;bottom:7px;right:7px;
+            width:5px;height:5px;border-radius:50%;
+            background:var(--rarity-ink);
+            box-shadow:0 0 7px rgba(var(--rarity-rgb),.66);
+        }
+        .upgrade-card .upgrade-icon i {
+            position:relative;z-index:1;
+            color:var(--rarity-contrast);
+            text-shadow:0 0 11px rgba(var(--rarity-contrast-rgb),.48);
+            transition:color .18s ease,text-shadow .18s ease;
+        }
+        .upgrade-card:hover .upgrade-icon i,
+        .upgrade-card:focus-visible .upgrade-icon i {
+            text-shadow:0 0 21px rgba(var(--rarity-contrast-rgb),.8);
+        }
+        .upgrade-card .upgrade-rarity-gem i {
+            color:var(--rarity-contrast);
+            text-shadow:0 0 7px rgba(var(--rarity-contrast-rgb),.5);
+        }
+        .upgrade-card .upgrade-rarity-band {
+            background:linear-gradient(90deg,transparent 0%,var(--rarity-ink) 15%,
+                var(--rarity-contrast) 50%,var(--rarity-ink) 85%,transparent 100%);
+        }
+        .upgrade-card .upgrade-tier-step.filled {
+            background:var(--rarity-ink);
+            box-shadow:0 0 10px rgba(var(--rarity-rgb),.32);
+        }
+        .upgrade-card .upgrade-tier-step.next {
+            background:var(--rarity-contrast);
+            opacity:1;
+            box-shadow:0 0 10px rgba(var(--rarity-contrast-rgb),.42);
+        }
+        .upgrade-card .upgrade-card-footer {
+            background:linear-gradient(90deg,rgba(var(--rarity-rgb),.16),
+                rgba(var(--rarity-contrast-rgb),.075),transparent);
+        }
+        .upgrade-card .upgrade-card-footer::before {
+            content:'';position:absolute;left:9px;top:-1px;width:44px;height:2px;
+            background:linear-gradient(90deg,var(--rarity-contrast),transparent);
+            pointer-events:none;
+        }
+        .upgrade-card .upgrade-card-footer i {
+            color:var(--rarity-contrast);
+            text-shadow:0 0 10px rgba(var(--rarity-contrast-rgb),.52);
+        }
+        .upgrade-card:not([data-rarity="LEGENDARY"]):hover::after {
+            background:linear-gradient(112deg,transparent 35%,
+                rgba(var(--rarity-contrast-rgb),.18) 51%,transparent 65%);
+        }
+        /* Purple evolution orbit and cyan weapon brackets still denote function,
+           even when the card's rarity accent changes. */
+        @media(prefers-reduced-motion:reduce) {
+            .upgrade-card .upgrade-icon i {transition:none!important;}
+            .upgrade-card:hover .upgrade-icon i,
+            .upgrade-card:focus-visible .upgrade-icon i {
+                text-shadow:0 0 11px rgba(var(--rarity-contrast-rgb),.48);
+            }
+        }
+
+        /* M4.2: content-density without placeholder-sized cards. */
+        .menu-panel-v2 {background:linear-gradient(145deg,rgba(7,15,30,.94),rgba(6,9,20,.95));border:1px solid rgba(0,218,238,.24);}
+        .menu-chassis-v2{min-height:174px;gap:10px;align-content:start;}
+        .menu-chassis-v2.active{outline:2px solid rgba(0,243,255,.35);outline-offset:-2px;}
+        .menu-feature-v2{display:inline-flex;align-items:center;padding:.27rem .47rem;border-radius:.4rem;font-size:11px;font-weight:700;border:1px solid rgba(148,163,184,.26);background:rgba(8,18,32,.83);}
+        .menu-protocol-v2{min-height:146px;background:linear-gradient(145deg,rgba(12,20,38,.86),rgba(7,12,24,.93));border:1px solid rgba(100,142,171,.24);display:flex;flex-direction:column;gap:7px;}
+        .menu-protocol-v2 p{line-height:1.46;}
+        .menu-protocol-v2 .key{font:700 10px 'Orbitron',sans-serif;letter-spacing:.025em;opacity:.95;}
+        .menu-detail-v2{background:linear-gradient(125deg,rgba(7,19,34,.92),rgba(8,12,25,.96));border:1px solid rgba(56,189,248,.24);}
+        .menu-core-v2{width:68px;height:68px;min-width:68px;display:flex;align-items:center;justify-content:center;border-radius:16px;border:1px solid rgba(0,243,255,.25);position:relative;background:radial-gradient(circle,rgba(0,243,255,.11),rgba(4,9,24,.85));}
+        .menu-core-v2::before{content:'';position:absolute;inset:9px;border:2px dashed var(--neon-cyan);border-radius:50%;animation:menu-core-spin 18s linear infinite;opacity:.8;}
+        @keyframes menu-core-spin{to{transform:rotate(360deg)}}
+        .menu-core-v2 .core-center{width:17px;height:17px;border:2px solid white;border-radius:50%;box-shadow:0 0 16px currentColor;}
+        @media(min-width:1280px){#tabProtocolContent{grid-template-columns:repeat(3,minmax(0,1fr));}}
+        @media(max-width:1279px){#tabProtocolContent{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        @media(max-width:639px){#tabProtocolContent{grid-template-columns:minmax(0,1fr);}.menu-chassis-v2{min-height:0;}}
+        @media(prefers-reduced-motion:reduce){.menu-core-v2::before{animation:none}}
+
+
+        /* M4.2.1: no giant empty full-height dashboard column. */
+        #preflightDashboard > section {align-self:start;}
+        #preflightReadiness {flex:none;}
+        #preflightReadiness .menu-panel-v2 {background:linear-gradient(120deg,rgba(8,21,37,.94),rgba(9,12,25,.96));}
+        #preflightReadiness #menuLoadoutSummary > div {min-height:73px;}
+        @media(min-width:1024px) {
+            #preflightDashboard {align-items:start;}
+            #preflightDashboard > section {height:auto;min-height:0;}
+        }
+        @media(max-width:1023px) {
+            #preflightDashboard {display:flex;flex-direction:column;}
+            #preflightDashboard > section {width:100%;}
+        }
+    
+        /* M4.2.2 — Fit desktop dashboard to the visible viewport, not a scroll page. */
+        #startMenuShell {transform-origin:top center;}
+        #startModal {overscroll-behavior:contain;}
+        .menu-protocol-v2 {position:relative;}
+        .menu-protocol-tip {margin-top:auto;}
+        .menu-protocol-tip summary {cursor:pointer;list-style:none;color:#91b9c9;
+            font:700 9px 'Orbitron',sans-serif;letter-spacing:.06em;border-top:1px solid rgba(100,130,148,.27);
+            padding-top:.35rem;}
+        .menu-protocol-tip summary::-webkit-details-marker {display:none;}
+        .menu-protocol-tip summary::after {content:' ▾';}
+        .menu-protocol-tip[open] {z-index:40;}
+        .menu-protocol-tip[open] summary::after {content:' ▴';}
+        .menu-protocol-tip[open] p {position:absolute;z-index:50;top:calc(100% - 5px);left:-1px;right:-1px;
+            margin:0;padding:.8rem;border-radius:.5rem;border:1px solid rgba(0,243,255,.4);
+            background:#0a192d;box-shadow:0 9px 24px rgba(0,0,0,.65);line-height:1.55;}
+        .menu-protocol-tip:focus-within summary {outline:2px solid #9ceefa;outline-offset:2px;}
+        @media(min-width:1024px) and (max-height:1020px) {
+            #startMenuShell {padding-top:.75rem!important;padding-bottom:.75rem!important;gap:.6rem!important;}
+            #startMenuShell > header {padding-top:.55rem!important;padding-bottom:.55rem!important;}
+            #startMenuShell > footer {padding-top:.4rem!important;padding-bottom:.4rem!important;}
+            #preflightDashboard {gap:.75rem!important;}
+            #preflightDashboard > section {gap:.65rem!important;}
+            #preflightDashboard > section:nth-child(2) {padding:.85rem!important;}
+            .menu-protocol-v2 {min-height:0!important;padding:.6rem .7rem!important;gap:.3rem!important;}
+            #tabProtocolContent {gap:.55rem!important;}
+            #preflightReadiness .menu-panel-v2 {padding:.65rem!important;gap:.35rem!important;}
+            #preflightReadiness #menuLoadoutSummary > div {min-height:0!important;padding:.5rem!important;}
+            .menu-chassis-v2 {min-height:0!important;padding:.65rem!important;gap:.45rem!important;}
+            .menu-detail-v2 {padding:.65rem!important;}
+            #openShopFromMenuBtn, #startBtn {padding-top:.7rem!important;padding-bottom:.7rem!important;}
+        }
+        @media(min-width:1024px) and (max-height:790px) {
+            #startMenuShell > footer, #menuRunSteps {display:none;}
+        }
+
+
+        /* M5.5 / Battle debrief: typography first, saturated accents only for meaning. */
+        #gameOverModal{overflow-y:auto;overscroll-behavior:contain;color:#e9f6ff;}
+        .report-shell{width:min(1120px,100%);min-height:100dvh;margin:auto;background:
+            radial-gradient(ellipse at 82% -8%,rgba(247,57,125,.12),transparent 48%),
+            radial-gradient(ellipse at 4% 32%,rgba(24,206,242,.09),transparent 45%),
+            #080f1e;border-inline:1px solid #243550;box-shadow:0 0 90px #000e;
+            display:flex;flex-direction:column;}
+        .report-hero{padding:clamp(20px,4vw,38px) clamp(16px,4vw,42px) 22px;}
+        .report-hero-top,.report-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;}
+        .report-hero-top{margin-bottom:26px;}
+        .report-kicker,.report-eyebrow{font:700 10px 'Orbitron',sans-serif;letter-spacing:.17em;color:#6ce3f2;}
+        .report-kicker i{margin-right:6px}
+        .report-eyebrow{color:#9fb9c7;margin-bottom:10px}
+        .report-status{font:700 10px 'Orbitron',sans-serif;letter-spacing:.09em;color:#ffb5ca;
+            border:1px solid #a24c77;padding:8px 11px;border-radius:999px;background:#351526;}
+        .report-title{font:900 clamp(25px,4.8vw,53px) 'Orbitron',sans-serif;line-height:1.1;
+            letter-spacing:-.055em;color:#fff;text-shadow:0 0 33px #f8487052}
+        .report-title-dot{color:#fb6697}
+        .report-subtitle{font-size:13px;line-height:1.65;color:#aabbd2;margin-top:12px;max-width:570px}
+        .report-wave-medallion{width:120px;height:120px;border-radius:50%;flex:none;
+            background:radial-gradient(circle,#1f3554,#090f20 74%);border:2px solid #4979a0;
+            display:flex;align-items:center;justify-content:center;flex-direction:column;
+            box-shadow:0 0 36px #00cffe1b,inset 0 0 25px #00dfff0e}
+        .report-wave-medallion span{font:700 9px 'Orbitron',sans-serif;color:#a7dce8;letter-spacing:.09em;}
+        .report-wave-medallion strong{font:900 49px 'Orbitron',sans-serif;color:#b9f5ff;line-height:1.2}
+        .report-record{margin-top:14px;display:inline-flex;gap:8px;align-items:center;background:#4b3b171c;
+            border:1px solid #d3ab4e;color:#ffe0a0;font:700 11px 'Orbitron',sans-serif;
+            padding:8px 12px;border-radius:8px;}
+        .report-record.hidden{display:none}
+        .report-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:27px;}
+        .report-kpi{background:#101d31;border:1px solid #2e4057;border-radius:12px;padding:16px 17px;
+            min-width:0;display:flex;flex-direction:column;gap:7px;}
+        .report-kpi>span{font:700 9px 'Orbitron',sans-serif;letter-spacing:.07em;color:#9db5ca}
+        .report-kpi strong{font:800 clamp(18px,2.3vw,30px) 'Orbitron',sans-serif;overflow-wrap:anywhere;color:#e8f4ff}
+        .report-kpi small{color:#839db6;font-size:11px;}
+        .report-kpi-primary{border-color:#247e9a;background:linear-gradient(145deg,#123349,#0d192e)}
+        .report-kpi-primary strong{color:#79edff}
+        .report-kpi-gold strong{color:#ffe3a0}
+        #perfOverlay{max-width:min(680px,92vw);max-height:35dvh;overflow:hidden;line-height:1.5;overflow-wrap:anywhere;}
+        .report-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin;padding:10px clamp(16px,4vw,42px);
+            background:#0a1425;border-block:1px solid #27374c;position:sticky;top:0;z-index:2;}
+        .report-tab{flex:0 0 auto;min-height:43px;padding:0 15px;border:1px solid transparent;border-radius:8px;
+            color:#a5b9cf;font:700 10px 'Orbitron',sans-serif;letter-spacing:.03em;
+            white-space:nowrap;cursor:pointer;transition:background .16s,color .16s;}
+        .report-tab:hover{background:#1b2940;color:#fff}
+        .report-tab.is-active{background:#11354c;border-color:#32bbd5;color:#bbf4ff;box-shadow:inset 0 -2px #32bbd5}
+        .report-tab:focus-visible{outline:2px solid #d1fcff;outline-offset:2px;}
+        .report-main{flex:1;padding:26px clamp(16px,4vw,42px) 40px;min-height:260px;}
+        .report-panel.hidden{display:none}
+        .report-section-title{font:800 13px 'Orbitron',sans-serif;color:#e6f7ff;letter-spacing:.05em;margin:0 0 14px}
+        .report-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+        .report-block{min-width:0;padding:20px;border:1px solid #263c55;border-radius:13px;background:#111c2f;}
+        .report-block.wide{grid-column:1/-1}
+        .report-block-head{display:flex;align-items:center;gap:9px;margin-bottom:15px;color:#80ddeb;
+            font:800 12px 'Orbitron',sans-serif;}
+        .report-block-head i{width:18px}
+        .report-pair{display:flex;justify-content:space-between;align-items:baseline;gap:15px;padding:10px 0;
+            border-bottom:1px solid #27384b;font-size:13px;}
+        .report-pair:last-child{border-bottom:0}
+        .report-pair span{color:#a9bdd1}.report-pair strong{font-family:'Orbitron',sans-serif;text-align:right;
+            color:#f3fbff;font-size:12px;overflow-wrap:anywhere;}
+        .report-empty{color:#93aac1;font-size:12px;line-height:1.65;padding:8px 0}
+        .report-insight{padding:16px 18px;border-left:3px solid #44bace;
+            background:#112b40;border-radius:0 9px 9px 0;margin-bottom:10px}
+        .report-insight strong{font:800 11px 'Orbitron',sans-serif;color:#a9f4ff;display:block;margin-bottom:7px}
+        .report-insight p{font-size:12px;line-height:1.65;color:#d2e2f2}
+        .report-chip-list{display:flex;flex-wrap:wrap;gap:8px}
+        .report-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid #3f5b77;
+            border-radius:8px;padding:9px 11px;background:#0b192c;color:#ebf8ff;font-size:12px;line-height:1.4}
+        .report-chip strong{color:#c3fcff}
+        .report-meter{display:flex;align-items:center;gap:13px;padding:10px 0}
+        .report-meter-label{min-width:116px;max-width:155px;color:#b7cce2;font-size:11px;line-height:1.3}
+        .report-meter-track{height:8px;border-radius:30px;background:#253c52;flex:1;overflow:hidden}
+        .report-meter-fill{height:100%;border-radius:30px;background:#56cde6}
+        .report-meter-value{width:74px;text-align:right;color:#eef8ff;font:700 11px 'Orbitron',sans-serif}
+        .report-micro{color:#92a9be;font-size:11px;line-height:1.65;margin-top:12px}
+        .report-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:18px clamp(16px,4vw,42px);
+            border-top:1px solid #284159;background:rgba(7,16,31,.98);position:sticky;bottom:0;z-index:3;}
+        .report-actions button{min-height:47px;padding:12px 20px;border-radius:9px;font:800 11px 'Orbitron',sans-serif;
+            letter-spacing:.02em;cursor:pointer;white-space:normal;text-align:center;}
+        .report-action-primary{background:linear-gradient(105deg,#c32476,#316caf);color:#fff;border:1px solid #ef86bf;flex:1.4}
+        .report-action-secondary{background:#1a2638;color:#ffdc8b;border:1px solid #9b7e49;flex:1.1}
+        .report-action-quiet{background:transparent;color:#b0c6dc;border:1px solid #3d546b;flex:.7}
+        #gameOverModal button:focus-visible{outline:2px solid #defbff;outline-offset:3px}
+        @media(max-width:720px){
+            .report-hero-top{margin-bottom:18px;align-items:start}
+            .report-kicker{font-size:9px;line-height:1.7}
+            .report-status{font-size:8px}
+            .report-wave-medallion{width:83px;height:83px}
+            .report-wave-medallion strong{font-size:30px}
+            .report-wave-medallion span{font-size:7px}
+            .report-heading{gap:10px}
+            .report-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+            .report-grid{grid-template-columns:1fr}
+            .report-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+            .report-action-primary{grid-column:1/-1}
+            .report-actions button{font-size:10px;min-height:44px;padding:11px}
+            .report-main{padding-block:20px 30px}
+        }
+        @media(max-width:365px){
+            .report-wave-medallion{width:68px;height:68px}
+            .report-wave-medallion strong{font-size:24px}
+            .report-title{font-size:22px}
+            .report-kpi{padding:11px}
+            .report-kpi strong{font-size:17px}
+        }
+        @media(prefers-reduced-motion:reduce){.report-tab{transition:none}}

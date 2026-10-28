@@ -4,9 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
-const gameCode = scripts.at(-1)?.[1];
+// The browser uses separate static sources. Reconstruct the former inline view for
+// existing markup/CSS/source assertions while executing the identical game script.
+const pageHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+const gameCss = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.css'), 'utf8');
+const gameCode = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
+const html = pageHtml
+  .replace('<link rel="stylesheet" href="./src/game.css">', `<style>\n${gameCss}</style>`)
+  .replace('<script src="./src/game.js"></script>', `<script>\n${gameCode}</script>`);
 
 function setup(stored = {}, options = {}) {
   const nodes = new Map();
@@ -5018,4 +5023,13 @@ test('upgrade draft keeps evolution priority, unique eligible cards and original
   assert.equal(result.completedOffered, false);
   assert.equal(result.poolUnchanged, true);
   assert.deepEqual(result.rarities, ['COMMON', 'COMMON', 'COMMON']);
+});
+
+
+test('static page loads extracted CSS and classic game script in the correct order', () => {
+  assert.match(pageHtml, /<link rel="stylesheet" href="\.\/src\/game\.css">/);
+  assert.match(pageHtml, /<script src="\.\/src\/game\.js"><\/script>/);
+  assert.equal(pageHtml.includes('class Player'), false);
+  assert.ok(gameCss.includes('#gameCanvas'));
+  assert.ok(gameCode.includes('window.onload = function'));
 });
