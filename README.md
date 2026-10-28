@@ -10,7 +10,7 @@ Tarayıcıda çalışan, tek dosyalı bir Canvas 2D arena-survival oyunu. Kodun 
 python -m http.server 8000
 ```
 
-Ardından `http://localhost:8000` adresine gidin. Oyun için `npm install`, derleme, ayrı bir API veya veritabanı gerekmiyor. Ancak görünüm için kullanılan **Tailwind CDN**, **Font Awesome CDN** ve **Google Fonts** internet bağlantısı ister; tam çevrimdışı sunum garanti edilmez. CDN yüklenemezse temel oyun/menü durumları yerel CSS ile çalışır; ayrıntılı Tailwind tasarımı ve ikon/font görünümü eksik olabilir.
+Ardından `http://localhost:8000` adresine gidin. Oyun için `npm install`, derleme, ayrı bir API veya veritabanı gerekmiyor. CSS, ikonlar ve Orbitron/Rajdhani fontları artık **depodaki statik dosyalardan** yüklenir. Oyun açılırken Tailwind, Font Awesome veya Google Fonts CDN bağlantısı gerekmez. CSS/bağımlılıklar güncellendiğinde [yeniden derleme rehberi](docs/OFFLINE_ASSETS.md) kullanılır.
 
 ## Çalışma modları
 
@@ -26,7 +26,7 @@ Altın, meta yükseltmeler, grafik ayarları ve isteğe bağlı karşılaştırm
 
 ## Geliştirici notları
 
-- Oyun mantığı, stil ve markup: [index.html](index.html)
+- HTML: [index.html](index.html); oyun kodu: [src/game.js](src/game.js); stil: [src/game.css](src/game.css); üretim CSS'i: [src/utilities.css](src/utilities.css)
 - Node.js 22 ile çalışan, gerçek oyun kodunu VM sahte DOM ortamında sınayan regresyon seti: [tests/smoke.test.cjs](tests/smoke.test.cjs)
 - Her PR ve `main` push'unda Node ve Chromium smoke testleri: [.github/workflows/neon-smoke.yml](.github/workflows/neon-smoke.yml)
 - Mimari ve tamamlanan geliştirmelerin ayrıntıları: [docs/](docs/)
