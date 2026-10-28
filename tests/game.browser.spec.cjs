@@ -186,8 +186,10 @@ test('extended browser game loop avoids runtime errors and stays within entity b
   await page.goto('/index.html?perf=1', { waitUntil: 'domcontentloaded' });
   await page.locator('#startBtn').click();
   await page.evaluate(() => {
-    // Keep the player alive without modifying gameplay source or affecting another test.
-    player.invulnerable = true;
+    // This isolated browser fixture ignores damage, not the production game rules.
+    // A stationary player otherwise dies during the soak on narrow mobile viewports.
+    player.takeDamage = () => {};
+    player.hp = player.maxHp;
     nextBossTime = Infinity;
   });
   await page.waitForTimeout(12_000);
