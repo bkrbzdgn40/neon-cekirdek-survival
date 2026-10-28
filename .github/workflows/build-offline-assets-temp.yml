@@ -1,0 +1,27 @@
+name: Build and commit offline assets (temporary)
+on:
+  push:
+    branches: [build/selfhost-static-assets-20261028]
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Build pinned static assets
+        run: bash scripts/build-offline-assets.sh
+      - name: Commit assets to feature branch
+        run: |
+          git add src/utilities.css src/vendor/
+          if git diff --cached --quiet; then
+            echo "No generated changes"
+          else
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "build: check in pinned offline styles fonts and icons"
+            git push origin HEAD:build/selfhost-static-assets-20261028
+          fi
