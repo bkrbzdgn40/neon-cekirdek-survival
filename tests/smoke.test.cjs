@@ -5874,7 +5874,7 @@ test('M5.19 reset clears counterplay state without changing gold or module count
 
 test('M5.20 signature operations start on each middle wave, once per wave',()=>{
  const {run}=setup();
- const x=JSON.parse(run("(()=>{startNewGame();nextBossTime=1000;const result=[];for(const w of [4,5,5,6,7,8,9,10,11,12,13,14]){wave=w;waveTimer=2;enemies=[new Enemy(360,300,'SHOOTER')];updateArenaChapter(.02);result.push({w,kind:getArenaChapterSnapshot().showcase?.id||null,started:chapterShowcaseStats.started});}return JSON.stringify(result);})()"));
+ const x=JSON.parse(run("(()=>{startNewGame();nextBossTime=1000;const result=[];let lastWave=3;for(const w of [4,5,5,6,7,8,9,10,11,12,13,14]){if(w!==lastWave)totalTime+=(w-lastWave)*16;lastWave=w;wave=w;waveTimer=2;enemies=[new Enemy(360,300,'SHOOTER')];updateArenaChapter(.02);result.push({w,kind:getArenaChapterSnapshot().showcase?.id||null,started:chapterShowcaseStats.started});}return JSON.stringify(result);})()"));
  assert.equal(x[0].kind,null);
  assert.equal(x[1].kind,'FOUNDRY');
  assert.equal(x[2].started,1);
