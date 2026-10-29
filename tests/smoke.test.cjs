@@ -29,7 +29,7 @@ function setup(stored = {}, options = {}) {
     const elementListeners = new Map();
     return {
       classList: { add: noop, remove: noop, toggle: noop },
-      style: {}, textContent: '', innerHTML: '',
+      style: {}, dataset: {}, textContent: '', innerHTML: '',
       addEventListener(type, fn) { on(elementListeners, type, fn); },
       dispatch(type, event = {}) { emit(elementListeners, type, event); },
       click() { emit(elementListeners, 'click', { target: this }); },
@@ -37,7 +37,7 @@ function setup(stored = {}, options = {}) {
        _attrs: {}, setAttribute(key, value) { this._attrs[key] = value; },
       getContext: () => options.canvasContext || new Proxy({}, { get: () => noop }),
       querySelector: () => element(),
-      getAttribute: () => '',
+      getAttribute(key) { return this._attrs[key] || ''; },
     };
   }
   const document = {
@@ -6241,4 +6241,53 @@ test('M5.24 cinematic extras preserve existing particle, weapon impact and light
  assert.equal(x.particles,0);
  assert.equal(x.impacts,0);
  assert.equal(x.lightning,0);
+});
+
+
+test('M5.25 combat cockpit surfaces are semantic and preserve all critical action ids',()=>{
+ for(const id of ['xpBar','momentumBar','overdriveBar','hpBar']){
+   assert.match(pageHtml,new RegExp('id="'+id+'"[^>]*role="progressbar"|role="progressbar"[^>]*id="'+id+'"'));
+ }
+ for(const slot of ['bastion','nova','prism','dash']){
+   assert.match(pageHtml,new RegExp('id="'+slot+'Btn"[^>]*data-skill="'+slot+'"|data-skill="'+slot+'"[^>]*id="'+slot+'Btn"'));
+ }
+ assert.match(pageHtml,/hud-signal-deck/);
+ assert.match(pageHtml,/hud-information-row/);
+ assert.match(pageHtml,/hud-action-bay/);
+ assert.match(pageHtml,/hud-boss-console/);
+ assert.match(gameCss,/COMBAT COCKPIT/);
+});
+
+test('M5.25 cockpit health urgency uses actual percentage and keeps values accessible',()=>{
+ const {run}=setup();
+ const states=JSON.parse(run("(()=>{startNewGame();nextBossTime=5000;player.hp=player.maxHp;updateHUD();const high={...document.getElementById('hud').dataset};player.hp=player.maxHp*.47;updateHUD();const mid={...document.getElementById('hud').dataset};player.hp=player.maxHp*.19;updateHUD();const low={...document.getElementById('hud').dataset};const aria={hp:document.getElementById('hpBar').getAttribute('aria-valuenow'),xp:document.getElementById('xpBar').getAttribute('aria-valuenow')};return JSON.stringify({high,mid,low,aria,hpText:document.getElementById('hpText').textContent});})()"));
+ assert.equal(states.high.vital,'steady');
+ assert.equal(states.mid.vital,'wounded');
+ assert.equal(states.low.vital,'critical');
+ assert.equal(states.aria.hp,'19');
+ assert.equal(states.aria.xp,'0');
+ assert.ok(states.hpText.includes('/'));
+});
+
+test('M5.25 boss, warning, and overdrive cockpit states have explicit priorities',()=>{
+ const {run}=setup();
+ const values=JSON.parse(run("(()=>{startNewGame();totalTime=10;nextBossTime=5000;updateHUD();const patrol=document.getElementById('hud').dataset.combatAlert;combatDirector.profile.phase='WARNING';updateHUD();const warning=document.getElementById('hud').dataset.combatAlert;player.overdriveActive=true;updateHUD();const warningDuringDrive=document.getElementById('hud').dataset.combatAlert;combatDirector.profile.phase='PREPARATION';updateHUD();const drive=document.getElementById('hud').dataset.combatAlert;const e=new Enemy(player.x+130,player.y,'BOSS_DESTROYER');activeBosses=[e];updateHUD();const boss=document.getElementById('hud').dataset.combatAlert;return JSON.stringify({patrol,warning,warningDuringDrive,drive,boss});})()"));
+ assert.equal(values.patrol,'patrol');
+ assert.equal(values.warning,'warning');
+ assert.equal(values.warningDuringDrive,'warning');
+ assert.equal(values.drive,'overdrive');
+ assert.equal(values.boss,'boss');
+});
+
+test('M5.25 combat skills expose visual readiness without modifying their mechanics',()=>{
+ const {run}=setup();
+ const data=JSON.parse(run("(()=>{startNewGame();totalTime=5;player.dashCooldown=0;player.novaCooldown=0;prismGuardReadyAt=0;updateHUD();const status=()=>['dashBtn','novaBtn','prismBtn','bastionBtn'].map(x=>[x,document.getElementById(x).dataset.ready]);const ready=status();player.dashCooldown=2;player.novaCooldown=4;prismGuardReadyAt=10;updateHUD();const charging=status();return JSON.stringify({ready,charging,damage:player.damage,gold:totalGold});})()"));
+ assert.equal(data.ready[0][1],'true');
+ assert.equal(data.ready[1][1],'true');
+ assert.equal(data.ready[2][1],'true');
+ assert.equal(data.charging[0][1],'false');
+ assert.equal(data.charging[1][1],'false');
+ assert.equal(data.charging[2][1],'false');
+ assert.ok(data.damage>0);
+ assert.equal(data.gold,50);
 });
