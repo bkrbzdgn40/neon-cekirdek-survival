@@ -222,3 +222,8 @@ h2{font-size:clamp(33px,4.2vw,58px);font-weight:900;letter-spacing:-.055em}
   .btn{transition:none}
   .btn-primary:hover{transform:none}
 }
+
+.stop-preview{background:transparent;border:1px solid #567083;color:#c4ecf1;
+  font-size:10px;font-weight:800;letter-spacing:.04em;min-height:32px;
+  border-radius:4px;padding:4px 9px}
+.stop-preview:hover{background:#1b3850}
