@@ -219,6 +219,9 @@ test('extended browser game loop avoids runtime errors and stays within entity b
     // A stationary player otherwise dies during the soak on narrow mobile viewports.
     player.takeDamage = () => {};
     player.hp = player.maxHp;
+    // Isolated performance soak must not randomly pause at a level-up modal.
+    // Keep orb pickup and XP bookkeeping active; raise ONLY this fixture's goal.
+    player.xpToNext = 1_000_000_000;
     nextBossTime = Infinity;
   });
   await page.waitForTimeout(12_000);
