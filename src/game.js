@@ -6223,6 +6223,174 @@
             ctx.restore();
         }
 
+
+        // M5.22: a timed, frontal counter to enemy bullets, never a free shield
+        // against contact attacks, arena hazards, or boss telegraph damage.
+        const PRISM_RULES=Object.freeze({
+            duration:.42,cooldown:8.5,radius:92,
+            halfAngle:Math.PI*.38,maxDeflections:4,
+            perfectTime:.17,perfectMomentum:12,
+            boltSpeed:620,boltLife:1.65,maxFriendlyShots:250
+        });
+        let prismGuardUntil=-Infinity,prismGuardReadyAt=0;
+        let prismGuardStartedAt=-Infinity,prismGuardX=1,prismGuardY=0;
+        let prismGuardDeflections=0,prismGuardPerfect=false;
+        let prismStats={activations:0,deflected:0,perfect:0,
+            spent:0,whiffs:0,shotsReturned:0};
+        function resetPrismGuard(){
+            prismGuardUntil=-Infinity;prismGuardReadyAt=0;
+            prismGuardStartedAt=-Infinity;prismGuardX=1;prismGuardY=0;
+            prismGuardDeflections=0;prismGuardPerfect=false;
+            prismStats={activations:0,deflected:0,perfect:0,
+                spent:0,whiffs:0,shotsReturned:0};
+        }
+        function prismActive(){
+            return gameState==='PLAYING'&&!!player&&
+                totalTime<prismGuardUntil&&
+                prismGuardDeflections<PRISM_RULES.maxDeflections;
+        }
+        function choosePrismDirection(){
+            let choice=null,nearest=480;
+            // Mobile and keyboard have identical aim assistance: face the
+            // closest incoming hostile shot at activation, then LOCK the arc.
+            for(const ep of enemyProjectiles){
+                if(ep.dead)continue;
+                const dx=ep.x-player.x,dy=ep.y-player.y;
+                const d=Math.hypot(dx,dy);
+                if(d<nearest && ep.vx*(-dx)+ep.vy*(-dy)>0){
+                    nearest=d;choice={x:dx/(d||1),y:dy/(d||1)};
+                }
+            }
+            if(choice)return choice;
+            const a=Number.isFinite(player.aimAngle)?player.aimAngle:0;
+            return {x:Math.cos(a),y:Math.sin(a)};
+        }
+        function activatePrismGuard(){
+            if(gameState!=='PLAYING'||!player||
+                totalTime<prismGuardReadyAt||player.isDashing||
+                prismActive())return false;
+            const dir=choosePrismDirection();
+            prismGuardX=dir.x;prismGuardY=dir.y;
+            prismGuardStartedAt=totalTime;
+            prismGuardUntil=totalTime+PRISM_RULES.duration;
+            prismGuardReadyAt=totalTime+PRISM_RULES.cooldown;
+            prismGuardDeflections=0;prismGuardPerfect=false;
+            prismStats.activations++;
+            shockwaves.push(new Shockwave(player.x,player.y,
+                PRISM_RULES.radius,'#a3f4ff',.22));
+            return true;
+        }
+        function deflectPrismProjectile(ep){
+            if(!prismActive()||ep.dead)return false;
+            const dx=ep.x-player.x,dy=ep.y-player.y;
+            const d=Math.hypot(dx,dy);
+            if(d>PRISM_RULES.radius+ep.radius)return false;
+            if(d>0.001&&(dx*prismGuardX+dy*prismGuardY)/d<
+                Math.cos(PRISM_RULES.halfAngle))return false;
+            // A shot travelling away from the player is not parryable.
+            if(ep.vx*(-dx)+ep.vy*(-dy)<=0)return false;
+            ep.dead=true;
+            prismGuardDeflections++;
+            prismStats.deflected++;
+            const isPerfect=totalTime-prismGuardStartedAt<=PRISM_RULES.perfectTime;
+            if(isPerfect&&!prismGuardPerfect){
+                prismGuardPerfect=true;
+                prismStats.perfect++;
+                player.momentum=Math.min(100,
+                    player.momentum+PRISM_RULES.perfectMomentum);
+                createFloatingText(player.x,player.y-38,
+                    'KUSURSUZ KARŞILIK','#bcfbff',12);
+            }
+            if(bullets.length<PRISM_RULES.maxFriendlyShots){
+                let tx=-ep.vx,ty=-ep.vy;
+                let best=Infinity;
+                for(const e of enemies){
+                    if(e.dead)continue;
+                    const ex=e.x-ep.x,ey=e.y-ep.y;
+                    const dist2=ex*ex+ey*ey;
+                    if(dist2<best){best=dist2;tx=ex;ty=ey;}
+                }
+                const norm=Math.hypot(tx,ty)||1;
+                const bolt=new Bullet(ep.x,ep.y,
+                    tx/norm*PRISM_RULES.boltSpeed,
+                    ty/norm*PRISM_RULES.boltSpeed,
+                    Math.min(42,player.damage*1.25+ep.damage*.6),
+                    5,1,0,false,false);
+                bolt.life=PRISM_RULES.boltLife;
+                bolt.prismRiposte=true;
+                bullets.push(bolt);
+                prismStats.shotsReturned++;
+            }
+            shockwaves.push(new Shockwave(ep.x,ep.y,43,'#bffaff',.17));
+            return true;
+        }
+        function updatePrismGuard(){
+            if(prismGuardUntil===-Infinity||totalTime<prismGuardUntil)return;
+            prismStats.spent++;
+            if(prismGuardDeflections===0)prismStats.whiffs++;
+            prismGuardUntil=-Infinity;
+        }
+        function getPrismGuardSnapshot(){
+            return {active:prismActive(),
+                remaining:prismActive()?Math.max(0,
+                    Math.round((prismGuardUntil-totalTime)*100)/100):0,
+                readyIn:Math.max(0,Math.round(
+                    (prismGuardReadyAt-totalTime)*10)/10),
+                deflections:prismGuardDeflections,
+                cap:PRISM_RULES.maxDeflections,
+                direction:{x:prismGuardX,y:prismGuardY},
+                stats:{...prismStats}};
+        }
+        function drawPrismGuard(ctx){
+            if(!prismActive())return;
+            const center=Math.atan2(prismGuardY,prismGuardX);
+            const begin=center-PRISM_RULES.halfAngle;
+            const end=center+PRISM_RULES.halfAngle;
+            const progress=Math.max(0,Math.min(1,
+                (prismGuardUntil-totalTime)/PRISM_RULES.duration));
+            ctx.save();
+            ctx.translate(player.x,player.y);
+            ctx.strokeStyle='#bffaff';
+            ctx.fillStyle='#5df4ff';
+            ctx.lineWidth=5;
+            ctx.globalAlpha=.28+.48*progress;
+            ctx.beginPath();ctx.moveTo(0,0);
+            ctx.arc(0,0,PRISM_RULES.radius,begin,end);
+            ctx.closePath();ctx.fill();
+            ctx.globalAlpha=.9;
+            ctx.beginPath();ctx.arc(0,0,PRISM_RULES.radius,begin,end);
+            ctx.stroke();
+            ctx.lineWidth=2;
+            const facets=graphicsQuality==='low'?3:6;
+            for(let i=0;i<=facets;i++){
+                const a=begin+(end-begin)*i/facets;
+                ctx.beginPath();
+                ctx.moveTo(Math.cos(a)*28,Math.sin(a)*28);
+                ctx.lineTo(Math.cos(a)*PRISM_RULES.radius,
+                    Math.sin(a)*PRISM_RULES.radius);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+        function updatePrismGuardHud(){
+            const button=document.getElementById('prismBtn');
+            const status=document.getElementById('prismStatus');
+            const overlay=document.getElementById('prismCooldownOverlay');
+            if(!button||!status||!overlay||!player)return;
+            const ready=Math.max(0,prismGuardReadyAt-totalTime);
+            overlay.style.height=(ready/PRISM_RULES.cooldown*100).toFixed(1)+'%';
+            const active=prismActive();
+            status.textContent=active?
+                'KARŞILA '+(PRISM_RULES.maxDeflections-prismGuardDeflections):
+                ready>0?ready.toFixed(1)+'s':'HAZIR';
+            status.className='font-cyber text-xs font-bold relative z-10 '+
+                (active?'text-cyan-200':ready>0?'text-blue-200':'text-green-400');
+            button.setAttribute('aria-label',
+                active?'Prizma Karşılığı aktif, kalan yansıma '+(PRISM_RULES.maxDeflections-prismGuardDeflections):
+                ready>0?'Prizma Karşılığı şarj oluyor, '+ready.toFixed(1)+' saniye':
+                'Prizma Karşılığı hazır; C tuşu');
+        }
+
         const ARENA_EVENT_GAP = 82;
         const ARENA_EVENT_LIFETIME = 17;
 
@@ -7359,6 +7527,7 @@
                     circuitWeaver: getCircuitWeaverSnapshot(),
                     arenaChapter: getArenaChapterSnapshot(),
                     nemesis:getNemesisSnapshot(),
+                    prismGuard:getPrismGuardSnapshot(),
                     bastion: getBastionStatus(),
                     warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
                     arenaEvent: this.activeArenaEvent ? this.activeArenaEvent.kind : null,
@@ -7479,6 +7648,7 @@
             totalTime += dt;
             waveTimer += dt;
             if (slowMoTimer > 0) slowMoTimer = Math.max(0, slowMoTimer - dt);
+            updatePrismGuard();
             updateBastion();
             updatePhaseEchoes();
             updateCircuitField();
@@ -7588,6 +7758,10 @@
                     continue;
                 }
                 ep.update(dt * enemyTimeScale);
+                if (!ep.dead && deflectPrismProjectile(ep)) {
+                    enemyProjectiles.splice(i,1);
+                    continue;
+                }
                 if (bastionIntercepts(ep)) {
                     ep.dead = true;
                     bastion.blocked++;
@@ -8154,6 +8328,7 @@
             drawArenaChapter(ctx);
             drawChapterShowcase(ctx);
             drawNemesisThreat(ctx);
+            drawPrismGuard(ctx);
             drawBossArenaPresence(ctx);
             drawSpecialEncounterWarning();
             drawTacticalLinks();
@@ -8434,6 +8609,7 @@
             updateTacticalHint();
             updateArenaChapterHud();
             updateNemesisHud();
+            updatePrismGuardHud();
 
             const xpPct = Math.min(100, (player.xp / player.xpToNext) * 100);
             document.getElementById('xpBar').style.width = `${xpPct}%`;
@@ -8616,6 +8792,7 @@
             resetEnemyCrowdSteering();
             resetChapterBiome();
             resetNemesis();
+            resetPrismGuard();
             phaseEchoes = [];
             circuitField = null;
             circuitFlash = null;
@@ -9666,6 +9843,10 @@
                     player.triggerDash();
                 } else if (e.code === 'KeyE') {
                     player.triggerNova();
+                } else if (e.code === 'KeyC') {
+                    if (isInteractiveKeyTarget(e.target)) return;
+                    e.preventDefault();
+                    activatePrismGuard();
                 } else if (e.code === 'KeyQ') {
                     // Do not spend gold while keyboard focus is on another control.
                     if (!isInteractiveKeyTarget(e.target)) {
@@ -9811,6 +9992,7 @@
         document.getElementById('novaBtn').addEventListener('click', () => {
             if (gameState === 'PLAYING' && player) player.triggerNova();
         });
+        document.getElementById('prismBtn').addEventListener('click', activatePrismGuard);
         document.getElementById('bastionBtn').addEventListener('click', () => {
             deployBastion();
         });
@@ -10088,6 +10270,7 @@
         window.getNeonCircuitWeaver = () => getCircuitWeaverSnapshot();
         window.getNeonArenaChapter = () => getArenaChapterSnapshot();
         window.getNeonNemesis = () => getNemesisSnapshot();
+        window.getNeonPrismGuard = () => getPrismGuardSnapshot();
         window.getNeonBuildSnapshot = () => player ? {
             modules: { ...player.upgradeCounts },
             evolutions: [...player.evolutions],

@@ -501,3 +501,61 @@ test('M5.21 Echo Hunter visibly announces stationary, moving and dashing player 
  await expect(page.locator('#nemesisBanner')).toBeVisible();
  expect(errors).toEqual([]);
 });
+
+
+test('M5.22 keyboard C and touch Prism Riposte deflect a real projectile in Chromium',async({page})=>{
+ const errors=[];page.on('pageerror',err=>errors.push(err.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ await page.evaluate(()=>{
+   totalTime=10;nextBossTime=500;
+   const shot=new EnemyProjectile(player.x+72,player.y,-360,0,6,25);
+   enemyProjectiles=[shot];enemies=[];
+ });
+ await page.keyboard.press('c');
+ const result=await page.evaluate(()=>{
+   const wasActive=getNeonPrismGuard().active;
+   const hp=player.hp;
+   updateGame(.016);
+   updatePrismGuardHud();
+   const state=getNeonPrismGuard();
+   return {wasActive,hp,afterHp:player.hp,state,
+     shots:bullets.filter(b=>b.prismRiposte).length,
+     label:document.getElementById('prismStatus').textContent};
+ });
+ expect(result.wasActive).toBe(true);
+ expect(result.state.stats.deflected).toBe(1);
+ expect(result.state.stats.shotsReturned).toBe(1);
+ expect(result.shots).toBe(1);
+ expect(result.afterHp).toBe(result.hp);
+ expect(result.label).toContain('KARŞILA');
+ await expect(page.locator('#prismBtn')).toBeVisible();
+ await page.evaluate(()=>{totalTime+=8.6;updatePrismGuard();updatePrismGuardHud();});
+ await page.locator('#prismBtn').click();
+ expect(await page.evaluate(()=>getNeonPrismGuard().stats.activations)).toBe(2);
+ expect(errors).toEqual([]);
+});
+
+
+test('M5.22 all four touch combat controls fit the phone viewport without overlap',async({page,isMobile})=>{
+ test.skip(!isMobile,'phone-only combat command geometry');
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const ids=['bastionBtn','novaBtn','prismBtn','dashBtn'];
+ const positions=await page.evaluate(ids=>({
+   width:window.innerWidth,
+   buttons:ids.map(id=>{
+     const rect=document.getElementById(id).getBoundingClientRect();
+     return {id,x:rect.x,right:rect.right,width:rect.width,height:rect.height};
+   })
+ }),ids);
+ for(const item of positions.buttons){
+   expect(item.width).toBeGreaterThan(35);
+   expect(item.height).toBeGreaterThan(30);
+   expect(item.x).toBeGreaterThanOrEqual(-1);
+   expect(item.right).toBeLessThanOrEqual(positions.width+1);
+ }
+ for(let i=1;i<positions.buttons.length;i++)
+   expect(positions.buttons[i].x).toBeGreaterThanOrEqual(
+     positions.buttons[i-1].right-1);
+});

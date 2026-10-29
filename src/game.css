@@ -934,7 +934,7 @@
         }
         #reviveModal, #gameOverModal { z-index: 40; }
         #hud { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
-        #pauseBtn, #dashBtn, #novaBtn, #fullscreenBtn,
+        #pauseBtn, #dashBtn, #novaBtn, #prismBtn, #fullscreenBtn,
         #soundToggleBtn, #musicToggleBtn { pointer-events: auto; }
         /* Fallback for critical modal states if a utility CSS CDN is blocked.
            Full responsive styling still needs Tailwind; gameplay remains operable. */
@@ -1070,4 +1070,48 @@
         transition:none!important;
         animation:none!important;
     }
+}
+
+/* M5.22: Prism Riposte has a distinct interactive icon on touch and desktop.
+   Keep the fourth active ability compact on narrow mobile screens. */
+#hud .prism-skill-button {
+    box-shadow:inset 0 2px 0 rgba(165,243,252,.24);
+    touch-action:manipulation;
+    min-height:42px;
+    flex-shrink:1;
+}
+#hud #prismCooldownOverlay {
+    pointer-events:none;
+}
+@media(max-width:639px) {
+    #hud .prism-skill-button {padding:8px 7px;gap:5px;min-width:0;}
+    #hud .prism-skill-button #prismStatus {font-size:10px;}
+}
+@media(prefers-reduced-motion:reduce) {
+    #hud .prism-skill-button,#hud #prismCooldownOverlay {
+        transition:none!important;animation:none!important;
+    }
+}
+
+/* Fit four active actions on narrow mobile viewports without hiding status. */
+@media(max-width:639px) {
+    #hud .ability-command-row {
+        gap:3px;
+        width:100%;
+        min-width:0;
+        justify-content:space-between;
+    }
+    #hud .ability-command-row > button {
+        flex:0 1 auto;
+        min-width:0;
+        min-height:44px;
+        padding:7px 4px;
+        gap:3px;
+        white-space:nowrap;
+    }
+    #hud .ability-command-row > button > i {font-size:14px;}
+    #hud .ability-command-row #prismStatus,
+    #hud .ability-command-row #dashStatus,
+    #hud .ability-command-row #novaStatus,
+    #hud .ability-command-row #bastionStatus {font-size:9px;}
 }

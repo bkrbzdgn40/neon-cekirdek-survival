@@ -6045,3 +6045,95 @@ test('M5.21 low-VFX Echo Hunter identity and warning geometry are rendered witho
  assert.ok(calls.includes('lineTo'));
  assert.ok(calls.includes('fill'));
 });
+
+
+test('M5.22 Prism Riposte has an eight-second cooldown and refuses paused or dash activation',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();totalTime=10;const first=activatePrismGuard();const second=activatePrismGuard();const active=getPrismGuardSnapshot();gameState='PAUSED';const paused=activatePrismGuard();gameState='PLAYING';totalTime=18.6;player.isDashing=true;const dash=activatePrismGuard();player.isDashing=false;const later=activatePrismGuard();return JSON.stringify({first,second,active,paused,dash,later,after:getPrismGuardSnapshot()});})()"));
+ assert.equal(x.first,true);
+ assert.equal(x.second,false);
+ assert.equal(x.active.active,true);
+ assert.equal(x.active.cap,4);
+ assert.ok(x.active.remaining>.4);
+ assert.equal(x.paused,false);
+ assert.equal(x.dash,false);
+ assert.equal(x.later,true);
+ assert.equal(x.after.stats.activations,2);
+});
+
+test('M5.22 frontal incoming shots deflect once, return real Bullet and reward a single perfect timing',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();totalTime=10;const beforeGold=totalGold;player.momentum=0;const ep1=new EnemyProjectile(player.x+75,player.y,-320,0,6,18);const ep2=new EnemyProjectile(player.x+65,player.y+12,-320,0,6,18);enemyProjectiles=[ep1,ep2];enemies=[new Enemy(player.x+300,player.y,'SHOOTER')];const ready=activatePrismGuard();const a=deflectPrismProjectile(ep1);const b=deflectPrismProjectile(ep2);return JSON.stringify({ready,a,b,dead1:ep1.dead,dead2:ep2.dead,bolts:bullets.map(b=>({damage:b.damage,riposte:b.prismRiposte,crit:b.isCrit,life:b.life,pierce:b.pierce})),stats:getPrismGuardSnapshot(),momentum:player.momentum,gold:totalGold,beforeGold});})()"));
+ assert.equal(x.ready,true);
+ assert.equal(x.a,true);
+ assert.equal(x.b,true);
+ assert.equal(x.dead1,true);
+ assert.equal(x.dead2,true);
+ assert.equal(x.bolts.length,2);
+ assert.ok(x.bolts.every(b=>b.riposte&&b.crit===false&&b.damage<=42&&b.pierce===1));
+ assert.equal(x.stats.stats.deflected,2);
+ assert.equal(x.stats.stats.shotsReturned,2);
+ assert.equal(x.stats.stats.perfect,1);
+ assert.equal(x.momentum,12);
+ assert.equal(x.gold,x.beforeGold);
+});
+
+test('M5.22 flank, receding and distant shots cannot be parried',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();totalTime=10;const threat=new EnemyProjectile(player.x+160,player.y,-320,0,6,18);enemyProjectiles=[threat];activatePrismGuard();const distant=deflectPrismProjectile(threat);const back=new EnemyProjectile(player.x-55,player.y,320,0,6,18);const backBlocked=deflectPrismProjectile(back);const away=new EnemyProjectile(player.x+55,player.y,320,0,6,18);const receding=deflectPrismProjectile(away);return JSON.stringify({distant,backBlocked,receding,stats:getPrismGuardSnapshot(),backDead:back.dead,awayDead:away.dead});})()"));
+ assert.equal(x.distant,false);
+ assert.equal(x.backBlocked,false);
+ assert.equal(x.receding,false);
+ assert.equal(x.stats.stats.deflected,0);
+ assert.equal(x.backDead,false);
+ assert.equal(x.awayDead,false);
+});
+
+test('M5.22 four-deflection cap and friendly-bullet capacity remain bounded',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();totalTime=10;enemies=[];enemyProjectiles=[new EnemyProjectile(player.x+65,player.y,-240,0,6,25)];activatePrismGuard();bullets=Array.from({length:250},()=>({dead:false}));let result=[];for(let i=0;i<6;i++){const ep=new EnemyProjectile(player.x+65,player.y,-240,0,6,25);result.push(deflectPrismProjectile(ep));}const s=getPrismGuardSnapshot();return JSON.stringify({result,stats:s.stats,active:s.active,deflections:s.deflections,bullets:bullets.length});})()"));
+ assert.deepEqual(x.result,[true,true,true,true,false,false]);
+ assert.equal(x.deflections,4);
+ assert.equal(x.active,false);
+ assert.equal(x.bullets,250);
+ assert.equal(x.stats.shotsReturned,0);
+ assert.equal(x.stats.deflected,4);
+});
+
+test('M5.22 actual game projectile loop intercepts before player damage',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();totalTime=10;nextBossTime=500;player.momentum=0;player.takeDamage=(n)=>{player.hp-=n;};const hp=player.hp;const ep=new EnemyProjectile(player.x+71,player.y,-400,0,6,23);enemyProjectiles=[ep];activatePrismGuard();updateGame(.016);const state=getPrismGuardSnapshot();return JSON.stringify({hp,afterHp:player.hp,deflected:state.stats.deflected,shotCount:bullets.filter(b=>b.prismRiposte).length,epCount:enemyProjectiles.length});})()"));
+ assert.equal(x.hp,x.afterHp);
+ assert.equal(x.deflected,1);
+ assert.equal(x.shotCount,1);
+ assert.equal(x.epCount,0);
+});
+
+test('M5.22 expired guard cannot block and correctly counts whiffs; run reset clears temporary state',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();totalTime=10;activatePrismGuard();totalTime=10.5;updatePrismGuard();const stale=new EnemyProjectile(player.x+40,player.y,-240,0,6,12);const blocked=deflectPrismProjectile(stale);const expired=getPrismGuardSnapshot();const gold=totalGold;startNewGame();return JSON.stringify({blocked,staleDead:stale.dead,expired,reset:getPrismGuardSnapshot(),gold,afterGold:totalGold});})()"));
+ assert.equal(x.blocked,false);
+ assert.equal(x.staleDead,false);
+ assert.equal(x.expired.stats.whiffs,1);
+ assert.equal(x.expired.stats.spent,1);
+ assert.equal(x.reset.stats.activations,0);
+ assert.equal(x.reset.readyIn,0);
+ assert.equal(x.reset.active,false);
+ assert.equal(x.gold,x.afterGold);
+});
+
+test('M5.22 HUD and low-VFX prism sector are accessible with no artificial movement',()=>{
+ const calls=[];
+ const ctx=new Proxy({}, {get(_,key){return(...args)=>calls.push(String(key));}});
+ const {run}=setup({}, {canvasContext:ctx});
+ const x=JSON.parse(run("(()=>{startNewGame();graphicsQuality='low';totalTime=10;activatePrismGuard();updatePrismGuardHud();drawPrismGuard(ctx);const b=document.getElementById('prismBtn');return JSON.stringify({text:document.getElementById('prismStatus').textContent,aria:b._attrs['aria-label'],active:getPrismGuardSnapshot().active});})()"));
+ assert.equal(x.active,true);
+ assert.match(x.text,/KARŞILA/);
+ assert.match(x.aria,/aktif/);
+ assert.ok(calls.includes('arc'));
+ assert.ok(calls.includes('lineTo'));
+ assert.ok(calls.includes('fill'));
+ assert.match(html,/id="prismBtn"/);
+ assert.match(html,/id="prismCooldownOverlay"/);
+ assert.match(html,/\[C\]/);
+});
