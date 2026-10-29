@@ -349,3 +349,38 @@ test('Circuit Weaver closes a drawn loop in Chromium, hits enclosed enemy and le
  expect(result.otherModules).toBe(0);
  expect(errors).toEqual([]);
 });
+
+
+test('arena chapters change visual HUD identity and rift teleports without spending gold',async({page})=>{
+ const errors=[];page.on('pageerror',err=>errors.push(err.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const steps=await page.evaluate(()=>{
+   player.takeDamage=()=>{};
+   nextBossTime=500;
+   wave=4;updateArenaChapter(.02);updateArenaChapterHud();
+   const first={badge:document.getElementById('arenaChapterBadge').textContent,
+     mode:document.getElementById('hud').getAttribute('data-arena-chapter')};
+   wave=7;updateArenaChapter(.02);updateArenaChapterHud();
+   const second={badge:document.getElementById('arenaChapterBadge').textContent,
+     mode:document.getElementById('hud').getAttribute('data-arena-chapter')};
+   wave=10;updateArenaChapter(.02);updateArenaChapterHud();
+   const third={badge:document.getElementById('arenaChapterBadge').textContent,
+     mode:document.getElementById('hud').getAttribute('data-arena-chapter')};
+   const nodes=getRiftCenters();
+   player.x=nodes[0].x;player.y=nodes[0].y;
+   const gold=totalGold;
+   updateArenaChapter(.02);
+   return {first,second,third,warps:getArenaChapterSnapshot().riftWarps,
+     playerAtExit:Math.abs(player.x-nodes[1].x)<1,
+     gold,afterGold:totalGold};
+ });
+ expect(steps.first).toEqual({badge:expect.stringContaining('DÖKÜMHANE'),mode:'FOUNDRY'});
+ expect(steps.second).toEqual({badge:expect.stringContaining('BAHÇE'),mode:'GARDEN'});
+ expect(steps.third).toEqual({badge:expect.stringContaining('YARIK'),mode:'RIFT'});
+ expect(steps.warps).toBe(1);
+ expect(steps.playerAtExit).toBe(true);
+ expect(steps.afterGold).toBe(steps.gold);
+ await expect(page.locator('#arenaChapterAnnouncement')).toBeVisible();
+ expect(errors).toEqual([]);
+});
