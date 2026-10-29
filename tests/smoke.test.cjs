@@ -5348,3 +5348,12 @@ test('real linked shooters delay simultaneous volley rather than adding projecti
   assert.equal(result.denied,1);
   assert.equal(result.unmodifiedDamage,true);
 });
+
+
+test('idle player at arena edge gets safe entrance instead of unsafe random flank', () => {
+  const {run}=setup();
+  const data=JSON.parse(run("(()=>{startNewGame();wave=8;player.x=30;player.y=worldHeight/2;const chosen=scoreTacticalDeployment(8,'SIEGE',1,3,{vx:0,vy:0,tracked:3},null);const blocked=getSpecialEncounterPlan(8,'SIEGE',3,1);const unsafe=Math.min(...blocked.units.map(u=>{const q=formationEdgePoint(u.side,u.slot,u.count);return Math.hypot(q.x-player.x,q.y-player.y);}));return JSON.stringify({chosen,unsafe});})()"));
+  assert.equal(data.chosen.mode,'safety-only');
+  assert.notEqual(data.chosen.side,3);
+  assert.ok(data.chosen.clearance>data.unsafe+80);
+});
