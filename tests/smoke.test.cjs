@@ -5813,3 +5813,60 @@ test('M5.18 mobile status and honest cooldown arcs expose terrain mechanics',()=
  assert.match(gameCode,/const readyIn=Math.max\(0,chapterGardenReady\[index\]-totalTime\)/);
  assert.match(gameCode,/const remaining=chapterRiftReadyAt-totalTime/);
 });
+
+ 
+test('M5.19 announced foundry rails make cautious ranged units sidestep without speed buffs',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();wave=4;nextBossTime=500;totalTime=101;updateArenaChapter(.02);const y=worldHeight*.32;const e=new Enemy(390,y+10,'SHOOTER');const from={x:e.x,y:e.y};e.x+=19;e.y-=6;steerFoundryRangedEnemy(e,from.x,from.y);const after={x:e.x,y:e.y},before={x:from.x+19,y:from.y-6};const distance=Math.hypot(e.x-from.x,e.y-from.y);const count=chapterStats.foundryDodges;totalTime+=1.7;const danger=new Enemy(390,y+10,'SHOOTER');const orig={x:danger.x+19,y:danger.y-6};danger.x+=19;danger.y-=6;steerFoundryRangedEnemy(danger,390,y+10);return JSON.stringify({from,after,before,distance,count,dangerX:danger.x,origX:orig.x,dangerY:danger.y,origY:orig.y});})()"));
+ assert.ok(s.after.y>s.before.y,'warning-phase shooter must steer away from rail');
+ assert.ok(Math.abs(s.distance-Math.hypot(19,6))<0.01,'no additional displacement');
+ assert.equal(s.count,1);
+ assert.equal(s.dangerX,s.origX,'danger-phase enemy does not dodge mid-pulse');
+ assert.equal(s.dangerY,s.origY);
+});
+
+test('M5.19 contested ion flowers still charge and recover as the guard is stunned',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();wave=7;nextBossTime=500;const node=getGardenCenters()[0];player.x=node.x;player.y=node.y;const e=new Enemy(node.x+24,node.y,'SHIELD_BEARER');enemies=[e];updateArenaChapter(.02);updateArenaChapter(.5);const guarded=getArenaChapterSnapshot();e.stunTimer=2;updateArenaChapter(.5);const cleared=getArenaChapterSnapshot();combatDirector.activeArenaEvent={kind:'STORM'};updateArenaChapter(.5);const suppressed=getArenaChapterSnapshot();return JSON.stringify({guarded,cleared,suppressed});})()"));
+ assert.equal(s.guarded.gardenContested[0],1);
+ assert.ok(s.guarded.gardenCharge[0]>.3&&s.guarded.gardenCharge[0]<.5);
+ assert.ok(s.guarded.gardenContestedSeconds>.4);
+ assert.equal(s.cleared.gardenContested[0],0);
+ assert.ok(s.cleared.gardenCharge[0]>s.guarded.gardenCharge[0]+.49);
+ assert.equal(s.suppressed.enabled,false);
+ assert.equal(s.suppressed.gardenCharge[0],0);
+ assert.equal(s.suppressed.gardenContested[0],0);
+});
+
+test('M5.19 portal pursuer warns before flanking; never telefrags or spawns new enemies',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();wave=10;nextBossTime=500;totalTime=100;updateArenaChapter(.02);const portals=getRiftCenters();player.x=portals[0].x;player.y=portals[0].y;const e=new Enemy(portals[0].x+22,portals[0].y+12,'ASSASSIN');enemies=[e];updateArenaChapter(.02);const warps=chapterStats.riftWarps;updateArenaChapter(.02);const announced=getArenaChapterSnapshot();const old={x:e.x,y:e.y};totalTime+=1.1;updateArenaChapter(.02);const arrived=getArenaChapterSnapshot();return JSON.stringify({warps,announced,arrived,old,after:{x:e.x,y:e.y},gap:Math.hypot(e.x-player.x,e.y-player.y),stun:e.stunTimer,count:enemies.length});})()"));
+ assert.equal(s.warps,1);
+ assert.ok(s.announced.riftPursuit?.remaining>=1);
+ assert.equal(s.announced.riftEnemyFlanks,0);
+ assert.equal(s.arrived.riftPursuit,null);
+ assert.equal(s.arrived.riftEnemyFlanks,1);
+ assert.ok(Math.hypot(s.after.x-s.old.x,s.after.y-s.old.y)>300);
+ assert.ok(s.gap>80,'enemy must land beyond melee contact');
+ assert.ok(s.stun>=.5,'follow-up ambush has visible reaction time');
+ assert.equal(s.count,1,'no extra enemy spawned');
+});
+
+test('M5.19 moving a pursuer away or starting a boss event cancels the portal follow',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();wave=10;nextBossTime=500;totalTime=100;updateArenaChapter(.02);const portals=getRiftCenters();player.x=portals[0].x;player.y=portals[0].y;const e=new Enemy(portals[0].x+20,portals[0].y,'DASHER');enemies=[e];updateArenaChapter(.02);updateArenaChapter(.02);const planned=!!chapterRiftPursuit;combatDirector.activeArenaEvent={kind:'STORM'};totalTime+=1.2;updateArenaChapter(.02);combatDirector.activeArenaEvent=null;updateArenaChapter(.02);const after=getArenaChapterSnapshot();return JSON.stringify({planned,after,x:e.x});})()"));
+ assert.equal(s.planned,true);
+ assert.equal(s.after.riftPursuit,null);
+ assert.equal(s.after.riftEnemyFlanks,0);
+});
+
+test('M5.19 reset clears counterplay state without changing gold or module count',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();nextBossTime=500;wave=7;const n=getGardenCenters()[0];enemies=[new Enemy(n.x,n.y,'SHOOTER')];player.x=n.x;player.y=n.y;updateArenaChapter(.5);const before=getArenaChapterSnapshot();const gold=totalGold,cards=UPGRADES_POOL.length;startNewGame();const after=getArenaChapterSnapshot();return JSON.stringify({before,after,gold,afterGold:totalGold,cards,afterCards:UPGRADES_POOL.length});})()"));
+ assert.ok(s.before.gardenContested[0]>0);
+ assert.deepEqual(s.after.gardenContested,[0,0,0]);
+ assert.equal(s.after.riftEnemyFlanks,0);
+ assert.equal(s.after.foundryDodges,0);
+ assert.equal(s.gold,s.afterGold);
+ assert.equal(s.cards,s.afterCards);
+});
