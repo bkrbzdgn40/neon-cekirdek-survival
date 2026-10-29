@@ -1148,13 +1148,13 @@ test('M3.1 cluster fragments respect hard projectile allocation ceiling', () => 
 });
 
 
-test('M3.2 all twelve modules have unique third-tier evolutions', () => {
+test('M3.2 all thirteen modules have unique third-tier evolutions', () => {
   const { run }=setup();
   const x=JSON.parse(run(`(() => JSON.stringify({
     names:UPGRADES_POOL.map(u=>u.id),evolutions:Object.keys(EVOLUTION_DEFS),
     missing:UPGRADES_POOL.filter(u=>!EVOLUTION_DEFS[u.id]).map(u=>u.id)
   }))()`));
-  assert.equal(x.names.length,12);
+  assert.equal(x.names.length,13);
   assert.equal(x.evolutions.length,x.names.length);
   assert.deepEqual(x.missing,[]);
 });
@@ -1313,7 +1313,7 @@ test('M3.2 full-tier modules never appear again in upgrade draft', () => {
   assert.equal(x.fire,'firerate');
 });
 
-test('M3.2 fully completed 36-tier run does not open an empty choice dialog', () => {
+test('M3.2 fully completed 39-tier run does not open an empty choice dialog', () => {
   const { run }=setup();
   const x=JSON.parse(run(`(() => {
     startNewGame();
@@ -1326,7 +1326,7 @@ test('M3.2 fully completed 36-tier run does not open an empty choice dialog', ()
   })()`));
   assert.equal(x.state,'PLAYING');
   assert.equal(x.hp,x.max-20);
-  assert.equal(x.evolutions,12);
+  assert.equal(x.evolutions,13);
 });
 
 test('M3.2 build guide reports active traits, near goals and correct counts', () => {
@@ -2263,7 +2263,7 @@ test('M4.3.3 separates equipment, utility and third-tier evolution independently
   assert.equal(x.evo.isLegendary,false);
   assert.equal(x.legendaryEvo.role,'evolution');
   assert.equal(x.legendaryEvo.isLegendary,true);
-  assert.equal(x.all.length,12);
+  assert.equal(x.all.length,13);
 });
 
 test('M4.3.3 reserves gold styling for legendary while orbital icon stays neutral on all other rarities', () => {
@@ -2375,8 +2375,8 @@ test('M4.3.3.1 legacy rarity odds and module power remain unchanged', () => {
   const {run}=setup();
   const data=JSON.parse(run("(()=>{startNewGame();return JSON.stringify({rarities:RARITIES.map(r=>[r.id,r.weight,r.mult]),modules:UPGRADES_POOL.length,evolutions:Object.keys(EVOLUTION_DEFS).length,tier:MAX_MODULE_TIER});})()"));
   assert.deepEqual(data.rarities,[['COMMON',48,1],['RARE',30,1.35],['EPIC',15,1.75],['LEGENDARY',7,2.3]]);
-  assert.equal(data.modules,12);
-  assert.equal(data.evolutions,12);
+  assert.equal(data.modules,13);
+  assert.equal(data.evolutions,13);
   assert.equal(data.tier,3);
 });
 
@@ -5492,10 +5492,10 @@ test('M5.14 bastion draw is graphics-only and HUD provides independent button st
 });
 
 
-test('M5.15 Phase Echo is a selectable 12th card and build guide reflects 36 total tiers',()=>{
+test('M5.15 Phase Echo stays selectable after 13th card and build guide reflects dynamic tiers',()=>{
  const {run}=setup();
  const d=JSON.parse(run("(()=>{startNewGame();const card=UPGRADES_POOL.find(u=>u.id==='phase_echo');const pool=UPGRADES_POOL.length;const guide=getBuildGuideModel(player);return JSON.stringify({pool,cardName:card.name,role:getUpgradeCardPresentation(card,RARITIES[0],0).role,evo:EVOLUTION_DEFS.phase_echo.name,guide:guide.totalTiers});})()"));
- assert.equal(d.pool,12);
+ assert.equal(d.pool,13);
  assert.equal(d.cardName,'Faz Yankısı');
  assert.equal(d.role,'weapon');
  assert.equal(d.evo,'Çift Yankı');
@@ -5574,4 +5574,90 @@ test('M5.15 high and low graphics draw echo without adding simulation entities',
  assert.equal(d.projectiles,0);
  assert.equal(d.bullets,0);
  assert.equal(d.upgrades.phase_echo,1);
+});
+
+
+test('M5.16 Circuit Weaver card extends pool to 13 without changing gold or existing rarity',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();const a=UPGRADES_POOL.find(u=>u.id==='circuit_weaver');return JSON.stringify({pool:UPGRADES_POOL.length,name:a.name,evo:EVOLUTION_DEFS.circuit_weaver.name,role:getUpgradeCardPresentation(a,RARITIES[0],0).role,stats:player.buildStats.circuitClosures,initialGold:totalGold});})()"));
+ assert.equal(s.pool,13);
+ assert.equal(s.name,'Devre Dokuyucu');
+ assert.equal(s.evo,'Yanan Çember');
+ assert.equal(s.role,'weapon');
+ assert.equal(s.stats,0);
+ assert.equal(s.initialGold,50);
+});
+
+test('M5.16 reliable polygon geometry accepts interior and rejects exterior regardless of winding',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{const p=[{x:300,y:200},{x:420,y:200},{x:420,y:320},{x:300,y:320}];return JSON.stringify({a:circuitSignedArea(p),inside:circuitContains(p,360,260),out:circuitContains(p,430,260),reverse:circuitContains([...p].reverse(),360,260)});})()"));
+ assert.equal(s.a,14400);
+ assert.equal(s.inside,true);
+ assert.equal(s.out,false);
+ assert.equal(s.reverse,true);
+});
+
+test('M5.16 tracing a movement rectangle closes circuit and damages only enclosed enemies',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts.circuit_weaver=1;player.refreshBuildTraits();player.x=300;player.y=200;const inside=new Enemy(360,260,'TANK'),outside=new Enemy(500,260,'TANK');inside.hp=1000;outside.hp=1000;enemies=[inside,outside];recordCircuitWeaverMotion(player,0,false);const route=[];for(let n=1;n<=6;n++)route.push([300+20*n,200]);for(let n=1;n<=6;n++)route.push([420,200+20*n]);for(let n=1;n<=6;n++)route.push([420-20*n,320]);for(let n=1;n<=6;n++)route.push([300,320-20*n]);let fired=0;for(const [x,y] of route){player.x=x;player.y=y;totalTime+=.07;if(recordCircuitWeaverMotion(player,20,false))fired++;}return JSON.stringify({fired,inside:inside.hp,outside:outside.hp,closures:player.buildStats.circuitClosures,hits:player.buildStats.circuitPulseHits,remaining:player.circuitTrace.length,ready:player.circuitReadyAt,gold:totalGold,field:!!circuitField});})()"));
+ assert.equal(s.fired,1);
+ assert.ok(s.inside<1000,'inside target is hit');
+ assert.equal(s.outside,1000);
+ assert.equal(s.closures,1);
+ assert.equal(s.hits,1);
+ assert.equal(s.remaining,0);
+ assert.ok(s.ready>0);
+ assert.equal(s.gold,50);
+ assert.equal(s.field,false);
+});
+
+test('M5.16 tiny loops cannot arm and long-distance dash is not an artificial closing stroke',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts.circuit_weaver=1;player.refreshBuildTraits();player.x=250;player.y=250;recordCircuitWeaverMotion(player,0,false);for(let i=0;i<40;i++){const a=i*Math.PI/10;player.x=250+20*Math.cos(a);player.y=250+20*Math.sin(a);totalTime+=.07;recordCircuitWeaverMotion(player,20,false);}const tiny=player.buildStats.circuitClosures;player.x=500;player.y=500;recordCircuitWeaverMotion(player,350,true);return JSON.stringify({tiny,trace:player.circuitTrace.length,startsAt:player.circuitTrace[0],ready:player.circuitReadyAt});})()"));
+ assert.equal(s.tiny,0);
+ assert.equal(s.trace,1);
+ assert.deepEqual(s.startsAt,{x:500,y:500});
+ assert.equal(s.ready,0);
+});
+
+test('M5.16 full 160-enemy room caps loop pulse hits and never harms boss',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts.circuit_weaver=1;player.refreshBuildTraits();enemies=Array.from({length:159},()=>new Enemy(360,260,'TANK'));const boss=new Enemy(360,260,'BOSS_PRISM');enemies.push(boss);for(const e of enemies)e.hp=e.maxHp=10000;const polygon=[{x:300,y:200},{x:440,y:200},{x:440,y:340},{x:300,y:340}];const hit=closeCircuitWeaver(player,polygon,19600);return JSON.stringify({hit,damaged:enemies.filter(e=>e.hp<10000).length,boss:boss.hp,total:enemies.length,stats:player.buildStats.circuitPulseHits});})()"));
+ assert.equal(s.hit,true);
+ assert.equal(s.damaged,16);
+ assert.equal(s.boss,10000);
+ assert.equal(s.total,160);
+ assert.equal(s.stats,16);
+});
+
+test('M5.16 evolved charged boundary hits each crossing enemy once but not an idle enemy',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts.circuit_weaver=3;player.refreshBuildTraits();const a=new Enemy(490,260,'TANK'),b=new Enemy(490,260,'TANK');a.hp=a.maxHp=b.hp=b.maxHp=1000;enemies=[a,b];const poly=[{x:300,y:200},{x:420,y:200},{x:420,y:320},{x:300,y:320}];closeCircuitWeaver(player,poly,14400);totalTime=.2;a.x=360;updateCircuitField();const once=a.hp;totalTime=.4;a.x=490;updateCircuitField();const twice=a.hp;totalTime=.6;a.x=360;updateCircuitField();return JSON.stringify({once,twice,third:a.hp,idle:b.hp,crossings:player.buildStats.circuitCrossings,field:!!circuitField});})()"));
+ assert.ok(s.once<1000);
+ assert.equal(s.twice,s.once);
+ assert.equal(s.third,s.once);
+ assert.equal(s.idle,1000);
+ assert.equal(s.crossings,1);
+ assert.equal(s.field,true);
+});
+
+test('M5.16 circuit field and trace expire and reset on new run',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts.circuit_weaver=3;player.refreshBuildTraits();const poly=[{x:300,y:200},{x:420,y:200},{x:420,y:320},{x:300,y:320}];closeCircuitWeaver(player,poly,14400);const old=getCircuitWeaverSnapshot();totalTime=3.25;updateCircuitField();const expired=getCircuitWeaverSnapshot();startNewGame();return JSON.stringify({old,expired,now:getCircuitWeaverSnapshot(),gold:totalGold});})()"));
+ assert.equal(s.old.fieldActive,true);
+ assert.equal(s.expired.fieldActive,false);
+ assert.equal(s.now.tier,0);
+ assert.equal(s.now.closures,0);
+ assert.equal(s.now.fieldActive,false);
+ assert.equal(s.gold,50);
+});
+
+test('M5.16 circuit visualization has bounded draw path and distinct high/low effects',()=>{
+ const methods=[];const ctx=new Proxy({}, {get(_,key){return(...args)=>methods.push(String(key));}});
+ const {run}=setup({}, {canvasContext:ctx});
+ const s=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts.circuit_weaver=1;player.refreshBuildTraits();player.circuitTrace=[{x:300,y:200},{x:400,y:200},{x:400,y:300}];graphicsQuality='high';drawCircuitWeaver(ctx);graphicsQuality='low';drawCircuitWeaver(ctx);return JSON.stringify({trace:player.circuitTrace.length,stats:getCircuitWeaverSnapshot()});})()"));
+ assert.ok(methods.filter(m=>m==='lineTo').length>=4);
+ assert.ok(methods.filter(m=>m==='stroke').length>=4);
+ assert.equal(s.trace,3);
+ assert.equal(s.stats.closures,0);
 });
