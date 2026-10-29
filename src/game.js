@@ -5844,7 +5844,7 @@
                     banner.textContent=spec.name+' · '+spec.hint;
                     banner.style.borderColor=spec.color;
                     banner.style.color=spec.color;
-                    banner.style.setProperty('--operation-progress',progress.toFixed(1)+'%');
+                    banner.style.setProperty?.('--operation-progress',progress.toFixed(1)+'%');
                 }
             }
         }
