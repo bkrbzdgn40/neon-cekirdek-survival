@@ -1065,10 +1065,13 @@
                 this.buildStats = { railShots: 0, clusterBursts: 0, arcSurges: 0,
                     orbitalPulses: 0, aegisPulses: 0, prismBounces: 0,
                     reactorBursts: 0, overdriveDischarges: 0, weakpointMarks: 0,
-                    bloodReactorHeals: 0, aegisDeflections: 0, kineticVortices: 0 };
+                    bloodReactorHeals: 0, aegisDeflections: 0, kineticVortices: 0,
+                    phaseEchoes: 0, phaseEchoTargets: 0 };
                 this.bloodReactorKills = 0;
                 this.bloodReactorReadyAt = 0;
                 this.kineticVortexReadyAt = 0;
+                this.phaseEchoReadyAt = 0;
+                this.phaseEchoOrigin = null;
             }
 
             refreshBuildTraits() {
@@ -1162,6 +1165,8 @@
 
                     if (this.dashTimer <= 0) {
                         this.isDashing = false;
+                        deployPhaseEcho(this, this.phaseEchoOrigin);
+                        this.phaseEchoOrigin = null;
                         if (this.evolutions.has('kinetic_magnet') && totalTime >= this.kineticVortexReadyAt) {
                             this.kineticVortexReadyAt = totalTime + 4;
                             this.buildStats.kineticVortices++;
@@ -1396,6 +1401,7 @@
 
             triggerDash() {
                 if (this.dashCooldown > 0 || this.isDashing) return;
+                this.phaseEchoOrigin = { x: this.x, y: this.y };
                 this.isDashing = true;
                 this.dashTimer = this.dashDuration;
                 this.dashCooldown = this.dashMaxCooldown;
@@ -2561,8 +2567,9 @@
                 if (this.stunTimer > 0) {
                     this.stunTimer -= dt;
                 } else {
-                    const dx = player.x - this.x;
-                    const dy = player.y - this.y;
+                    const echoTarget = getPhaseEchoTarget(this);
+                    const dx = (echoTarget ? echoTarget.x : player.x) - this.x;
+                    const dy = (echoTarget ? echoTarget.y : player.y) - this.y;
                     const dist = Math.hypot(dx, dy) || 1;
                     const contractProjectileMult = !this.isBoss && activeContractId === 'OVERCHARGE' ? 1.10 : 1;
                     const projSpeedScale = Math.min(1.7, 1 + (wave - 1) * 0.042) * contractProjectileMult;
@@ -3444,6 +3451,7 @@
         }
 
         const EVOLUTION_DEFS = Object.freeze({
+            phase_echo: { name: 'Çift Yankı', desc: 'Aynı anda iki Faz Yankısı aktif kalabilir; hologram süresi 4,1 saniyeye çıkar.' },
             multishot: { name: 'Odak Rayı', desc: 'Her 4. salvoya güçlü, fazladan iki hedef delen beyaz bir plazma rayı ekler.' },
             firerate: { name: 'Reaktör Ritmi', desc: 'Her 5. salvoda iki ek düşük hasarlı yan plazma atışı üretir.' },
             homing: { name: 'Küme Roketleri', desc: 'İsabet eden ana güdümlü füze iki küçük takip füzesi bırakır.' },
@@ -3527,7 +3535,7 @@
                 (rows.length ? rows.map(row => `<p class="mt-1 text-gray-200">${row}</p>`).join('') :
                     `<p class="text-gray-500">${empty}</p>`);
             panel.innerHTML =
-                `<p class="text-gray-400">Modül: ${info.totalModules} / 11 · Kademe: ${info.totalTiers} / 33</p>` +
+                `<p class="text-gray-400">Modül: ${info.totalModules} / ${UPGRADES_POOL.length} · Kademe: ${info.totalTiers} / ${UPGRADES_POOL.length * MAX_MODULE_TIER}</p>` +
                 section('AÇIK EVRİMLER', info.evolutions, 'Henüz evrim yok') +
                 section('AKTİF SİNERJİLER', info.synergies, 'Henüz sinerji yok') +
                 section('EVRİME YAKIN', info.nextEvolutions.map(x =>
@@ -3545,6 +3553,14 @@
         }
 
         const UPGRADES_POOL = [
+            {
+                id: 'phase_echo',
+                name: 'Faz Yankısı',
+                icon: 'fa-solid fa-clone',
+                color: '#6df7ff',
+                getDesc: () => 'Dash sonrasında geride bir hologram bırakır. Yakındaki en fazla 6 sıradan düşman kısa süreliğine holograma yönelir. Boss ve menzilli düşmanlar etkilenmez.',
+                apply: () => { /* Passive ability uses upgradeCounts, not combat stats. */ }
+            },
             {
                 id: 'multishot',
                 name: 'Çatallı Plazma',
@@ -4140,6 +4156,113 @@
             SHOOTER: 2, TANK: 3, SHIELD_BEARER: 3, SNIPER: 2.3,
             ASSASSIN: 2.1, GRAV_WELL: 2.6
         };
+
+        // M5.15: card-only tactical decoy. No gold consumption, no new
+        // projectile sources, no boss targeting changes or saved run state.
+        const PHASE_ECHO = Object.freeze({
+            eligible: ['SWARM', 'SPLITTER', 'TANK', 'SHIELD_BEARER'],
+            maxDecoys: 2, maxTargets: 6,
+            durations: [0, 2.6, 3.2, 4.1],
+            cooldowns: [Infinity, 6, 4.5, 3.0],
+            ranges: [0, 250, 265, 280]
+        });
+        let phaseEchoes = [];
+        function canPhaseEchoDistract(enemy) {
+            return !!enemy && !enemy.dead && !enemy.isBoss &&
+                PHASE_ECHO.eligible.includes(enemy.type) &&
+                !(enemy.type === 'SHIELD_BEARER' && enemy.tacticalRole === 'guard');
+        }
+        function deployPhaseEcho(p, origin) {
+            const tier = Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.phase_echo || 0);
+            if (!tier || gameState !== 'PLAYING' || totalTime < p.phaseEchoReadyAt)
+                return false;
+            if (!origin || !Number.isFinite(origin.x) || !Number.isFinite(origin.y))
+                return false;
+            const range = PHASE_ECHO.ranges[tier];
+            const eligible = enemies.filter(e => canPhaseEchoDistract(e) &&
+                Math.hypot(e.x - origin.x, e.y - origin.y) <= range)
+                .sort((a,b) => Math.hypot(a.x-origin.x,a.y-origin.y) -
+                    Math.hypot(b.x-origin.x,b.y-origin.y) || a.id-b.id)
+                .slice(0, PHASE_ECHO.maxTargets);
+            // Nothing to misdirect? Do not consume a charge for an empty cast.
+            if (!eligible.length) return false;
+            p.phaseEchoReadyAt = totalTime + PHASE_ECHO.cooldowns[tier];
+            // 1 or 2 simultaneous echoes, depending on evolution status.
+            const cap = p.evolutions.has('phase_echo') ? PHASE_ECHO.maxDecoys : 1;
+            while (phaseEchoes.length >= cap) phaseEchoes.shift();
+            phaseEchoes.push({
+                x: origin.x, y: origin.y, createdAt: totalTime,
+                expiresAt: totalTime + PHASE_ECHO.durations[tier],
+                radius: range, targets: eligible.map(e => e.id)
+            });
+            p.buildStats.phaseEchoes++;
+            p.buildStats.phaseEchoTargets += eligible.length;
+            shockwaves.push(new Shockwave(origin.x, origin.y, 110, '#6df7ff', 0.35));
+            createFloatingText(origin.x, origin.y - 30,
+                'FAZ YANKISI · ' + eligible.length + ' HEDEF ŞAŞIRDI', '#6df7ff', 13);
+            return true;
+        }
+        function updatePhaseEchoes() {
+            if (phaseEchoes.length) phaseEchoes = phaseEchoes.filter(e =>
+                totalTime < e.expiresAt);
+        }
+        function getPhaseEchoTarget(enemy) {
+            if (!canPhaseEchoDistract(enemy)) return null;
+            // Latest surviving decoy wins: intuitive counterplay during two-echo
+            // evolution, independent of AI Director threat tokens.
+            for (let i = phaseEchoes.length - 1; i >= 0; i--) {
+                const echo = phaseEchoes[i];
+                if (totalTime < echo.expiresAt && echo.targets.includes(enemy.id) &&
+                    Math.hypot(enemy.x - echo.x, enemy.y - echo.y) < echo.radius * 1.45)
+                    return echo;
+            }
+            return null;
+        }
+        function getPhaseEchoSnapshot() {
+            return {
+                active: phaseEchoes.length,
+                targets: phaseEchoes.map(e => e.targets.length),
+                remaining: phaseEchoes.map(e => Math.max(0,
+                    Math.round((e.expiresAt - totalTime)*10)/10)),
+                deployed: player?.buildStats.phaseEchoes || 0,
+                distracted: player?.buildStats.phaseEchoTargets || 0
+            };
+        }
+        function drawPhaseEchoes(ctx) {
+            if (gameState !== 'PLAYING') return;
+            for (const echo of phaseEchoes) {
+                const remain = Math.max(0, echo.expiresAt - totalTime);
+                if (!remain) continue;
+                const fade = Math.min(1, remain / .7);
+                const pulse = Math.sin((totalTime - echo.createdAt) * 7);
+                ctx.save();
+                ctx.translate(echo.x, echo.y);
+                ctx.globalAlpha = fade * .65;
+                ctx.strokeStyle = '#6df7ff';
+                ctx.lineWidth = 2;
+                if (graphicsQuality === 'high') {
+                    ctx.shadowBlur = getGraphicsBlur(15);
+                    ctx.shadowColor = '#00f3ff';
+                }
+                // Hologram silhouette and beacon, not a second player.
+                ctx.setLineDash([6, 8]);
+                ctx.beginPath();
+                ctx.arc(0, 0, 23 + 3 * pulse, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.moveTo(0, -18);
+                ctx.lineTo(17, 8);
+                ctx.lineTo(-17, 8);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.globalAlpha *= .32;
+                ctx.beginPath();
+                ctx.arc(0, 0, echo.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
 
         // M5.14: an independent gold sink, with no connection to level-up cards.
         // A stationary shield counters *incoming* projectiles, not collision damage
@@ -5949,6 +6072,7 @@
                     pendingEncounter: this.pendingEncounter ? this.pendingEncounter.type : null,
                     tacticalPlacement: { ...this.lastTacticalDecision },
                     crowdSteering: getEnemyCrowdSteeringSnapshot(),
+                    phaseEcho: getPhaseEchoSnapshot(),
                     bastion: getBastionStatus(),
                     warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
                     arenaEvent: this.activeArenaEvent ? this.activeArenaEvent.kind : null,
@@ -6070,6 +6194,7 @@
             waveTimer += dt;
             if (slowMoTimer > 0) slowMoTimer = Math.max(0, slowMoTimer - dt);
             updateBastion();
+            updatePhaseEchoes();
 
             if (bannerHideTimer > 0) {
                 bannerHideTimer -= dt;
@@ -6739,6 +6864,7 @@
             drawBossArenaPresence(ctx);
             drawSpecialEncounterWarning();
             drawTacticalLinks();
+            drawPhaseEchoes(ctx);
             drawBastion(ctx);
             drawBossAttackTelegraphs(ctx);
 
@@ -7191,6 +7317,7 @@
             clearGameplayInput();
             resetPc3Telemetry();
             resetEnemyCrowdSteering();
+            phaseEchoes = [];
             bastion = null;
             bastionReadyAt = 0;
             bastionUses = 0;
@@ -7318,7 +7445,7 @@
         // No extra item rolls, unlock conditions, or power calculations.
         const WEAPON_UPGRADE_IDS = new Set([
             'multishot','firerate','orbital','pierce_ricochet',
-            'homing','lightning','crit_mastery'
+            'homing','lightning','crit_mastery','phase_echo'
         ]);
         function getUpgradeCardPresentation(upg, rarity, currentLvl) {
             const willEvolve=currentLvl+1===MAX_MODULE_TIER && !!EVOLUTION_DEFS[upg.id];
@@ -8656,6 +8783,7 @@
             combatDirector.intensityObserver.getHistory() : [];
         window.getNeonEconomySnapshot = () => combatDirector ? combatDirector.getEconomySnapshot() : null;
         window.getNeonBastionStatus = () => getBastionStatus();
+        window.getNeonPhaseEcho = () => getPhaseEchoSnapshot();
         window.getNeonBuildSnapshot = () => player ? {
             modules: { ...player.upgradeCounts },
             evolutions: [...player.evolutions],
