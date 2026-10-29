@@ -664,3 +664,86 @@ test('M5.23 longest evolution and synergy text stays inside natural-height cards
  await page.keyboard.press('1');
  await expect(page.locator('#upgradeModal')).toBeHidden();
 });
+
+
+test('M5.24 Neon Motion reacts to live dash, Nova and Overdrive with distinct canvas motifs',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const x=await page.evaluate(()=>{
+   nextBossTime=5000;graphicsQuality='high';totalTime=10;
+   player.dashDir={x:1,y:0};
+   player.triggerDash();
+   updateGame(.04);
+   player.triggerNova();
+   player.addOverdrive(200);
+   const before=window.getNeonMotionFx();
+   renderGame();
+   const after=window.getNeonMotionFx();
+   return {before,after,gold:totalGold};
+ });
+ expect(x.before.byKind.DASH).toBeGreaterThan(0);
+ expect(x.before.byKind.NOVA).toBe(1);
+ expect(x.before.byKind.OVERDRIVE).toBe(1);
+ expect(x.before.active).toBeLessThanOrEqual(64);
+ expect(x.after.drawn).toBeGreaterThan(0);
+ expect(x.gold).toBe(50);
+ expect(errors).toEqual([]);
+});
+
+test('M5.24 all three graphics profiles cap motion drawing under sustained effect storms',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const values=await page.evaluate(()=>{
+   nextBossTime=5000;
+   const out={};
+   for(const quality of ['high','medium','low']){
+     graphicsQuality=quality;
+     resetMotionFx();
+     for(let frame=0;frame<120;frame++){
+       motionFxFrameCount=0;
+       for(let i=0;i<15;i++)emitMotionFx('PRISM',player.x,player.y);
+       updateMotionFx(.016);
+     }
+     renderGame();
+     const snapshot=getNeonMotionFx();
+     out[quality]={active:snapshot.active,limit:snapshot.limit,
+       perFrame:snapshot.perFrame,peak:snapshot.highWater,
+       dropped:snapshot.capDropped+snapshot.frameDropped,drawn:snapshot.drawn};
+   }
+   return out;
+ });
+ for(const [quality,value] of Object.entries(values)){
+   expect(value.active,quality).toBeLessThanOrEqual(value.limit);
+   expect(value.peak,quality).toBeLessThanOrEqual(value.limit);
+   expect(value.dropped,quality).toBeGreaterThan(100);
+   expect(value.drawn,quality).toBeGreaterThan(0);
+ }
+ expect(values.low.limit).toBeLessThan(values.high.limit);
+ expect(errors).toEqual([]);
+});
+
+test('M5.24 reduced motion keeps boss/wave readability but avoids repeated dash and ambient animation',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const result=await page.evaluate(()=>{
+   nextBossTime=5000;
+   const dash=emitMotionFx('DASH',player.x,player.y);
+   const kill=emitMotionFx('KILL',player.x,player.y);
+   const boss=emitMotionFx('BOSS',player.x,player.y);
+   const wave=emitMotionFx('WAVE',player.x,player.y);
+   const s=getNeonMotionFx();
+   renderGame();
+   return {dash,kill,boss,wave,s,preference:PREFERS_REDUCED_VFX_MOTION};
+ });
+ expect(result.preference).toBe(true);
+ expect(result.dash).toBe(false);
+ expect(result.kill).toBe(false);
+ expect(result.boss).toBe(true);
+ expect(result.wave).toBe(true);
+ expect(result.s.active).toBe(2);
+ expect(errors).toEqual([]);
+});
