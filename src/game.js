@@ -5975,6 +5975,254 @@
             ctx.restore();
         }
 
+
+        // M5.21 Echo Hunter: a short, readable adaptation of ONE existing foe.
+        // No enemy spawning, stat inflation, bonus reward or persistent learning.
+        const NEMESIS_RULES=Object.freeze({
+            firstWave:7,step:6,minAge:2,life:13,
+            warning:1.45,interval:3.55,maxAttacks:3,
+            lockRadius:72,trailRadius:55,crossHalfWidth:24,
+            hit:8,historySeconds:2.6,historyCap:18
+        });
+        const NEMESIS_TITLES=Object.freeze({
+            LOCK:'SABİT NOKTA',TRAIL:'HAREKET İZİ',CROSS:'ÇAPRAZ KİLİT'
+        });
+        let nemesis=null, nemesisAttemptWave=-1, nemesisHistory=[];
+        let nemesisDashAt=-Infinity, nemesisSampleAt=-Infinity;
+        let nemesisStats={started:0,completed:0,defeated:0,suppressed:0,
+            attacks:0,hits:0,evaded:0,interrupted:0,
+            lock:0,trail:0,cross:0};
+        function resetNemesis(){
+            nemesis=null;nemesisAttemptWave=-1;nemesisHistory=[];
+            nemesisDashAt=-Infinity;nemesisSampleAt=-Infinity;
+            nemesisStats={started:0,completed:0,defeated:0,suppressed:0,
+                attacks:0,hits:0,evaded:0,interrupted:0,
+                lock:0,trail:0,cross:0};
+        }
+        function nemesisAllowed(){
+            return chapterEffectsAllowed()&&!chapterShowcase;
+        }
+        function sampleNemesisMovement(){
+            if(!player)return;
+            if(player.isDashing)nemesisDashAt=totalTime;
+            if(totalTime-nemesisSampleAt<.18)return;
+            nemesisSampleAt=totalTime;
+            nemesisHistory.push({x:player.x,y:player.y,t:totalTime});
+            const cutoff=totalTime-NEMESIS_RULES.historySeconds;
+            while(nemesisHistory.length>0&&
+                (nemesisHistory[0].t<cutoff||
+                 nemesisHistory.length>NEMESIS_RULES.historyCap))
+                nemesisHistory.shift();
+        }
+        function chooseNemesisPattern(){
+            if(totalTime-nemesisDashAt<1.6)return 'CROSS';
+            if(nemesisHistory.length>=3){
+                const earliest=nemesisHistory[0];
+                const moved=Math.hypot(player.x-earliest.x,player.y-earliest.y);
+                if(moved>=125)return 'TRAIL';
+            }
+            return 'LOCK';
+        }
+        function nemesisSafePoint(p){
+            return {x:Math.max(22,Math.min(worldWidth-22,p.x)),
+                y:Math.max(22,Math.min(worldHeight-22,p.y))};
+        }
+        function makeNemesisAttack(kind){
+            let centers=[];
+            if(kind==='TRAIL'){
+                const history=nemesisHistory;
+                const indices=[0,Math.floor((history.length-1)/2),history.length-1];
+                for(const index of indices){
+                    const point=nemesisSafePoint(history[index]);
+                    if(centers.every(q=>Math.hypot(q.x-point.x,q.y-point.y)>35))
+                        centers.push(point);
+                }
+                if(centers.length<2)kind='LOCK';
+            }
+            if(kind!=='TRAIL')centers=[nemesisSafePoint(player)];
+            return {kind,centers,at:totalTime,
+                fireAt:totalTime+NEMESIS_RULES.warning};
+        }
+        function startNemesis(){
+            if(nemesis||!nemesisAllowed()||wave<NEMESIS_RULES.firstWave||
+                (wave-NEMESIS_RULES.firstWave)%NEMESIS_RULES.step!==0||
+                nemesisAttemptWave===wave||waveTimer<NEMESIS_RULES.minAge)
+                return false;
+            const candidates=enemies.filter(e=>!e.dead&&!e.isBoss&&e.stunTimer<=0&&
+                ['SHOOTER','SNIPER','DASHER','ASSASSIN','SHIELD_BEARER','TANK']
+                    .includes(e.type)&&Math.hypot(e.x-player.x,e.y-player.y)>115);
+            if(!candidates.length)return false;
+            candidates.sort((a,b)=>
+                Math.hypot(a.x-player.x,a.y-player.y)-
+                Math.hypot(b.x-player.x,b.y-player.y)||a.id-b.id);
+            const leader=candidates[0];
+            nemesisAttemptWave=wave;
+            nemesis={enemyId:leader.id,start:totalTime,
+                endAt:totalTime+NEMESIS_RULES.life,
+                nextAttackAt:totalTime+1.6,attacks:0,attack:null};
+            nemesisStats.started++;
+            createFloatingText(leader.x,leader.y-50,'YANKI AVCISI',
+                '#ff87de',17);
+            return true;
+        }
+        function endNemesis(reason){
+            if(!nemesis)return;
+            if(Object.prototype.hasOwnProperty.call(nemesisStats,reason))
+                nemesisStats[reason]++;
+            nemesis=null;
+        }
+        function nemesisAttackHit(attack){
+            const point=player;
+            if(attack.kind==='CROSS'){
+                const c=attack.centers[0];
+                return Math.abs((point.x-c.x)+(point.y-c.y))/
+                    Math.SQRT2<NEMESIS_RULES.crossHalfWidth+player.radius ||
+                    Math.abs((point.x-c.x)-(point.y-c.y))/
+                    Math.SQRT2<NEMESIS_RULES.crossHalfWidth+player.radius;
+            }
+            const radius=attack.kind==='TRAIL'?
+                NEMESIS_RULES.trailRadius:NEMESIS_RULES.lockRadius;
+            return attack.centers.some(c=>Math.hypot(point.x-c.x,point.y-c.y)<
+                radius+player.radius*.25);
+        }
+        function updateNemesis(dt){
+            if(!player)return;
+            if(gameState==='PLAYING')sampleNemesisMovement();
+            if(nemesis&&!nemesisAllowed()){
+                endNemesis('suppressed');
+                return;
+            }
+            if(!nemesis){
+                if(nemesisAllowed())startNemesis();
+                return;
+            }
+            const leader=enemies.find(e=>e.id===nemesis.enemyId&&!e.dead);
+            if(!leader){endNemesis('defeated');return;}
+            if(totalTime>=nemesis.endAt){endNemesis('completed');return;}
+            if(leader.stunTimer>0){
+                if(nemesis.attack){
+                    nemesis.attack=null;
+                    nemesisStats.interrupted++;
+                    nemesis.nextAttackAt=totalTime+1.2;
+                }
+                return;
+            }
+            if(nemesis.attack){
+                if(totalTime<nemesis.attack.fireAt)return;
+                const attack=nemesis.attack;
+                nemesis.attack=null;
+                // A suspended/lagged frame may not materialize a stale strike.
+                if(totalTime-attack.fireAt>.32){
+                    nemesisStats.evaded++;
+                    return;
+                }
+                const hit=nemesisAttackHit(attack);
+                if(hit) {
+                    const before=player.hp;
+                    player.takeDamage(NEMESIS_RULES.hit);
+                    if(player.hp<before)nemesisStats.hits++;
+                    else nemesisStats.evaded++;
+                } else nemesisStats.evaded++;
+                shockwaves.push(new Shockwave(attack.centers[0].x,
+                    attack.centers[0].y,100,'#ff87de',.34));
+                return;
+            }
+            if(nemesis.attacks>=NEMESIS_RULES.maxAttacks||
+                totalTime<nemesis.nextAttackAt)return;
+            const attack=makeNemesisAttack(chooseNemesisPattern());
+            nemesis.attack=attack;
+            nemesis.attacks++;
+            nemesisStats.attacks++;
+            nemesisStats[attack.kind.toLowerCase()]++;
+            nemesis.nextAttackAt=attack.fireAt+NEMESIS_RULES.interval;
+        }
+        function getNemesisSnapshot(){
+            return {active:!!nemesis,
+                enemyId:nemesis?.enemyId??null,wave,
+                remaining:nemesis?Math.max(0,
+                    Math.round((nemesis.endAt-totalTime)*10)/10):0,
+                attack:nemesis?.attack?{
+                    kind:nemesis.attack.kind,
+                    title:NEMESIS_TITLES[nemesis.attack.kind],
+                    warning:Math.max(0,Math.round(
+                        (nemesis.attack.fireAt-totalTime)*10)/10),
+                    centers:nemesis.attack.centers.map(p=>({...p}))
+                }:null,stats:{...nemesisStats}};
+        }
+        function updateNemesisHud(){
+            const banner=document.getElementById('nemesisBanner');
+            if(!banner)return;
+            banner.classList.toggle('hidden',!nemesis);
+            if(!nemesis)return;
+            const attack=nemesis.attack;
+            banner.textContent=attack?
+                'YANKI AVCISI · '+NEMESIS_TITLES[attack.kind]+
+                ' · '+Math.max(0,attack.fireAt-totalTime).toFixed(1)+' sn':
+                'YANKI AVCISI · HEDEFİ SERSEMLET VEYA YOK ET';
+            const elapsed=Math.max(0,totalTime-nemesis.start);
+            banner.style.setProperty?.('--nemesis-progress',
+                Math.min(100,elapsed/NEMESIS_RULES.life*100).toFixed(1)+'%');
+        }
+        function drawNemesisThreat(ctx){
+            if(!nemesis||!nemesis.attack||!nemesisAllowed())return;
+            const attack=nemesis.attack;
+            const progress=Math.min(1,Math.max(0,
+                (totalTime-attack.at)/NEMESIS_RULES.warning));
+            ctx.save();
+            ctx.strokeStyle='#ff87de';
+            ctx.fillStyle='#ff2f9e';
+            ctx.lineWidth=2+progress*2;
+            ctx.globalAlpha=.55+.35*progress;
+            ctx.setLineDash([12,8]);
+            if(attack.kind==='CROSS'){
+                const c=attack.centers[0];
+                const span=Math.max(worldWidth,worldHeight);
+                for(const sign of [-1,1]){
+                    ctx.beginPath();ctx.moveTo(c.x-span,c.y-span*sign);
+                    ctx.lineTo(c.x+span,c.y+span*sign);ctx.stroke();
+                }
+            }else{
+                const radius=attack.kind==='TRAIL'?
+                    NEMESIS_RULES.trailRadius:NEMESIS_RULES.lockRadius;
+                for(const c of attack.centers){
+                    ctx.globalAlpha=.11+.1*progress;
+                    ctx.beginPath();ctx.arc(c.x,c.y,radius,0,Math.PI*2);
+                    ctx.fill();
+                    ctx.globalAlpha=.55+.35*progress;
+                    ctx.beginPath();ctx.arc(c.x,c.y,radius,0,Math.PI*2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.beginPath();ctx.arc(c.x,c.y,Math.max(9,radius*(1-progress)),
+                        0,Math.PI*2);ctx.stroke();
+                    ctx.setLineDash([12,8]);
+                }
+            }
+            ctx.restore();
+        }
+        function drawNemesisIdentity(ctx){
+            if(!nemesis||!nemesisAllowed())return;
+            const enemy=enemies.find(e=>e.id===nemesis.enemyId&&!e.dead);
+            if(!enemy)return;
+            ctx.save();
+            ctx.translate(enemy.x,enemy.y);
+            const size=enemy.radius+13;
+            ctx.strokeStyle='#ff87de';
+            ctx.lineWidth=graphicsQuality==='low'?2:3;
+            ctx.globalAlpha=.9;
+            ctx.beginPath();
+            for(let i=0;i<6;i++){
+                const a=i*Math.PI/3-Math.PI/2;
+                const x=Math.cos(a)*size,y=Math.sin(a)*size;
+                if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+            }
+            ctx.closePath();ctx.stroke();
+            ctx.fillStyle='#fff0fa';
+            ctx.beginPath();ctx.moveTo(0,-size-13);
+            ctx.lineTo(-8,-size-3);ctx.lineTo(8,-size-3);
+            ctx.closePath();ctx.fill();
+            ctx.restore();
+        }
+
         const ARENA_EVENT_GAP = 82;
         const ARENA_EVENT_LIFETIME = 17;
 
@@ -7110,6 +7358,7 @@
                     phaseEcho: getPhaseEchoSnapshot(),
                     circuitWeaver: getCircuitWeaverSnapshot(),
                     arenaChapter: getArenaChapterSnapshot(),
+                    nemesis:getNemesisSnapshot(),
                     bastion: getBastionStatus(),
                     warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
                     arenaEvent: this.activeArenaEvent ? this.activeArenaEvent.kind : null,
@@ -7415,6 +7664,8 @@
                     enemies.splice(i, 1);
                 }
             }
+
+            updateNemesis(dt);
 
             for (let i = orbs.length - 1; i >= 0; i--) {
                 orbs[i].update(dt);
@@ -7902,6 +8153,7 @@
             drawArenaAtmosphere();
             drawArenaChapter(ctx);
             drawChapterShowcase(ctx);
+            drawNemesisThreat(ctx);
             drawBossArenaPresence(ctx);
             drawSpecialEncounterWarning();
             drawTacticalLinks();
@@ -7950,6 +8202,7 @@
             drawLightningArcs();
 
             for (const e of enemies) e.draw(ctx);
+            drawNemesisIdentity(ctx);
 
             if (player && player.lockedTarget && !player.lockedTarget.dead && gameState === 'PLAYING') {
                 const lt = player.lockedTarget;
@@ -8180,6 +8433,7 @@
             }
             updateTacticalHint();
             updateArenaChapterHud();
+            updateNemesisHud();
 
             const xpPct = Math.min(100, (player.xp / player.xpToNext) * 100);
             document.getElementById('xpBar').style.width = `${xpPct}%`;
@@ -8361,6 +8615,7 @@
             resetPc3Telemetry();
             resetEnemyCrowdSteering();
             resetChapterBiome();
+            resetNemesis();
             phaseEchoes = [];
             circuitField = null;
             circuitFlash = null;
@@ -9832,6 +10087,7 @@
         window.getNeonPhaseEcho = () => getPhaseEchoSnapshot();
         window.getNeonCircuitWeaver = () => getCircuitWeaverSnapshot();
         window.getNeonArenaChapter = () => getArenaChapterSnapshot();
+        window.getNeonNemesis = () => getNemesisSnapshot();
         window.getNeonBuildSnapshot = () => player ? {
             modules: { ...player.upgradeCounts },
             evolutions: [...player.evolutions],
