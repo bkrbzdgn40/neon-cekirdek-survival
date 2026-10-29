@@ -1429,6 +1429,10 @@
                 const novaRadius = 290;
                 shockwaves.push(new Shockwave(this.x, this.y, novaRadius, '#b000ff', 0.45));
                 emitMotionFx('NOVA',this.x,this.y,{radius:novaRadius});
+                for(const device of fieldDevices){
+                    if(device.state==='idle'&&Math.hypot(device.x-this.x,device.y-this.y)<=
+                        FIELD_RULES.novaReach)triggerFieldDevice(device,'nova');
+                }
 
                 for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
                     const ep = enemyProjectiles[i];
@@ -3737,6 +3741,282 @@
         let pendingMetaSave = false;
         let spawnTimer = 0;
         let conduitSpawnTimer = 4.0;
+
+        // M5.26: Tactical field engineering. Devices are physical, temporary
+        // targets, completely separate from the gold, XP and upgrade economy.
+        // A capacitor is an optional risky blast; a graviton pylon is control.
+        const FIELD_RULES=Object.freeze({
+            maxDevices:2,firstWave:2,waveInterval:3,
+            life:13.5,triggerRadius:24,blastRadius:166,
+            blastDamage:54,blastTargets:12,blastFuse:.52,
+            friendlyBlastDamage:13,chainRadius:190,chainFuse:.22,
+            gravityRadius:175,gravityDuration:4.2,enemyTimeScale:.55,
+            novaReach:290
+        });
+        const FIELD_DEVICE_TYPES=Object.freeze({
+            CAPACITOR:{label:'KARARSIZ REAKTÖR',color:'#ffb15e'},
+            GRAVITON:{label:'GRAVİTON DİREĞİ',color:'#80daff'}
+        });
+        let fieldDevices=[];
+        let fieldDeviceLastWave=0;
+        let fieldDeviceCounter=0;
+        let fieldDeviceStats={spawned:0,triggered:0,blasts:0,
+            gravityFields:0,chainReactions:0,enemyHits:0,
+            playerHits:0,expired:0,cancelled:0,shotsCaptured:0};
+        function resetFieldDevices(){
+            fieldDevices=[];fieldDeviceLastWave=0;fieldDeviceCounter=0;
+            fieldDeviceStats={spawned:0,triggered:0,blasts:0,
+                gravityFields:0,chainReactions:0,enemyHits:0,
+                playerHits:0,expired:0,cancelled:0,shotsCaptured:0};
+        }
+        function getFieldDeviceSnapshot(){
+            return {limit:FIELD_RULES.maxDevices,
+                devices:fieldDevices.map(d=>({
+                    id:d.id,kind:d.kind,state:d.state,
+                    x:d.x,y:d.y,radius:FIELD_RULES.triggerRadius,
+                    remaining:Math.max(0,Math.round(d.life*10)/10),
+                    fuse:Math.max(0,Math.round(d.fuse*100)/100),
+                    source:d.source,
+                    effectRemaining:Math.max(0,Math.round(d.effect*10)/10)
+                })),stats:{...fieldDeviceStats}};
+        }
+        function spawnFieldDevice(kind,x,y){
+            if(!Object.hasOwn(FIELD_DEVICE_TYPES,kind)||
+                fieldDevices.length>=FIELD_RULES.maxDevices||
+                !Number.isFinite(x)||!Number.isFinite(y))return null;
+            const d={id:++fieldDeviceCounter,kind,x,y,
+                state:'idle',source:'',fuse:0,effect:0,
+                life:FIELD_RULES.life,age:0};
+            fieldDevices.push(d);fieldDeviceStats.spawned++;
+            return d;
+        }
+        function maybeSpawnFieldDevice(){
+            if(wave<FIELD_RULES.firstWave ||
+                (wave-FIELD_RULES.firstWave)%FIELD_RULES.waveInterval!==0||
+                fieldDeviceLastWave===wave||fieldDevices.length>=FIELD_RULES.maxDevices||
+                activeBosses.some(b=>!b.dead)||nextBossTime-totalTime<7||
+                combatDirector?.activeArenaEvent||!player)return false;
+            // One attempt per eligible wave. No catch-up spawning on subsequent frames.
+            fieldDeviceLastWave=wave;
+            const kind=(Math.floor((wave-FIELD_RULES.firstWave)/
+                FIELD_RULES.waveInterval)%2===0)?'CAPACITOR':'GRAVITON';
+            const minX=55,maxX=Math.max(55,worldWidth-55);
+            const minY=55,maxY=Math.max(55,worldHeight-55);
+            for(let i=0;i<8;i++){
+                const a=Math.random()*Math.PI*2;
+                const distance=175+Math.random()*85;
+                const x=Math.min(maxX,Math.max(minX,player.x+Math.cos(a)*distance));
+                const y=Math.min(maxY,Math.max(minY,player.y+Math.sin(a)*distance));
+                if(Math.hypot(x-player.x,y-player.y)<100 ||
+                    conduitZones.some(c=>Math.hypot(x-c.x,y-c.y)<115)||
+                    (activeQuest?.point&&
+                        Math.hypot(x-activeQuest.point.x,y-activeQuest.point.y)<110))
+                    continue;
+                const d=spawnFieldDevice(kind,x,y);
+                if(d){
+                    createFloatingText(x,y-35,kind==='CAPACITOR'?
+                        'REAKTÖR SAHADA':'GRAVİTON SAHADA',
+                        FIELD_DEVICE_TYPES[kind].color,13);
+                    return true;
+                }
+            }
+            return false;
+        }
+        function triggerFieldDevice(d,source='shot'){
+            if(!d||d.state!=='idle')return false;
+            d.source=source;
+            fieldDeviceStats.triggered++;
+            if(d.kind==='CAPACITOR'){
+                d.state='armed';
+                d.fuse=source==='chain'?FIELD_RULES.chainFuse:FIELD_RULES.blastFuse;
+                if(source==='chain')fieldDeviceStats.chainReactions++;
+            }else{
+                d.state='field';
+                d.effect=FIELD_RULES.gravityDuration;
+                fieldDeviceStats.gravityFields++;
+                shockwaves.push(new Shockwave(d.x,d.y,
+                    FIELD_RULES.gravityRadius,'#80daff',.28));
+            }
+            return true;
+        }
+        function blastFieldCapacitor(d){
+            if(!d||d.state!=='armed')return false;
+            d.state='spent';fieldDeviceStats.blasts++;
+            shockwaves.push(new Shockwave(d.x,d.y,
+                FIELD_RULES.blastRadius,'#ffae59',.38));
+            emitMotionFx('NOVA',d.x,d.y,{radius:FIELD_RULES.blastRadius});
+            let victims=0;
+            for(const e of enemies){
+                if(e.dead||e.isBoss||victims>=FIELD_RULES.blastTargets)continue;
+                const dx=e.x-d.x,dy=e.y-d.y;
+                const dist=Math.hypot(dx,dy);
+                if(dist>FIELD_RULES.blastRadius+e.radius)continue;
+                const n=dist||1;
+                e.takeDamage(FIELD_RULES.blastDamage,
+                    dx/n*280,dy/n*280,false,false);
+                fieldDeviceStats.enemyHits++;victims++;
+            }
+            if(player&&Math.hypot(player.x-d.x,player.y-d.y)<
+                FIELD_RULES.blastRadius+player.radius){
+                const hpBefore=player.hp,shieldBefore=player.shieldActive;
+                player.takeDamage(FIELD_RULES.friendlyBlastDamage);
+                if(player.hp<hpBefore||player.shieldActive!==shieldBefore)
+                    fieldDeviceStats.playerHits++;
+            }
+            // Chain explosions are finite: at most MAX_FIELD_DEVICES-1 neighbors.
+            for(const other of fieldDevices){
+                if(other===d||other.kind!=='CAPACITOR'||other.state!=='idle')continue;
+                if(Math.hypot(other.x-d.x,other.y-d.y)<=FIELD_RULES.chainRadius)
+                    triggerFieldDevice(other,'chain');
+            }
+            return true;
+        }
+        function pointNearBulletSegment(b,x,y,reach){
+            const ax=Number.isFinite(b.previousX)?b.previousX:b.x;
+            const ay=Number.isFinite(b.previousY)?b.previousY:b.y;
+            const dx=b.x-ax,dy=b.y-ay,len2=dx*dx+dy*dy;
+            const t=len2>0?Math.max(0,Math.min(1,
+                ((x-ax)*dx+(y-ay)*dy)/len2)):0;
+            const ox=ax+dx*t-x,oy=ay+dy*t-y;
+            return ox*ox+oy*oy<=reach*reach;
+        }
+        function updateFieldDevices(dt){
+            if(!player||!fieldDevices.length)return;
+            for(let i=fieldDevices.length-1;i>=0;i--){
+                const d=fieldDevices[i];d.age+=dt;
+                if(d.state==='idle'){
+                    d.life-=dt;
+                    if(d.life<=0){
+                        fieldDeviceStats.expired++;fieldDevices.splice(i,1);continue;
+                    }
+                    if(player.isDashing&&Math.hypot(player.x-d.x,player.y-d.y)<=
+                        FIELD_RULES.triggerRadius+player.radius+9)
+                        triggerFieldDevice(d,'dash');
+                    if(d.state!=='idle')continue;
+                    // Swept player projectile detection avoids tunneling at high speed.
+                    for(const b of bullets){
+                        if(b.dead)continue;
+                        if(pointNearBulletSegment(b,d.x,d.y,
+                            FIELD_RULES.triggerRadius+b.radius)){
+                            if(triggerFieldDevice(d,'shot')){
+                                b.dead=true;fieldDeviceStats.shotsCaptured++;
+                            }
+                            break;
+                        }
+                    }
+                    // Enemy fire can unexpectedly activate the prop too.
+                    if(d.state==='idle'){
+                        for(const ep of enemyProjectiles){
+                            if(ep.dead)continue;
+                            if(Math.hypot(ep.x-d.x,ep.y-d.y)<=
+                                FIELD_RULES.triggerRadius+ep.radius){
+                                if(triggerFieldDevice(d,'enemy')){
+                                    ep.dead=true;fieldDeviceStats.shotsCaptured++;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }else if(d.state==='armed'){
+                    d.fuse-=dt;
+                    if(d.fuse<=0)blastFieldCapacitor(d);
+                }else if(d.state==='field'){
+                    d.effect-=dt;
+                    if(d.effect<=0)d.state='spent';
+                }
+                if(d.state==='spent')fieldDevices.splice(i,1);
+            }
+        }
+        function getFieldEnemyTimeScale(enemy){
+            if(enemy.isBoss||enemy.dead)return 1;
+            for(const d of fieldDevices){
+                if(d.kind==='GRAVITON'&&d.state==='field'&&
+                    Math.hypot(enemy.x-d.x,enemy.y-d.y)<
+                        FIELD_RULES.gravityRadius+enemy.radius)
+                    return FIELD_RULES.enemyTimeScale;
+            }
+            return 1;
+        }
+        function cancelFieldDevices(){
+            if(fieldDevices.length)fieldDeviceStats.cancelled+=fieldDevices.length;
+            fieldDevices=[];
+        }
+        function drawFieldDevices(target){
+            if(!fieldDevices.length)return;
+            for(const d of fieldDevices){
+                if(!isFxInsideViewport(d.x,d.y,FIELD_RULES.gravityRadius,12))
+                    continue;
+                const cap=d.kind==='CAPACITOR';
+                const color=FIELD_DEVICE_TYPES[d.kind].color;
+                target.save();target.translate(d.x,d.y);
+                const phase=PREFERS_REDUCED_VFX_MOTION?0:totalTime*1.7;
+                const size=FIELD_RULES.triggerRadius;
+                target.strokeStyle=color;target.fillStyle=color;
+                target.globalAlpha=.85;target.lineWidth=2;
+                if(d.state==='armed'||d.state==='field'){
+                    const r=d.state==='armed'?FIELD_RULES.blastRadius:
+                        FIELD_RULES.gravityRadius;
+                    target.fillStyle=d.state==='armed'?
+                        'rgba(255,115,69,.12)':'rgba(74,184,255,.09)';
+                    target.beginPath();target.arc(0,0,r,0,Math.PI*2);
+                    target.fill();
+                    target.strokeStyle=d.state==='armed'?'#ff9666':'#8aefff';
+                    target.globalAlpha=.8;
+                    target.setLineDash([8,9]);
+                    target.stroke();target.setLineDash([]);
+                }
+                target.rotate(phase);
+                target.beginPath();
+                for(let n=0;n<=6;n++){
+                    const a=n*Math.PI/3;
+                    if(n===0)target.moveTo(Math.cos(a)*size,Math.sin(a)*size);
+                    else target.lineTo(Math.cos(a)*size,Math.sin(a)*size);
+                }
+                target.closePath();target.stroke();
+                target.rotate(-phase);
+                target.fillStyle=color;
+                if(cap){
+                    target.beginPath();
+                    target.moveTo(-6,-12);target.lineTo(4,-3);
+                    target.lineTo(-2,2);target.lineTo(7,13);
+                    target.lineTo(-8,1);target.lineTo(-1,-3);
+                    target.closePath();target.fill();
+                }else{
+                    for(let n=0;n<4;n++){
+                        const a=n*Math.PI/2;
+                        target.beginPath();target.arc(Math.cos(a)*8,
+                            Math.sin(a)*8,3,0,Math.PI*2);target.fill();
+                    }
+                }
+                target.rotate(0);
+                target.font="700 11px 'Segoe UI',sans-serif";
+                target.textAlign='center';target.fillStyle=color;
+                target.fillText(d.state==='armed'?'KAÇ · '+Math.max(0,d.fuse).toFixed(1)+'s':
+                    d.state==='field'?'YAVAŞLATMA · '+Math.ceil(d.effect)+'s':
+                    cap?'REAKTÖR · TETİKLE':'GRAVİTON · TETİKLE',
+                    0,-FIELD_RULES.triggerRadius-15);
+                target.restore();
+            }
+        }
+        function updateFieldDeviceHud(){
+            const chip=document.getElementById('fieldDeviceBadge');
+            if(!chip)return;
+            const d=fieldDevices.find(e=>e.state==='armed')||
+                fieldDevices.find(e=>e.state==='field')||fieldDevices[0];
+            if(!d){chip.classList.add('hidden');return;}
+            chip.classList.remove('hidden');
+            chip.dataset.kind=d.kind;
+            chip.dataset.state=d.state;
+            const text=d.state==='armed'?
+                'REAKTÖR PATLAYACAK · '+Math.max(0,d.fuse).toFixed(1)+'sn · UZAKLAŞ':
+                d.state==='field'?
+                    'GRAVİTON AKTİF · '+Math.ceil(d.effect)+'sn DÜŞMANLAR YAVAŞ':
+                d.kind==='CAPACITOR'?
+                    'KARARSIZ REAKTÖR · ATEŞ / ATILIM / NOVA · PATLAMA RİSKİ':
+                    'GRAVİTON DİREĞİ · ATEŞ / ATILIM / NOVA · YAVAŞLATMA';
+            if(chip.textContent!==text)chip.textContent=text;
+        }
+
         const MAX_VISIBLE_PARTICLES = 420;
 
         // M5.24: event-driven motion grammar, separate from gameplay and the
@@ -7840,6 +8120,7 @@
         }
 
         function spawnBossEncounter() {
+            cancelFieldDevices();
             bossEncounterCount++;
             if (combatDirector) combatDirector.onBossEncounter();
             nextBossTime = Number.POSITIVE_INFINITY;
@@ -7921,6 +8202,7 @@
                 createFloatingText(player.x, player.y - 45, `DALGA ${wave} BAŞLADI!`, '#ff007f', 20);
                 shockwaves.push(new Shockwave(player.x, player.y, 240, '#ff007f', 0.45));
                 emitMotionFx('WAVE',player.x,player.y,{radius:150});
+                maybeSpawnFieldDevice();
             }
 
             activeBosses = activeBosses.filter(b => !b.dead);
@@ -8000,6 +8282,7 @@
                 bullets[i].update(dt);
                 if (bullets[i].dead) bullets.splice(i, 1);
             }
+            updateFieldDevices(dt);
 
             const enemyTimeScale = slowMoTimer > 0 ? 0.45 : 1.0;
 
@@ -8033,7 +8316,7 @@
 
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const e = enemies[i];
-                e.update(dt * enemyTimeScale);
+                e.update(dt * enemyTimeScale * getFieldEnemyTimeScale(e));
 
                 for (const j of getNearbyBulletIndices(e.x, e.y, e.radius, bulletCandidateScratch)) {
                     const b = bullets[j];
@@ -8613,6 +8896,7 @@
             }
 
             drawQuestObjective(ctx);
+            drawFieldDevices(ctx);
             for (const cz of conduitZones) cz.draw(ctx);
             if (combatDirector?.activeArenaEvent) combatDirector.activeArenaEvent.draw(ctx);
             for (const sw of shockwaves) sw.draw(ctx);
@@ -8865,6 +9149,7 @@
             updateArenaChapterHud();
             updateNemesisHud();
             updatePrismGuardHud();
+            updateFieldDeviceHud();
 
             const xpPct = Math.min(100, (player.xp / player.xpToNext) * 100);
             document.getElementById('xpBar').style.width = `${xpPct}%`;
@@ -9076,6 +9361,7 @@
             resetEnemyCrowdSteering();
             resetChapterBiome();
             resetMotionFx();
+            resetFieldDevices();
             resetNemesis();
             resetPrismGuard();
             phaseEchoes = [];
@@ -10557,6 +10843,7 @@
         window.getNeonNemesis = () => getNemesisSnapshot();
         window.getNeonPrismGuard = () => getPrismGuardSnapshot();
         window.getNeonMotionFx = () => motionFxSnapshot();
+        window.getNeonFieldDevices = () => getFieldDeviceSnapshot();
         window.getNeonBuildSnapshot = () => player ? {
             modules: { ...player.upgradeCounts },
             evolutions: [...player.evolutions],
