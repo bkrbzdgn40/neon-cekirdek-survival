@@ -315,3 +315,37 @@ test('Phase Echo upgrade produces a visible tactical decoy after dash without sp
  expect(await page.evaluate(()=>totalGold)).toBe(before.gold);
  expect(errors).toEqual([]);
 });
+
+
+test('Circuit Weaver closes a drawn loop in Chromium, hits enclosed enemy and leaves gold unchanged', async ({page})=>{
+ const errors=[];
+ page.on('pageerror',err=>errors.push(err.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const result=await page.evaluate(()=>{
+   player.upgradeCounts.circuit_weaver=3;
+   player.refreshBuildTraits();
+   player.takeDamage=()=>{};
+   const initialGold=totalGold;
+   const target=new Enemy(360,260,'TANK');
+   target.hp=target.maxHp=1000;
+   enemies=[target];
+   player.x=300;player.y=200;recordCircuitWeaverMotion(player,0,false);
+   const route=[];
+   for(let n=1;n<=6;n++)route.push([300+n*20,200]);
+   for(let n=1;n<=6;n++)route.push([420,200+n*20]);
+   for(let n=1;n<=6;n++)route.push([420-n*20,320]);
+   for(let n=1;n<=6;n++)route.push([300,320-n*20]);
+   for(const [x,y] of route){player.x=x;player.y=y;totalTime+=.07;recordCircuitWeaverMotion(player,20,false);}
+   const result=window.getNeonCircuitWeaver();
+   return {initialGold,afterGold:totalGold,targetHp:target.hp,stats:result,
+     otherModules:player.upgradeCounts.phase_echo||0};
+ });
+ expect(result.initialGold).toBe(result.afterGold);
+ expect(result.targetHp).toBeLessThan(1000);
+ expect(result.stats.closures).toBe(1);
+ expect(result.stats.pulseHits).toBe(1);
+ expect(result.stats.fieldActive).toBe(true);
+ expect(result.otherModules).toBe(0);
+ expect(errors).toEqual([]);
+});

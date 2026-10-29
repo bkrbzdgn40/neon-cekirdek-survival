@@ -1066,12 +1066,17 @@
                     orbitalPulses: 0, aegisPulses: 0, prismBounces: 0,
                     reactorBursts: 0, overdriveDischarges: 0, weakpointMarks: 0,
                     bloodReactorHeals: 0, aegisDeflections: 0, kineticVortices: 0,
-                    phaseEchoes: 0, phaseEchoTargets: 0 };
+                    phaseEchoes: 0, phaseEchoTargets: 0,
+                    circuitClosures: 0, circuitPulseHits: 0, circuitCrossings: 0 };
                 this.bloodReactorKills = 0;
                 this.bloodReactorReadyAt = 0;
                 this.kineticVortexReadyAt = 0;
                 this.phaseEchoReadyAt = 0;
                 this.phaseEchoOrigin = null;
+                this.circuitTrace = [];
+                this.circuitLength = 0;
+                this.circuitStartedAt = 0;
+                this.circuitReadyAt = 0;
             }
 
             refreshBuildTraits() {
@@ -1109,6 +1114,7 @@
             }
 
             update(dt) {
+                const circuitWasDashing = this.isDashing;
                 if (this.invulnTimer > 0) this.invulnTimer -= dt;
                 if (this.dashCooldown > 0) this.dashCooldown = Math.max(0, this.dashCooldown - dt);
                 if (this.novaCooldown > 0) this.novaCooldown = Math.max(0, this.novaCooldown - dt);
@@ -1234,6 +1240,7 @@
                 const moveRatio = movedDist / Math.max(1, this.speed * dt);
                 this.lastPos.x = this.x;
                 this.lastPos.y = this.y;
+                recordCircuitWeaverMotion(this, movedDist, circuitWasDashing);
 
                 if (moveRatio > 0.25 || this.isDashing) {
                     this.momentum = Math.min(100, this.momentum + dt * (this.isDashing ? 95 : 28));
@@ -3451,6 +3458,7 @@
         }
 
         const EVOLUTION_DEFS = Object.freeze({
+            circuit_weaver: { name: 'Yanan Çember', desc: 'Kapatılan devre 3,2 saniye daha elektrikli kalır; sınırdan geçen en fazla 16 düşmana bir kez zarar verir.' },
             phase_echo: { name: 'Çift Yankı', desc: 'Aynı anda iki Faz Yankısı aktif kalabilir; hologram süresi 4,1 saniyeye çıkar.' },
             multishot: { name: 'Odak Rayı', desc: 'Her 4. salvoya güçlü, fazladan iki hedef delen beyaz bir plazma rayı ekler.' },
             firerate: { name: 'Reaktör Ritmi', desc: 'Her 5. salvoda iki ek düşük hasarlı yan plazma atışı üretir.' },
@@ -3553,6 +3561,14 @@
         }
 
         const UPGRADES_POOL = [
+            {
+                id: 'circuit_weaver',
+                name: 'Devre Dokuyucu',
+                icon: 'fa-solid fa-draw-polygon',
+                color: '#ffe66d',
+                getDesc: () => 'Hareketinle kapalı bir devre çiz: içindeki en fazla 16 düşmanı vur. Dash devreyi sıfırlar. 3. kademede sınırı elektrikli bırak.',
+                apply: () => { /* Drawn movement path supplies the attack, not a weapon stat. */ }
+            },
             {
                 id: 'phase_echo',
                 name: 'Faz Yankısı',
@@ -4156,6 +4172,208 @@
             SHOOTER: 2, TANK: 3, SHIELD_BEARER: 3, SNIPER: 2.3,
             ASSASSIN: 2.1, GRAV_WELL: 2.6
         };
+
+        // M5.16: CIRCUIT WEAVER. The player draws a closed loop with movement.
+        // Completing it detonates a bounded area, and the third tier leaves a
+        // short-lived live wire that damages a crossing enemy only once.
+        const CIRCUIT_WEAVER = Object.freeze({
+            sampleStep: 16, maxPoints: 48, maxDuration: 9,
+            minLength: 340, minPoints: 12, closeRadius: 42,
+            minArea: 8000, maxArea: 90000, maxJump: 90,
+            maxPulseTargets: 16, maxWireTargets: 16,
+            cooldown: [0, 11, 9, 7], fieldSeconds: 3.2, fieldStep: .13
+        });
+        let circuitField = null;
+        let circuitFlash = null;
+        function circuitSignedArea(points) {
+            if (points.length < 3) return 0;
+            let twice = 0;
+            for (let i = 0; i < points.length; i++) {
+                const a = points[i], b = points[(i + 1) % points.length];
+                twice += a.x * b.y - b.x * a.y;
+            }
+            return twice / 2;
+        }
+        function circuitContains(points, x, y) {
+            let inside = false;
+            for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+                const a = points[i], b = points[j];
+                if ((a.y > y) !== (b.y > y) &&
+                    x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x)
+                    inside = !inside;
+            }
+            return inside;
+        }
+        function closeCircuitWeaver(p, points, area) {
+            const tier = Math.min(MAX_MODULE_TIER, p.upgradeCounts.circuit_weaver || 0);
+            if (!tier || gameState !== 'PLAYING') return false;
+            const impacted = [];
+            for (const target of enemies) {
+                if (impacted.length >= CIRCUIT_WEAVER.maxPulseTargets) break;
+                if (target.dead || target.isBoss ||
+                    !circuitContains(points, target.x, target.y)) continue;
+                impacted.push(target.id);
+                target.takeDamage(Math.min(260, p.damage * (1.15 + .1 * tier) + 18),
+                    0, 0, false, false);
+            }
+            p.buildStats.circuitClosures++;
+            p.buildStats.circuitPulseHits += impacted.length;
+            p.circuitReadyAt = totalTime + CIRCUIT_WEAVER.cooldown[tier];
+            // Preserve immutable point snapshots for effects and the live wire.
+            const closed = points.map(point => ({x: point.x, y: point.y}));
+            circuitFlash = { points: closed, expiresAt: totalTime + .75,
+                createdAt: totalTime };
+            circuitField = null;
+            if (p.evolutions.has('circuit_weaver')) {
+                const prev = new Map();
+                for (const target of enemies) {
+                    if (!target.dead && !target.isBoss) {
+                        prev.set(target.id, circuitContains(closed, target.x, target.y));
+                    }
+                }
+                circuitField = { points: closed,
+                    expiresAt: totalTime + CIRCUIT_WEAVER.fieldSeconds,
+                    nextTickAt: totalTime + CIRCUIT_WEAVER.fieldStep,
+                    previous: prev, hitIds: new Set(impacted), crossings: 0 };
+            }
+            shockwaves.push(new Shockwave(p.x, p.y, 90, '#ffe66d', .35));
+            createFloatingText(p.x, p.y - 45,
+                'DEVRE TAMAMLANDI · ' + impacted.length + ' HEDEF', '#ffe66d', 15);
+            return true;
+        }
+        function recordCircuitWeaverMotion(p, movedDist = 0, wasDashing = false) {
+            const tier = Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.circuit_weaver || 0);
+            if (!tier || gameState !== 'PLAYING') return false;
+            if (totalTime < p.circuitReadyAt) {
+                p.circuitTrace = [];
+                p.circuitLength = 0;
+                return false;
+            }
+            const now = {x:p.x,y:p.y};
+            const trace = p.circuitTrace;
+            if (wasDashing || movedDist > CIRCUIT_WEAVER.maxJump ||
+                !Number.isFinite(now.x) || !Number.isFinite(now.y)) {
+                p.circuitTrace = [{x:now.x,y:now.y}];
+                p.circuitLength = 0;
+                p.circuitStartedAt = totalTime;
+                return false;
+            }
+            if (!trace.length || totalTime - p.circuitStartedAt >
+                CIRCUIT_WEAVER.maxDuration) {
+                p.circuitTrace = [now];
+                p.circuitLength = 0;
+                p.circuitStartedAt = totalTime;
+                return false;
+            }
+            const previous = trace[trace.length-1];
+            const delta = Math.hypot(now.x-previous.x, now.y-previous.y);
+            if (delta < CIRCUIT_WEAVER.sampleStep) return false;
+            const nextLength = p.circuitLength + delta;
+            const start = trace[0];
+            if (trace.length >= CIRCUIT_WEAVER.minPoints &&
+                nextLength >= CIRCUIT_WEAVER.minLength &&
+                Math.hypot(now.x-start.x,now.y-start.y) <=
+                    CIRCUIT_WEAVER.closeRadius) {
+                const polygon = [...trace, now];
+                const area = Math.abs(circuitSignedArea(polygon));
+                if (area >= CIRCUIT_WEAVER.minArea &&
+                    area <= CIRCUIT_WEAVER.maxArea) {
+                    closeCircuitWeaver(p, polygon, area);
+                    p.circuitTrace = [];
+                    p.circuitLength = 0;
+                    return true;
+                }
+            }
+            trace.push(now);
+            p.circuitLength = nextLength;
+            if (trace.length >= CIRCUIT_WEAVER.maxPoints) {
+                p.circuitTrace = [now];
+                p.circuitLength = 0;
+                p.circuitStartedAt = totalTime;
+            }
+            return false;
+        }
+        function updateCircuitField() {
+            if (circuitFlash && totalTime >= circuitFlash.expiresAt) circuitFlash = null;
+            if (!circuitField) return;
+            if (totalTime >= circuitField.expiresAt) {
+                circuitField = null;
+                return;
+            }
+            if (totalTime < circuitField.nextTickAt) return;
+            circuitField.nextTickAt = totalTime + CIRCUIT_WEAVER.fieldStep;
+            const field = circuitField;
+            for (const target of enemies) {
+                if (field.crossings >= CIRCUIT_WEAVER.maxWireTargets) break;
+                if (target.dead || target.isBoss || !player) continue;
+                const nowInside = circuitContains(field.points, target.x, target.y);
+                const previousInside = field.previous.get(target.id);
+                field.previous.set(target.id, nowInside);
+                // Enemy created mid-field is first registered, not hit for free.
+                if (previousInside === undefined || previousInside === nowInside ||
+                    field.hitIds.has(target.id)) continue;
+                field.hitIds.add(target.id);
+                field.crossings++;
+                player.buildStats.circuitCrossings++;
+                target.takeDamage(Math.min(135, player.damage * .68 + 12),
+                    0, 0, false, false);
+            }
+        }
+        function getCircuitWeaverSnapshot() {
+            return { tier: player?.upgradeCounts?.circuit_weaver || 0,
+                tracePoints: player?.circuitTrace?.length || 0,
+                readyIn: player ? Math.max(0, Math.round((player.circuitReadyAt -
+                    totalTime) * 10) / 10) : 0,
+                fieldActive: !!circuitField,
+                closures: player?.buildStats.circuitClosures || 0,
+                pulseHits: player?.buildStats.circuitPulseHits || 0,
+                wireHits: player?.buildStats.circuitCrossings || 0 };
+        }
+        function drawCircuitWeaver(ctx) {
+            if (!player || gameState !== 'PLAYING') return;
+            const trace = player.circuitTrace;
+            const renderPath = (points, closed, color, alpha, width) => {
+                if (points.length < 2) return;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                if (graphicsQuality === 'high') {
+                    ctx.shadowBlur = getGraphicsBlur(14);
+                    ctx.shadowColor = color;
+                }
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                for (let i=1;i<points.length;i++) ctx.lineTo(points[i].x,points[i].y);
+                if (closed) ctx.closePath();
+                ctx.stroke();
+                ctx.restore();
+            };
+            if (player.upgradeCounts.circuit_weaver > 0 &&
+                totalTime >= player.circuitReadyAt && trace.length > 1) {
+                renderPath(trace,false,'#66efff',.65,3);
+                const start = trace[0];
+                ctx.save();
+                ctx.strokeStyle = '#ffe66d';
+                ctx.globalAlpha = .75;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(start.x,start.y,CIRCUIT_WEAVER.closeRadius,0,Math.PI*2);
+                ctx.stroke();
+                ctx.restore();
+            }
+            if (circuitFlash) {
+                const alpha = Math.max(0, (circuitFlash.expiresAt-totalTime)/.75);
+                renderPath(circuitFlash.points,true,'#ffe66d',alpha,5);
+            }
+            if (circuitField) {
+                const alpha = Math.max(0,
+                    (circuitField.expiresAt-totalTime)/CIRCUIT_WEAVER.fieldSeconds);
+                renderPath(circuitField.points,true,'#ff58d2',.8*alpha,4);
+            }
+        }
 
         // M5.15: card-only tactical decoy. No gold consumption, no new
         // projectile sources, no boss targeting changes or saved run state.
@@ -6073,6 +6291,7 @@
                     tacticalPlacement: { ...this.lastTacticalDecision },
                     crowdSteering: getEnemyCrowdSteeringSnapshot(),
                     phaseEcho: getPhaseEchoSnapshot(),
+                    circuitWeaver: getCircuitWeaverSnapshot(),
                     bastion: getBastionStatus(),
                     warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
                     arenaEvent: this.activeArenaEvent ? this.activeArenaEvent.kind : null,
@@ -6195,6 +6414,7 @@
             if (slowMoTimer > 0) slowMoTimer = Math.max(0, slowMoTimer - dt);
             updateBastion();
             updatePhaseEchoes();
+            updateCircuitField();
 
             if (bannerHideTimer > 0) {
                 bannerHideTimer -= dt;
@@ -6865,6 +7085,7 @@
             drawSpecialEncounterWarning();
             drawTacticalLinks();
             drawPhaseEchoes(ctx);
+            drawCircuitWeaver(ctx);
             drawBastion(ctx);
             drawBossAttackTelegraphs(ctx);
 
@@ -7318,6 +7539,8 @@
             resetPc3Telemetry();
             resetEnemyCrowdSteering();
             phaseEchoes = [];
+            circuitField = null;
+            circuitFlash = null;
             bastion = null;
             bastionReadyAt = 0;
             bastionUses = 0;
@@ -7445,7 +7668,7 @@
         // No extra item rolls, unlock conditions, or power calculations.
         const WEAPON_UPGRADE_IDS = new Set([
             'multishot','firerate','orbital','pierce_ricochet',
-            'homing','lightning','crit_mastery','phase_echo'
+            'homing','lightning','crit_mastery','phase_echo','circuit_weaver'
         ]);
         function getUpgradeCardPresentation(upg, rarity, currentLvl) {
             const willEvolve=currentLvl+1===MAX_MODULE_TIER && !!EVOLUTION_DEFS[upg.id];
@@ -7569,7 +7792,7 @@
 
         function triggerLevelUp() {
             if (UPGRADES_POOL.every(u => (player.upgradeCounts[u.id] || 0) >= MAX_MODULE_TIER)) {
-                // Endless play stays playable after all 33 tiers; no empty choice modal.
+                // Endless play stays playable after all module tiers; no empty choice modal.
                 player.hp = Math.min(player.maxHp, player.hp + 20);
                 player.addOverdrive(20);
                 createFloatingText(player.x, player.y - 30, 'TÜM MODÜLLER TAM · +20 CAN', '#00ff88', 15);
@@ -8784,6 +9007,7 @@
         window.getNeonEconomySnapshot = () => combatDirector ? combatDirector.getEconomySnapshot() : null;
         window.getNeonBastionStatus = () => getBastionStatus();
         window.getNeonPhaseEcho = () => getPhaseEchoSnapshot();
+        window.getNeonCircuitWeaver = () => getCircuitWeaverSnapshot();
         window.getNeonBuildSnapshot = () => player ? {
             modules: { ...player.upgradeCounts },
             evolutions: [...player.evolutions],
