@@ -870,14 +870,14 @@ test('M2.3 optional arena event renders using mock canvas without error', () => 
 });
 
 
-test('M3.1 five original evolutions remain among all eleven, with four recipes', () => {
+test('M3.1 five original evolutions remain among expanded twelve, with four recipes', () => {
   const { run } = setup();
   const info = JSON.parse(run(`(() => JSON.stringify({
     evolutions: Object.keys(EVOLUTION_DEFS),
     synergies: SYNERGY_DEFS.map(s=>({id:s.id,modules:s.modules})),
     upgrades: UPGRADES_POOL.map(u=>u.id)
   }))()`));
-  assert.equal(info.evolutions.length,11);
+  assert.equal(info.evolutions.length,info.upgrades.length);
   for(const id of ['multishot','homing','lightning','orbital','pierce_ricochet']) {
     assert.ok(info.evolutions.includes(id));
   }
@@ -1148,14 +1148,14 @@ test('M3.1 cluster fragments respect hard projectile allocation ceiling', () => 
 });
 
 
-test('M3.2 all eleven modules now have unique third-tier evolutions', () => {
+test('M3.2 all twelve modules have unique third-tier evolutions', () => {
   const { run }=setup();
   const x=JSON.parse(run(`(() => JSON.stringify({
     names:UPGRADES_POOL.map(u=>u.id),evolutions:Object.keys(EVOLUTION_DEFS),
     missing:UPGRADES_POOL.filter(u=>!EVOLUTION_DEFS[u.id]).map(u=>u.id)
   }))()`));
-  assert.equal(x.names.length,11);
-  assert.equal(x.evolutions.length,11);
+  assert.equal(x.names.length,12);
+  assert.equal(x.evolutions.length,x.names.length);
   assert.deepEqual(x.missing,[]);
 });
 
@@ -1313,7 +1313,7 @@ test('M3.2 full-tier modules never appear again in upgrade draft', () => {
   assert.equal(x.fire,'firerate');
 });
 
-test('M3.2 fully completed 33-tier run does not open an empty choice dialog', () => {
+test('M3.2 fully completed 36-tier run does not open an empty choice dialog', () => {
   const { run }=setup();
   const x=JSON.parse(run(`(() => {
     startNewGame();
@@ -1326,7 +1326,7 @@ test('M3.2 fully completed 33-tier run does not open an empty choice dialog', ()
   })()`));
   assert.equal(x.state,'PLAYING');
   assert.equal(x.hp,x.max-20);
-  assert.equal(x.evolutions,11);
+  assert.equal(x.evolutions,12);
 });
 
 test('M3.2 build guide reports active traits, near goals and correct counts', () => {
@@ -2263,7 +2263,7 @@ test('M4.3.3 separates equipment, utility and third-tier evolution independently
   assert.equal(x.evo.isLegendary,false);
   assert.equal(x.legendaryEvo.role,'evolution');
   assert.equal(x.legendaryEvo.isLegendary,true);
-  assert.equal(x.all.length,11);
+  assert.equal(x.all.length,12);
 });
 
 test('M4.3.3 reserves gold styling for legendary while orbital icon stays neutral on all other rarities', () => {
@@ -2375,8 +2375,8 @@ test('M4.3.3.1 legacy rarity odds and module power remain unchanged', () => {
   const {run}=setup();
   const data=JSON.parse(run("(()=>{startNewGame();return JSON.stringify({rarities:RARITIES.map(r=>[r.id,r.weight,r.mult]),modules:UPGRADES_POOL.length,evolutions:Object.keys(EVOLUTION_DEFS).length,tier:MAX_MODULE_TIER});})()"));
   assert.deepEqual(data.rarities,[['COMMON',48,1],['RARE',30,1.35],['EPIC',15,1.75],['LEGENDARY',7,2.3]]);
-  assert.equal(data.modules,11);
-  assert.equal(data.evolutions,11);
+  assert.equal(data.modules,12);
+  assert.equal(data.evolutions,12);
   assert.equal(data.tier,3);
 });
 
@@ -5500,7 +5500,7 @@ test('M5.15 Phase Echo is a selectable 12th card and build guide reflects 36 tot
  assert.equal(d.role,'weapon');
  assert.equal(d.evo,'Çift Yankı');
  assert.equal(d.guide,0);
- assert.match(gameJs,/UPGRADES_POOL\.length \* MAX_MODULE_TIER/);
+ assert.match(gameCode,/UPGRADES_POOL\.length \* MAX_MODULE_TIER/);
 });
 
 test('M5.15 dash creates a bounded hologram that redirects at most six nearby melee foes',()=>{
