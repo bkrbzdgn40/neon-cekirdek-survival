@@ -5158,6 +5158,330 @@
             return count;
         }
 
+
+        // M5.17. Arena chapters change both visual identity and positional rules.
+        // Existing arena missions and the boss subsystem always have priority.
+        const ARENA_CHAPTERS = Object.freeze({
+            FOUNDRY: Object.freeze({label:'KOR DÖKÜMHANESİ',short:'DÖKÜMHANE',
+                caption:'Kızgın raylar · uyarıdan sonra hattı terk et',
+                color:'#ff9757',dark:'#180d17',accent:'#ffd392',glyph:'▰'}),
+            GARDEN: Object.freeze({label:'İYON BAHÇESİ',short:'BAHÇE',
+                caption:'İyon çiçeklerini doldur · rakipleri sersemlet',
+                color:'#6fffc6',dark:'#071d19',accent:'#b3ffe0',glyph:'✦'}),
+            RIFT: Object.freeze({label:'YARIK GEÇİDİ',short:'YARIK',
+                caption:'Geçide gir · uzak kapıdan çık',
+                color:'#bd93ff',dark:'#100d25',accent:'#ebe1ff',glyph:'◇'})
+        });
+        const ARENA_CHAPTER_ORDER = Object.freeze(['FOUNDRY','GARDEN','RIFT']);
+        const CHAPTER_RULES = Object.freeze({
+            foundryCycle:6, foundryWarn:1.5, foundryActiveEnd:2.05,
+            foundryHalfWidth:26, foundryHitCap:12,
+            gardenCharge:1.6, gardenCooldown:10, gardenRadius:58,
+            gardenStunRadius:175, gardenHitCap:8,
+            riftRadius:49, riftCooldown:11, riftInvuln:.55
+        });
+        let arenaChapter = null;
+        let chapterAnnounceUntil = 0;
+        let chapterStats = {changes:0,foundryEnemyHits:0,foundryPlayerHits:0,
+            gardenBursts:0,gardenStuns:0,riftWarps:0};
+        const chapterGardenCharge = [0,0,0];
+        const chapterGardenReady = [-Infinity,-Infinity,-Infinity];
+        let chapterRiftArmed = true;
+        let chapterRiftReadyAt = 0;
+        let chapterFoundryLastPulse = -1;
+
+        function chapterIdForWave(currentWave) {
+            if (!Number.isFinite(currentWave) || currentWave < 4) return null;
+            return ARENA_CHAPTER_ORDER[Math.floor((currentWave-4)/3)%3];
+        }
+        function getGardenCenters() {
+            return [
+                {x:worldWidth*.25,y:worldHeight*.38},
+                {x:worldWidth*.72,y:worldHeight*.35},
+                {x:worldWidth*.51,y:worldHeight*.72}
+            ];
+        }
+        function getRiftCenters() {
+            return [
+                {x:Math.max(75,worldWidth*.16),y:worldHeight*.46},
+                {x:Math.min(worldWidth-75,worldWidth*.84),y:worldHeight*.54}
+            ];
+        }
+        function chapterEffectsAllowed() {
+            return gameState==='PLAYING' && !!player &&
+                activeBosses.every(b=>b.dead) &&
+                nextBossTime-totalTime>4.0 &&
+                !combatDirector?.activeArenaEvent;
+        }
+        function resetChapterBiome() {
+            arenaChapter = null;
+            chapterAnnounceUntil = 0;
+            chapterStats={changes:0,foundryEnemyHits:0,foundryPlayerHits:0,
+                gardenBursts:0,gardenStuns:0,riftWarps:0};
+            chapterGardenCharge.fill(0);
+            chapterGardenReady.fill(-Infinity);
+            chapterRiftArmed=true;
+            chapterRiftReadyAt=0;
+            chapterFoundryLastPulse=-1;
+        }
+        function startChapterIfChanged() {
+            const next = chapterIdForWave(wave);
+            if (arenaChapter===next) return false;
+            arenaChapter=next;
+            chapterGardenCharge.fill(0);
+            chapterGardenReady.fill(-Infinity);
+            chapterRiftArmed=true;
+            chapterRiftReadyAt=0;
+            chapterFoundryLastPulse=-1;
+            if (!next) return false;
+            chapterAnnounceUntil=totalTime+5.0;
+            chapterStats.changes++;
+            const d=ARENA_CHAPTERS[next];
+            createFloatingText(player.x,player.y-54,d.label,d.color,17);
+            return true;
+        }
+        function chapterFoundryPhase(t=totalTime) {
+            return ((t%CHAPTER_RULES.foundryCycle)+CHAPTER_RULES.foundryCycle)%
+                CHAPTER_RULES.foundryCycle;
+        }
+        function updateFoundryChapter() {
+            const phase=chapterFoundryPhase();
+            if (phase<CHAPTER_RULES.foundryWarn ||
+                phase>=CHAPTER_RULES.foundryActiveEnd) return;
+            const pulse=Math.floor(totalTime/CHAPTER_RULES.foundryCycle);
+            if (chapterFoundryLastPulse===pulse) return;
+            chapterFoundryLastPulse=pulse;
+            const ys=[worldHeight*.32,worldHeight*.68];
+            if (ys.some(y=>Math.abs(player.y-y)<=CHAPTER_RULES.foundryHalfWidth)) {
+                const prev=player.hp;
+                player.takeDamage(9);
+                if(player.hp<prev)chapterStats.foundryPlayerHits++;
+            }
+            let hits=0;
+            for(const e of enemies){
+                if(hits>=CHAPTER_RULES.foundryHitCap) break;
+                if(e.dead||e.isBoss||!ys.some(y=>
+                    Math.abs(e.y-y)<=CHAPTER_RULES.foundryHalfWidth)) continue;
+                e.takeDamage(Math.min(70,player.damage*.65+18),0,0,false,false);
+                hits++;
+            }
+            chapterStats.foundryEnemyHits+=hits;
+            if(hits)shockwaves.push(new Shockwave(worldWidth*.5,ys[0],85,
+                ARENA_CHAPTERS.FOUNDRY.color,.25));
+        }
+        function updateGardenChapter(dt) {
+            const nodes=getGardenCenters();
+            for(let i=0;i<nodes.length;i++){
+                if(totalTime<chapterGardenReady[i]) continue;
+                const p=nodes[i];
+                const inside=Math.hypot(player.x-p.x,player.y-p.y) <
+                    CHAPTER_RULES.gardenRadius-player.radius*.25;
+                chapterGardenCharge[i]=Math.max(0,Math.min(CHAPTER_RULES.gardenCharge,
+                    chapterGardenCharge[i]+(inside?dt:-dt*1.5)));
+                if(chapterGardenCharge[i]<CHAPTER_RULES.gardenCharge)continue;
+                chapterGardenReady[i]=totalTime+CHAPTER_RULES.gardenCooldown;
+                chapterGardenCharge[i]=0;
+                chapterStats.gardenBursts++;
+                let stunned=0;
+                for(const e of enemies){
+                    if(stunned>=CHAPTER_RULES.gardenHitCap)break;
+                    if(e.dead||e.isBoss||Math.hypot(e.x-p.x,e.y-p.y)>
+                        CHAPTER_RULES.gardenStunRadius)continue;
+                    e.stunTimer=Math.max(e.stunTimer,1.15);
+                    stunned++;
+                }
+                chapterStats.gardenStuns+=stunned;
+                shockwaves.push(new Shockwave(p.x,p.y,
+                    CHAPTER_RULES.gardenStunRadius,ARENA_CHAPTERS.GARDEN.color,.48));
+                createFloatingText(p.x,p.y-48,'İYON ÇİÇEĞİ · '+stunned+' SERSEM',
+                    ARENA_CHAPTERS.GARDEN.color,13);
+            }
+        }
+        function updateRiftChapter() {
+            const nodes=getRiftCenters();
+            const within=nodes.map(n=>Math.hypot(player.x-n.x,player.y-n.y)<
+                CHAPTER_RULES.riftRadius);
+            if(!within.some(Boolean)){
+                chapterRiftArmed=true;
+                return;
+            }
+            if(!chapterRiftArmed||totalTime<chapterRiftReadyAt)return;
+            const from=within[0]?0:1, source=nodes[from],dest=nodes[1-from];
+            chapterRiftArmed=false;
+            chapterRiftReadyAt=totalTime+CHAPTER_RULES.riftCooldown;
+            chapterStats.riftWarps++;
+            shockwaves.push(new Shockwave(source.x,source.y,95,
+                ARENA_CHAPTERS.RIFT.color,.36));
+            player.x=Math.max(player.radius,Math.min(worldWidth-player.radius,dest.x));
+            player.y=Math.max(player.radius,Math.min(worldHeight-player.radius,dest.y));
+            player.lastPos.x=player.x;
+            player.lastPos.y=player.y;
+            player.vx=0;player.vy=0;
+            player.invulnTimer=Math.max(player.invulnTimer,
+                CHAPTER_RULES.riftInvuln);
+            player.circuitTrace=[];
+            player.circuitLength=0;
+            player.circuitStartedAt=totalTime;
+            mouse.active=false;
+            shockwaves.push(new Shockwave(dest.x,dest.y,110,
+                ARENA_CHAPTERS.RIFT.accent,.42));
+            createFloatingText(dest.x,dest.y-36,'YARIK GEÇİŞİ',
+                ARENA_CHAPTERS.RIFT.accent,15);
+        }
+        function updateArenaChapter(dt) {
+            startChapterIfChanged();
+            if(!arenaChapter || !chapterEffectsAllowed()){
+                // Holding a garden node through boss/mission must not bank a charge.
+                chapterGardenCharge.fill(0);
+                return;
+            }
+            if(arenaChapter==='FOUNDRY')updateFoundryChapter();
+            else if(arenaChapter==='GARDEN')updateGardenChapter(dt);
+            else if(arenaChapter==='RIFT')updateRiftChapter();
+        }
+        function getArenaChapterSnapshot(){
+            return {id:arenaChapter, label:arenaChapter?
+                ARENA_CHAPTERS[arenaChapter].label:null,
+                enabled:!!arenaChapter&&chapterEffectsAllowed(),
+                wave, foundryPhase:arenaChapter==='FOUNDRY'?
+                    Math.round(chapterFoundryPhase()*10)/10:null,
+                gardenCharge:[...chapterGardenCharge],
+                gardenReadyIn:chapterGardenReady.map(t=>Math.max(0,
+                    Math.round((t-totalTime)*10)/10)),
+                riftReadyIn:Math.max(0,
+                    Math.round((chapterRiftReadyAt-totalTime)*10)/10),
+                ...chapterStats};
+        }
+        function updateArenaChapterHud() {
+            const hud=document.getElementById('hud');
+            const badge=document.getElementById('arenaChapterBadge');
+            const status=document.getElementById('arenaChapterStatus');
+            const announcement=document.getElementById('arenaChapterAnnouncement');
+            if(!hud||!badge||!status||!announcement)return;
+            hud.setAttribute('data-arena-chapter',arenaChapter||'NONE');
+            const d=arenaChapter?ARENA_CHAPTERS[arenaChapter]:null;
+            badge.textContent=d?d.glyph+' '+d.short:'NORMAL';
+            badge.title=d?d.caption:'Standart savaş alanı';
+            let message='STANDARD ARENA';
+            if(d){
+                if(!chapterEffectsAllowed())message='BOSS / ETKİNLİK KORUMASI';
+                else if(arenaChapter==='FOUNDRY'){
+                    const phase=chapterFoundryPhase();
+                    message=phase<CHAPTER_RULES.foundryWarn?'ISI YÜKLENİYOR':
+                        phase<CHAPTER_RULES.foundryActiveEnd?'RAYLARDAN KAÇ':
+                        'RAYLAR SOĞUYOR';
+                }else if(arenaChapter==='GARDEN')message='HALKALARDA DUR · İYON DOLDUR';
+                else message=totalTime<chapterRiftReadyAt?'GEÇİT ŞARJDA':'İKİ GEÇİT AKTİF';
+            }
+            status.textContent=message;
+            const show=!!d && gameState==='PLAYING'&&totalTime<chapterAnnounceUntil;
+            announcement.classList.toggle('hidden',!show);
+            if(show){
+                announcement.textContent=d.label+' · '+d.caption;
+                announcement.style.borderColor=d.color;
+                announcement.style.color=d.accent;
+            }
+        }
+        function drawArenaChapter(ctx) {
+            if(gameState!=='PLAYING'||!arenaChapter)return;
+            const d=ARENA_CHAPTERS[arenaChapter],active=chapterEffectsAllowed();
+            const low=graphicsQuality==='low';
+            const clock=PREFERS_REDUCED_VFX_MOTION?0:totalTime;
+            ctx.save();
+            // Each chapter has a different floor grammar; enemy/shot art remains
+            // on top. Boss telegraphs retain their own higher-contrast palette.
+            ctx.fillStyle=d.dark;
+            ctx.globalAlpha=.23;
+            ctx.fillRect(0,0,worldWidth,worldHeight);
+            ctx.strokeStyle=d.color;
+            ctx.lineWidth=2;
+            ctx.globalAlpha=active?.22:.09;
+            const cell=90;
+            if(arenaChapter==='FOUNDRY'){
+                for(let x=45;x<worldWidth;x+=cell){
+                    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x-22,worldHeight);
+                    ctx.stroke();
+                }
+                const phase=chapterFoundryPhase();
+                const danger=active&&phase>=CHAPTER_RULES.foundryWarn&&
+                    phase<CHAPTER_RULES.foundryActiveEnd;
+                const warning=active&&phase<CHAPTER_RULES.foundryWarn;
+                for(const y of [worldHeight*.32,worldHeight*.68]){
+                    ctx.save();
+                    ctx.fillStyle=d.color;
+                    ctx.globalAlpha=danger?.21:warning?.09:.025;
+                    ctx.fillRect(0,y-CHAPTER_RULES.foundryHalfWidth,worldWidth,
+                        CHAPTER_RULES.foundryHalfWidth*2);
+                    ctx.globalAlpha=danger?.9:warning?.65:.16;
+                    ctx.strokeStyle=danger?'#fff1c9':d.color;
+                    ctx.lineWidth=danger?4:2;
+                    if(warning)ctx.setLineDash([12,10]);
+                    ctx.beginPath();ctx.moveTo(0,y-CHAPTER_RULES.foundryHalfWidth);
+                    ctx.lineTo(worldWidth,y-CHAPTER_RULES.foundryHalfWidth);
+                    ctx.moveTo(0,y+CHAPTER_RULES.foundryHalfWidth);
+                    ctx.lineTo(worldWidth,y+CHAPTER_RULES.foundryHalfWidth);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            } else if(arenaChapter==='GARDEN'){
+                for(const node of getGardenCenters()){
+                    const r=CHAPTER_RULES.gardenRadius;
+                    ctx.save();
+                    ctx.translate(node.x,node.y);
+                    ctx.strokeStyle=d.color;
+                    ctx.globalAlpha=active?.85:.25;
+                    ctx.lineWidth=2;
+                    for(let petal=0;petal<6;petal++){
+                        ctx.beginPath();
+                        const a=petal*Math.PI/3+clock*.15;
+                        ctx.ellipse(Math.cos(a)*r*.46,Math.sin(a)*r*.46,
+                            r*.5,r*.22,a,0,Math.PI*2);
+                        ctx.stroke();
+                    }
+                    ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke();
+                    const index=getGardenCenters().findIndex(p=>
+                        p.x===node.x&&p.y===node.y);
+                    const progress=chapterGardenCharge[index]/CHAPTER_RULES.gardenCharge;
+                    if(progress>0){
+                        ctx.lineWidth=5;ctx.strokeStyle=d.accent;
+                        ctx.beginPath();ctx.arc(0,0,r+6,-Math.PI/2,
+                            -Math.PI/2+Math.PI*2*progress);ctx.stroke();
+                    }
+                    if(totalTime<chapterGardenReady[index]){
+                        ctx.globalAlpha=.20;
+                    }
+                    ctx.restore();
+                }
+            } else if(arenaChapter==='RIFT'){
+                const nodes=getRiftCenters();
+                ctx.save();
+                ctx.strokeStyle=d.color;
+                ctx.lineWidth=2;
+                ctx.globalAlpha=active?.42:.17;
+                ctx.setLineDash([8,12]);
+                ctx.beginPath();ctx.moveTo(nodes[0].x,nodes[0].y);
+                ctx.lineTo(nodes[1].x,nodes[1].y);ctx.stroke();
+                ctx.setLineDash([]);
+                for(let i=0;i<2;i++){
+                    const node=nodes[i],r=CHAPTER_RULES.riftRadius;
+                    ctx.save();ctx.translate(node.x,node.y);
+                    ctx.strokeStyle=i?d.accent:d.color;
+                    ctx.globalAlpha=active?.85:.3;
+                    for(let ring=0;ring<(low?2:3);ring++){
+                        const a=clock*(i?-.8:.8)+ring*.72;
+                        ctx.lineWidth=ring?1.5:3;
+                        ctx.beginPath();ctx.arc(0,0,r-ring*9,a,a+Math.PI*1.43);
+                        ctx.stroke();
+                    }
+                    ctx.beginPath();ctx.moveTo(-15,0);ctx.lineTo(0,-18);
+                    ctx.lineTo(15,0);ctx.lineTo(0,18);ctx.closePath();ctx.stroke();
+                    ctx.restore();
+                }
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+
         const ARENA_EVENT_GAP = 82;
         const ARENA_EVENT_LIFETIME = 17;
 
@@ -6292,6 +6616,7 @@
                     crowdSteering: getEnemyCrowdSteeringSnapshot(),
                     phaseEcho: getPhaseEchoSnapshot(),
                     circuitWeaver: getCircuitWeaverSnapshot(),
+                    arenaChapter: getArenaChapterSnapshot(),
                     bastion: getBastionStatus(),
                     warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
                     arenaEvent: this.activeArenaEvent ? this.activeArenaEvent.kind : null,
@@ -6495,6 +6820,7 @@
             gridOffset.y = (gridOffset.y - player.vy * 0.15 * dt) % 48;
 
             combatDirector.update(dt);
+            updateArenaChapter(dt);
             spawnTimer -= dt;
             if (spawnTimer <= 0) {
                 spawnTimer += combatDirector.profile.interval;
@@ -7081,6 +7407,7 @@
 
             drawBackgroundGrid();
             drawArenaAtmosphere();
+            drawArenaChapter(ctx);
             drawBossArenaPresence(ctx);
             drawSpecialEncounterWarning();
             drawTacticalLinks();
@@ -7358,6 +7685,7 @@
                 contractBadge.title = contract.label + ' · ' + contract.desc;
             }
             updateTacticalHint();
+            updateArenaChapterHud();
 
             const xpPct = Math.min(100, (player.xp / player.xpToNext) * 100);
             document.getElementById('xpBar').style.width = `${xpPct}%`;
@@ -7538,6 +7866,7 @@
             clearGameplayInput();
             resetPc3Telemetry();
             resetEnemyCrowdSteering();
+            resetChapterBiome();
             phaseEchoes = [];
             circuitField = null;
             circuitFlash = null;
@@ -9008,6 +9337,7 @@
         window.getNeonBastionStatus = () => getBastionStatus();
         window.getNeonPhaseEcho = () => getPhaseEchoSnapshot();
         window.getNeonCircuitWeaver = () => getCircuitWeaverSnapshot();
+        window.getNeonArenaChapter = () => getArenaChapterSnapshot();
         window.getNeonBuildSnapshot = () => player ? {
             modules: { ...player.upgradeCounts },
             evolutions: [...player.evolutions],
