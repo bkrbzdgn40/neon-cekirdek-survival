@@ -5324,7 +5324,7 @@ test('spatial Director avoids nearby and crowded spawn candidates without extra 
 
 test('spatial Director records motion and diagnostic decision only when offering a real raid', () => {
   const {run}=setup();
-  const record=JSON.parse(run("(()=>{startNewGame();wave=16;totalTime=60;nextBossTime=500;combatDirector.tokens=14;combatDirector.nextEncounterAt=500;player.vx=230;player.vy=0;for(let i=0;i<26;i++)combatDirector.update(.05);combatDirector.nextEncounterAt=0;combatDirector.encounterIndex=7;combatDirector.update(.02);const p=combatDirector.pendingEncounter;const d=combatDirector.getDiagnostics();return JSON.stringify({p:p&&{side:p.side,kind:p.type,placement:p.placement,threatCost:p.threatCost},diag:d.tacticalPlacement,enemyCount:enemies.length,tokens:d.threatTokens});})()"));
+  const record=JSON.parse(run("(()=>{startNewGame();wave=16;totalTime=30;nextBossTime=500;combatDirector.tokens=14;combatDirector.nextEncounterAt=500;player.vx=230;player.vy=0;for(let i=0;i<26;i++)combatDirector.update(.05);combatDirector.nextEncounterAt=0;combatDirector.encounterIndex=7;combatDirector.update(.02);const p=combatDirector.pendingEncounter;const d=combatDirector.getDiagnostics();return JSON.stringify({p:p&&{side:p.side,kind:p.type,placement:p.placement,threatCost:p.threatCost},diag:d.tacticalPlacement,enemyCount:enemies.length,tokens:d.threatTokens});})()"));
   assert.equal(record.p.kind,'PINWHEEL');
   assert.equal(record.p.placement.mode,'reading-motion');
   assert.equal(record.p.side,record.diag.side);
