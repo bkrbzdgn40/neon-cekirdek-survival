@@ -999,3 +999,38 @@
 #hud[data-arena-chapter="GARDEN"] .arena-chapter-mobile { color:#b3ffe0;border-color:#6fffc6; }
 #hud[data-arena-chapter="RIFT"] .arena-chapter-mobile { color:#ebe1ff;border-color:#bd93ff; }
 @media(min-width:640px) { #hud .arena-chapter-mobile { display:none!important; } }
+
+/* M5.20: signature operations have a single quiet progress strip and
+   three distinct visual languages rendered inside the actual arena. */
+#hud .arena-showcase-banner {
+    position:relative;
+    isolation:isolate;
+    overflow:hidden;
+    max-width:min(96vw,680px);
+    padding:7px 16px 9px;
+    margin-top:5px;
+    border:1px solid currentColor;
+    border-radius:10px;
+    letter-spacing:.045em;
+    background:rgba(5,9,24,.93);
+    text-shadow:0 0 10px rgba(255,255,255,.15);
+    box-shadow:0 4px 16px rgba(0,0,0,.4);
+    pointer-events:none;
+}
+#hud .arena-showcase-banner::after {
+    content:'';
+    position:absolute;
+    left:0;bottom:0;
+    height:3px;
+    width:var(--operation-progress,0%);
+    background:currentColor;
+    box-shadow:0 0 10px currentColor;
+    pointer-events:none;
+}
+@media (max-width:639px) {
+    #hud .arena-showcase-banner { padding:5px 9px 7px;max-width:95vw; }
+}
+@media (prefers-reduced-motion:reduce) {
+    #hud .arena-showcase-banner,
+    #hud .arena-showcase-banner::after { transition:none!important;animation:none!important; }
+}
