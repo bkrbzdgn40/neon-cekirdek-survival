@@ -8890,6 +8890,16 @@
             }
 
             const hpPct = Math.max(0, (player.hp / player.maxHp) * 100);
+            // M5.25: the cockpit changes priority with actual combat state.
+            // Dataset updates only on transitions, not every HUD refresh.
+            const cockpit=document.getElementById('hud');
+            const vital=hpPct<=30&&hpPct>0?'critical':
+                hpPct<=55?'wounded':'steady';
+            const alert=activeBosses.some(b=>!b.dead)?'boss':
+                combatDirector?.profile?.phase==='WARNING'?'warning':
+                player.overdriveActive?'overdrive':'patrol';
+            if(cockpit.dataset.vital!==vital)cockpit.dataset.vital=vital;
+            if(cockpit.dataset.combatAlert!==alert)cockpit.dataset.combatAlert=alert;
             document.getElementById('hpBar').style.width = `${hpPct}%`;
             document.getElementById('hpText').textContent = `${Math.ceil(player.hp)}/${player.maxHp}`;
 
@@ -8907,6 +8917,16 @@
 
             document.getElementById('goldHudText').textContent = totalGold.toLocaleString('tr-TR');
             updateBastionHud();
+            for(const [id,ready] of [
+                ['bastionBtn',!document.getElementById('bastionBtn').disabled],
+                ['novaBtn',player.novaCooldown<=0],
+                ['prismBtn',totalTime>=prismGuardReadyAt&&!prismActive()],
+                ['dashBtn',player.dashCooldown<=0&&!player.isDashing]
+            ]){
+                const button=document.getElementById(id);
+                const next=ready?'true':'false';
+                if(button.dataset.ready!==next)button.dataset.ready=next;
+            }
 
             const shieldInd = document.getElementById('shieldIndicator');
             const shieldTxt = document.getElementById('shieldText');
@@ -8929,6 +8949,15 @@
             const phaseEl = document.getElementById('directorPhaseText');
             if (phaseEl && combatDirector) phaseEl.textContent = combatDirector.profile.label;
             document.getElementById('scoreText').textContent = score.toLocaleString('tr-TR');
+            for(const [id,value] of [
+                ['xpBar',xpPct],['momentumBar',momPct],
+                ['overdriveBar',odPct],['hpBar',hpPct]
+            ]){
+                const bar=document.getElementById(id);
+                const next=String(Math.round(value));
+                if(bar.getAttribute('aria-valuenow')!==next)
+                    bar.setAttribute('aria-valuenow',next);
+            }
 
             const comboContainer = document.getElementById('comboContainer');
             if (combo > 1) {
