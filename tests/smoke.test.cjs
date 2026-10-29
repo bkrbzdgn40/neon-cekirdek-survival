@@ -5357,3 +5357,58 @@ test('idle player at arena edge gets safe entrance instead of unsafe random flan
   assert.notEqual(data.chosen.side,3);
   assert.ok(data.chosen.clearance>data.unsafe+80);
 });
+
+
+test('M5.13 spatial crowd pairs peel apart instead of remaining one horizontal collision queue', () => {
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();player.x=820;player.y=300;const a=new Enemy(260,300,'SWARM');const b=new Enemy(278,300,'SWARM');enemies=[a,b];const initial=Math.hypot(a.x-b.x,a.y-b.y);const sampled=sampleEnemyCrowdSteering(.2);const beforeA={x:a.x,y:a.y},beforeB={x:b.x,y:b.y};a.update(.05);b.update(.05);return JSON.stringify({sampled,initial,dist:Math.hypot(a.x-b.x,a.y-b.y),aSide:a.y-beforeA.y,bSide:b.y-beforeB.y,travelA:Math.hypot(a.x-beforeA.x,a.y-beforeA.y),expectedA:a.speed*.05,snapshot:getEnemyCrowdSteeringSnapshot()});})()"));
+  assert.equal(x.sampled,true);
+  assert.ok(x.dist>x.initial,'nearby enemies should move apart in the same target lane');
+  assert.ok(x.aSide*x.bSide<0,'close agents must take mirrored lateral lanes');
+  assert.ok(Math.abs(x.travelA-x.expectedA)<.001,'do not silently buff movement speed');
+  assert.ok(x.snapshot.steered>=2);
+});
+
+test('M5.13 no crowd influence when neighbors are far; bosses, GRAV_WELL and kamikaze keep original behavior',()=>{
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();player.x=850;player.y=300;const a=new Enemy(120,300,'SWARM');const far=new Enemy(460,300,'SWARM');const boss=new Enemy(110,300,'BOSS_TITAN');const grav=new Enemy(110,300,'GRAV_WELL');const kam=new Enemy(110,300,'KAMIKAZE');enemies=[a,far,boss,grav,kam];sampleEnemyCrowdSteering(.2);return JSON.stringify({swarm:[a.crowdSteerX,a.crowdSteerY],boss:[boss.crowdSteerX,boss.crowdSteerY],grav:[grav.crowdSteerX,grav.crowdSteerY],kam:[kam.crowdSteerX,kam.crowdSteerY]});})()"));
+  assert.deepEqual(x.swarm,[0,0]);
+  assert.deepEqual(x.boss,[0,0]);
+  assert.deepEqual(x.grav,[0,0]);
+  assert.deepEqual(x.kam,[0,0]);
+});
+
+test('M5.13 steering is sampled sparsely and has bounded per-agent neighbor scans under full enemy cap',()=>{
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();player.x=760;player.y=520;enemies=Array.from({length:160},()=>new Enemy(260,280,'SWARM'));const once=sampleEnemyCrowdSteering(.08);const twice=sampleEnemyCrowdSteering(.08);const thrice=sampleEnemyCrowdSteering(.03);const snap=getEnemyCrowdSteeringSnapshot();return JSON.stringify({once,twice,thrice,snap,units:enemies.length});})()"));
+  assert.deepEqual([x.once,x.twice,x.thrice],[false,false,true]);
+  assert.equal(x.snap.samples,1);
+  assert.equal(x.snap.agents,160);
+  assert.ok(x.snap.checks<=160*18,'maximum bounded neighbor probes per spatial sample');
+  assert.equal(x.snap.peakCell,160);
+});
+
+test('M5.13 dasher lunge and boss special movement ignore crowd influence',()=>{
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();player.x=700;player.y=300;const a=new Enemy(240,300,'DASHER');a.state='LUNGE';a.actionTimer=.25;a.dashTargetAngle=0;a.crowdSteerX=0;a.crowdSteerY=0.38;const s={x:a.x,y:a.y};a.update(.02);const b=new Enemy(240,300,'BOSS_PRISM');const x0=b.x;b.crowdSteerX=0;b.crowdSteerY=.38;b.update(.02);return JSON.stringify({dashX:a.x-s.x,dashY:a.y-s.y,bossMoved:b.x-x0,bossSteer:b.crowdSteerY});})()"));
+  assert.ok(x.dashX>0);
+  assert.ok(Math.abs(x.dashY)<.001,'telegraphed lunge must not curve toward crowd steering');
+  assert.ok(x.bossMoved!==0);
+});
+
+test('M5.13 flankers predict trusted player movement, ordinary AI and unobserved motion remain unchanged',()=>{
+  const {run}=setup();
+  const x=JSON.parse(run("(()=>{startNewGame();player.x=500;player.y=300;const flank=new Enemy(120,300,'DASHER',false,{formationId:'F',role:'flank',side:0,slot:0});const plain=new Enemy(120,300,'DASHER');const initial=getTacticalFlankVector(flank,380,0,380);combatDirector.tacticalMotion={vx:0,vy:240,tracked:2};const predicted=getTacticalFlankVector(flank,380,0,380);const normal=getTacticalFlankVector(plain,380,0,380);combatDirector.tacticalMotion.tracked=.2;const unobserved=getTacticalFlankVector(flank,380,0,380);return JSON.stringify({initial,predicted,normal,unobserved});})()"));
+  assert.ok(Math.abs(x.predicted.y-x.initial.y)>.02);
+  assert.deepEqual(x.normal,{x:1,y:0});
+  assert.deepEqual(x.unobserved,x.initial);
+});
+
+test('M5.13 run reset clears crowd telemetry and no steering persists into a new session',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();player.x=700;enemies=[new Enemy(250,300,'SWARM'),new Enemy(260,300,'SWARM')];sampleEnemyCrowdSteering(.2);const old=getEnemyCrowdSteeringSnapshot();startNewGame();const now=getEnemyCrowdSteeringSnapshot();return JSON.stringify({old,now});})()"));
+ assert.equal(x.old.samples,1);
+ assert.equal(x.now.samples,0);
+ assert.equal(x.now.checks,0);
+ assert.equal(x.now.agents,0);
+});
