@@ -384,3 +384,23 @@ test('arena chapters change visual HUD identity and rift teleports without spend
  await expect(page.locator('#arenaChapterAnnouncement')).toBeVisible();
  expect(errors).toEqual([]);
 });
+
+
+test('M5.18 mobile displays chapter status through warning, garden and rift',async({page,isMobile})=>{
+ test.skip(!isMobile,'mobile-only terrain HUD visibility');
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ await page.evaluate(()=>{nextBossTime=500;wave=4;totalTime=23.7;updateArenaChapter(.02);updateArenaChapterHud();});
+ const mobile=page.locator('#arenaChapterMobile');
+ await expect(mobile).toBeVisible();
+ await expect(mobile).toContainText('DÖKÜMHANE');
+ await expect(mobile).toContainText('ISI YÜKLENİYOR');
+ await page.evaluate(()=>{totalTime+=1.55;updateArenaChapter(.02);updateArenaChapterHud();});
+ await expect(mobile).toContainText('RAYLARDAN KAÇ');
+ await page.evaluate(()=>{wave=7;updateArenaChapter(.02);updateArenaChapterHud();});
+ await expect(mobile).toContainText('İYON DOLDUR');
+ await page.evaluate(()=>{wave=10;updateArenaChapter(.02);updateArenaChapterHud();});
+ await expect(mobile).toContainText('İKİ GEÇİT AKTİF');
+ expect(errors).toEqual([]);
+});

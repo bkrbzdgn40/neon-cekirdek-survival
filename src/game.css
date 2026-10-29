@@ -980,3 +980,22 @@
         animation:none!important; transition:none!important;
     }
 }
+
+/* M5.18: Mobile players should not lose terrain instructions from the desktop-only chip. */
+#hud .arena-chapter-mobile {
+    max-width:min(96vw,460px);
+    padding:5px 12px;
+    margin-top:4px;
+    border:1px solid rgba(93,231,255,.65);
+    border-radius:9px;
+    color:#d8f5ff;
+    text-align:center;
+    line-height:1.35;
+    background:rgba(5,11,24,.93);
+    box-shadow:0 5px 14px rgba(0,0,0,.45);
+    pointer-events:none;
+}
+#hud[data-arena-chapter="FOUNDRY"] .arena-chapter-mobile { color:#ffe0ad;border-color:#ff9757; }
+#hud[data-arena-chapter="GARDEN"] .arena-chapter-mobile { color:#b3ffe0;border-color:#6fffc6; }
+#hud[data-arena-chapter="RIFT"] .arena-chapter-mobile { color:#ebe1ff;border-color:#bd93ff; }
+@media(min-width:640px) { #hud .arena-chapter-mobile { display:none!important; } }
