@@ -2833,6 +2833,9 @@
                         this.y = steeringStartY + steerY / norm * traveled;
                     }
                 }
+                // M5.19: Only cautious ranged units interpret an announced
+                // foundry rail. They retain their original travel distance.
+                steerFoundryRangedEnemy(this,steeringStartX,steeringStartY);
                 this.x += this.pushVx * dt;
                 this.y += this.pushVy * dt;
                 this.pushVx *= Math.pow(0.04, dt);
@@ -5178,16 +5181,24 @@
             foundryHalfWidth:26, foundryHitCap:12,
             gardenCharge:1.6, gardenCooldown:10, gardenRadius:58,
             gardenStunRadius:175, gardenHitCap:8,
-            riftRadius:49, riftCooldown:11, riftInvuln:.55
+            riftRadius:49, riftCooldown:11, riftInvuln:.55,
+            riftPursuitTell:1.05, riftPursuitCooldown:16
         });
         let arenaChapter = null;
         let chapterAnnounceUntil = 0;
         let chapterStats = {changes:0,foundryEnemyHits:0,foundryPlayerHits:0,
-            gardenBursts:0,gardenStuns:0,riftWarps:0,riftReroutes:0};
+            gardenBursts:0,gardenStuns:0,riftWarps:0,riftReroutes:0,
+            foundryDodges:0,gardenContestedSeconds:0,riftEnemyFlanks:0,
+            riftInterrupted:0};
         const chapterGardenCharge = [0,0,0];
         const chapterGardenReady = [-Infinity,-Infinity,-Infinity];
+        const chapterGardenContested = [0,0,0];
         let chapterRiftArmed = true;
         let chapterRiftReadyAt = 0;
+        let chapterRiftLastWarpAt = -Infinity;
+        let chapterRiftLastWarpSource = -1;
+        let chapterRiftPursuit = null;
+        let chapterRiftPursuitReadyAt = 0;
         let chapterFoundryLastPulse = -1;
         // Foundry timing starts in its first eligible frame, never mid-pulse.
         let chapterFoundryAnchor = null;
@@ -5219,9 +5230,16 @@
             arenaChapter = null;
             chapterAnnounceUntil = 0;
             chapterStats={changes:0,foundryEnemyHits:0,foundryPlayerHits:0,
-                gardenBursts:0,gardenStuns:0,riftWarps:0,riftReroutes:0};
+                gardenBursts:0,gardenStuns:0,riftWarps:0,riftReroutes:0,
+            foundryDodges:0,gardenContestedSeconds:0,riftEnemyFlanks:0,
+            riftInterrupted:0};
             chapterGardenCharge.fill(0);
             chapterGardenReady.fill(-Infinity);
+            chapterGardenContested.fill(0);
+            chapterRiftPursuit=null;
+            chapterRiftPursuitReadyAt=0;
+            chapterRiftLastWarpAt=-Infinity;
+            chapterRiftLastWarpSource=-1;
             chapterRiftArmed=true;
             chapterRiftReadyAt=0;
             chapterFoundryLastPulse=-1;
@@ -5233,6 +5251,11 @@
             arenaChapter=next;
             chapterGardenCharge.fill(0);
             chapterGardenReady.fill(-Infinity);
+            chapterGardenContested.fill(0);
+            chapterRiftPursuit=null;
+            chapterRiftPursuitReadyAt=0;
+            chapterRiftLastWarpAt=-Infinity;
+            chapterRiftLastWarpSource=-1;
             chapterRiftArmed=true;
             chapterRiftReadyAt=0;
             chapterFoundryLastPulse=-1;
@@ -5247,6 +5270,31 @@
         function chapterFoundryPhase(t=totalTime) {
             if(chapterFoundryAnchor===null)return 0;
             return Math.max(0,t-chapterFoundryAnchor)%CHAPTER_RULES.foundryCycle;
+        }
+        function steerFoundryRangedEnemy(enemy,fromX,fromY) {
+            if(arenaChapter!=='FOUNDRY'||!chapterEffectsAllowed()||
+                enemy.dead||enemy.stunTimer>0||
+                (enemy.type!=='SHOOTER'&&enemy.type!=='SNIPER')||
+                chapterFoundryPhase()>=CHAPTER_RULES.foundryWarn)return;
+            const traveled=Math.hypot(enemy.x-fromX,enemy.y-fromY);
+            if(traveled<0.001)return;
+            const rails=[worldHeight*.32,worldHeight*.68];
+            const nearest=rails[Math.abs(enemy.y-rails[0])<Math.abs(enemy.y-rails[1])?0:1];
+            const clearance=CHAPTER_RULES.foundryHalfWidth+enemy.radius+24;
+            if(Math.abs(enemy.y-nearest)>clearance)return;
+            const escape=nearest+(enemy.y<nearest?-1:1)*clearance;
+            const desiredX=enemy.x-fromX,desiredY=escape-fromY;
+            const norm=Math.hypot(desiredX,desiredY)||1;
+            enemy.x=Math.max(enemy.radius,Math.min(worldWidth-enemy.radius,
+                fromX+traveled*desiredX/norm));
+            enemy.y=Math.max(enemy.radius,Math.min(worldHeight-enemy.radius,
+                fromY+traveled*desiredY/norm));
+            const pulse=Math.floor(Math.max(0,totalTime-chapterFoundryAnchor)/
+                CHAPTER_RULES.foundryCycle);
+            if(enemy.lastFoundryDodgePulse!==pulse){
+                enemy.lastFoundryDodgePulse=pulse;
+                chapterStats.foundryDodges++;
+            }
         }
         function updateFoundryChapter() {
             const phase=chapterFoundryPhase();
@@ -5276,12 +5324,27 @@
         function updateGardenChapter(dt) {
             const nodes=getGardenCenters();
             for(let i=0;i<nodes.length;i++){
-                if(totalTime<chapterGardenReady[i]) continue;
+                if(totalTime<chapterGardenReady[i]){
+                    chapterGardenContested[i]=0;
+                    continue;
+                }
                 const p=nodes[i];
                 const inside=Math.hypot(player.x-p.x,player.y-p.y) <
                     CHAPTER_RULES.gardenRadius-player.radius*.25;
+                // At most two nearby unstunned tactical units can interfere.
+                // Interference slows charging, never fully locks the player out.
+                let contest=0;
+                for(const e of enemies){
+                    if(e.dead||e.isBoss||e.stunTimer>0||
+                        !['SHOOTER','SNIPER','SHIELD_BEARER'].includes(e.type))continue;
+                    if(Math.hypot(e.x-p.x,e.y-p.y)<CHAPTER_RULES.gardenRadius+e.radius+12)
+                        if(++contest>=2)break;
+                }
+                chapterGardenContested[i]=contest;
+                if(inside&&contest)chapterStats.gardenContestedSeconds+=dt;
+                const speed=inside?Math.max(.4,1-contest*.3):-1.5;
                 chapterGardenCharge[i]=Math.max(0,Math.min(CHAPTER_RULES.gardenCharge,
-                    chapterGardenCharge[i]+(inside?dt:-dt*1.5)));
+                    chapterGardenCharge[i]+dt*speed));
                 if(chapterGardenCharge[i]<CHAPTER_RULES.gardenCharge)continue;
                 chapterGardenReady[i]=totalTime+CHAPTER_RULES.gardenCooldown;
                 chapterGardenCharge[i]=0;
@@ -5333,8 +5396,61 @@
             }
             return chosen;
         }
+        function updateRiftPursuit(nodes) {
+            if(chapterRiftPursuit){
+                const plan=chapterRiftPursuit;
+                if(totalTime<plan.readyAt)return;
+                chapterRiftPursuit=null;
+                const e=enemies.find(unit=>unit.id===plan.enemyId);
+                if(!e||e.dead||e.isBoss||e.stunTimer>0||
+                    Math.hypot(e.x-nodes[plan.from].x,e.y-nodes[plan.from].y)>83||
+                    Math.hypot(player.x-nodes[plan.to].x,player.y-nodes[plan.to].y)>315){
+                    chapterStats.riftInterrupted++;
+                    return;
+                }
+                const gate=nodes[plan.to];
+                // Follow from a visible portal, land outside contact range,
+                // and give the player another half-second to react.
+                const options=[[0,120],[0,-120],[120,0],[-120,0]];
+                let spot=null,score=-Infinity;
+                for(const [ox,oy] of options){
+                    const x=Math.max(e.radius+6,Math.min(worldWidth-e.radius-6,gate.x+ox));
+                    const y=Math.max(e.radius+6,Math.min(worldHeight-e.radius-6,gate.y+oy));
+                    const gap=Math.hypot(player.x-x,player.y-y);
+                    if(gap>score){score=gap;spot={x,y};}
+                }
+                if(score<player.radius+e.radius+65){
+                    chapterStats.riftInterrupted++;
+                    return;
+                }
+                e.x=spot.x;e.y=spot.y;
+                e.stunTimer=Math.max(e.stunTimer,.5);
+                e.actionTimer=Math.max(e.actionTimer,.8);
+                e.state='CHASE';e.pushVx=0;e.pushVy=0;
+                e.crowdSteerX=0;e.crowdSteerY=0;
+                chapterStats.riftEnemyFlanks++;
+                shockwaves.push(new Shockwave(spot.x,spot.y,90,'#ffc078',.28));
+                createFloatingText(spot.x,spot.y-38,'YARIK TAKİPÇİSİ','#ffc078',12);
+                return;
+            }
+            // A single living pursuer may follow a recent player warp. The
+            // player can break it by moving away or stunning the pursuer.
+            if(totalTime-chapterRiftLastWarpAt>2.5||
+                totalTime<chapterRiftPursuitReadyAt||chapterRiftLastWarpSource<0)return;
+            const from=chapterRiftLastWarpSource,to=1-from;
+            if(Math.hypot(player.x-nodes[to].x,player.y-nodes[to].y)>315)return;
+            const e=enemies.find(unit=>!unit.dead&&!unit.isBoss&&
+                (unit.type==='ASSASSIN'||unit.type==='DASHER')&&
+                unit.stunTimer<=0&&
+                Math.hypot(unit.x-nodes[from].x,unit.y-nodes[from].y)<=65);
+            if(!e)return;
+            chapterRiftPursuit={enemyId:e.id,from,to,
+                readyAt:totalTime+CHAPTER_RULES.riftPursuitTell};
+            chapterRiftPursuitReadyAt=totalTime+CHAPTER_RULES.riftPursuitCooldown;
+        }
         function updateRiftChapter() {
             const nodes=getRiftCenters();
+            updateRiftPursuit(nodes);
             const within=nodes.map(n=>Math.hypot(player.x-n.x,player.y-n.y)<
                 CHAPTER_RULES.riftRadius);
             if(!within.some(Boolean)){
@@ -5345,6 +5461,8 @@
             const from=within[0]?0:1, source=nodes[from],dest=nodes[1-from];
             chapterRiftArmed=false;
             chapterRiftReadyAt=totalTime+CHAPTER_RULES.riftCooldown;
+            chapterRiftLastWarpAt=totalTime;
+            chapterRiftLastWarpSource=from;
             chapterStats.riftWarps++;
             shockwaves.push(new Shockwave(source.x,source.y,95,
                 ARENA_CHAPTERS.RIFT.color,.36));
@@ -5372,6 +5490,11 @@
             if(!arenaChapter || !chapterEffectsAllowed()){
                 // No banked garden charge or unseen foundry pulse through boss/mission.
                 chapterGardenCharge.fill(0);
+                chapterGardenContested.fill(0);
+                if(arenaChapter==='RIFT'){
+                    chapterRiftPursuit=null;
+                    chapterRiftLastWarpAt=-Infinity;
+                }
                 if(arenaChapter==='FOUNDRY'){
                     chapterFoundryAnchor=null;
                     chapterFoundryLastPulse=-1;
@@ -5394,6 +5517,11 @@
                 foundryReadyIn:arenaChapter==='FOUNDRY'&&chapterFoundryAnchor!==null?
                     Math.max(0,Math.round((CHAPTER_RULES.foundryWarn-chapterFoundryPhase())*10)/10):null,
                 gardenCharge:[...chapterGardenCharge],
+                gardenContested:[...chapterGardenContested],
+                riftPursuit:chapterRiftPursuit?{
+                    enemyId:chapterRiftPursuit.enemyId,
+                    remaining:Math.max(0,Math.round((chapterRiftPursuit.readyAt-totalTime)*10)/10)
+                }:null,
                 gardenReadyIn:chapterGardenReady.map(t=>Math.max(0,
                     Math.round((t-totalTime)*10)/10)),
                 riftReadyIn:Math.max(0,
@@ -5420,7 +5548,10 @@
                         'ISI YÜKLENİYOR · '+(CHAPTER_RULES.foundryWarn-phase).toFixed(1)+' sn':
                         phase<CHAPTER_RULES.foundryActiveEnd?'RAYLARDAN KAÇ':
                         'RAYLAR SOĞUYOR';
-                }else if(arenaChapter==='GARDEN')message='HALKALARDA DUR · İYON DOLDUR';
+                }else if(arenaChapter==='GARDEN')message=chapterGardenContested.some(Boolean)?
+                    'İYON BASKISI · MUHAFIZI UZAKLAŞTIR':'HALKALARDA DUR · İYON DOLDUR';
+                else if(chapterRiftPursuit)message='YARIK TAKİPÇİSİ · '+
+                    (chapterRiftPursuit.readyAt-totalTime).toFixed(1)+' sn';
                 else message=totalTime<chapterRiftReadyAt?
                     'GEÇİT ŞARJDA · '+Math.ceil(chapterRiftReadyAt-totalTime)+' sn':
                     'İKİ GEÇİT AKTİF';
@@ -5504,6 +5635,13 @@
                         ctx.beginPath();ctx.arc(0,0,r+6,-Math.PI/2,
                             -Math.PI/2+Math.PI*2*progress);ctx.stroke();
                     }
+                    if(active&&readyIn===0&&chapterGardenContested[index]>0){
+                        ctx.globalAlpha=.85;
+                        ctx.lineWidth=4;ctx.strokeStyle='#ffc078';
+                        ctx.setLineDash([8,6]);
+                        ctx.beginPath();ctx.arc(0,0,r+13,0,Math.PI*2);ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
                     if(readyIn>0){
                         ctx.globalAlpha=active?.8:.2;
                         ctx.lineWidth=4;ctx.strokeStyle=d.accent;
@@ -5536,6 +5674,13 @@
                     }
                     ctx.beginPath();ctx.moveTo(-15,0);ctx.lineTo(0,-18);
                     ctx.lineTo(15,0);ctx.lineTo(0,18);ctx.closePath();ctx.stroke();
+                    if(chapterRiftPursuit&&i===chapterRiftPursuit.to&&active){
+                        ctx.globalAlpha=.95;
+                        ctx.lineWidth=5;ctx.strokeStyle='#ffc078';
+                        ctx.setLineDash([9,7]);
+                        ctx.beginPath();ctx.arc(0,0,r+17,0,Math.PI*2);ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
                     if(totalTime<chapterRiftReadyAt){
                         ctx.globalAlpha=active?.7:.2;
                         ctx.lineWidth=4;ctx.strokeStyle=d.accent;

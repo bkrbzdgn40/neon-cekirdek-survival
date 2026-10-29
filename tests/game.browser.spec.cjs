@@ -404,3 +404,31 @@ test('M5.18 mobile displays chapter status through warning, garden and rift',asy
  await expect(mobile).toContainText('İKİ GEÇİT AKTİF');
  expect(errors).toEqual([]);
 });
+
+
+test('M5.19 contested garden and warned rift pursuit have readable HUD in Chromium',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const result=await page.evaluate(()=>{
+   wave=7;nextBossTime=500;updateArenaChapter(.02);
+   const n=getGardenCenters()[0];
+   player.x=n.x;player.y=n.y;
+   enemies=[new Enemy(n.x+12,n.y+12,'SHOOTER')];
+   updateArenaChapter(.2);updateArenaChapterHud();
+   const garden=document.getElementById('arenaChapterStatus').textContent;
+   wave=10;updateArenaChapter(.02);
+   const nodes=getRiftCenters();
+   player.x=nodes[0].x;player.y=nodes[0].y;
+   enemies=[new Enemy(nodes[0].x+10,nodes[0].y+8,'ASSASSIN')];
+   updateArenaChapter(.02);updateArenaChapter(.02);updateArenaChapterHud();
+   return {garden,rift:document.getElementById('arenaChapterStatus').textContent,
+     pursuit:getArenaChapterSnapshot().riftPursuit,
+     gold:totalGold};
+ });
+ expect(result.garden).toContain('İYON BASKISI');
+ expect(result.rift).toContain('YARIK TAKİPÇİSİ');
+ expect(result.pursuit?.remaining).toBeGreaterThan(0);
+ expect(result.gold).toBe(50);
+ expect(errors).toEqual([]);
+});
