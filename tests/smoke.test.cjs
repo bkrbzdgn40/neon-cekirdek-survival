@@ -6162,9 +6162,11 @@ test('M5.23 readable upgrade cards preserve every original description and selec
 
 test('M5.24 motion effects use separate, strictly bounded per-profile live and per-frame budgets',()=>{
  const {run}=setup();
- const x=JSON.parse(run("(()=>{startNewGame();const out={};for(const quality of ['high','medium','low']){graphicsQuality=quality;resetMotionFx();const emissions=[];for(let i=0;i<100;i++)emissions.push(emitMotionFx('PRISM',player.x,player.y));const first=motionFxSnapshot();for(let frame=0;frame<50;frame++){motionFxFrameCount=0;for(let n=0;n<8;n++)emitMotionFx('PRISM',player.x,player.y);}const stressed=motionFxSnapshot();out[quality]={first:{active:first.active,emitted:first.emitted,frameDropped:first.frameDropped},stressed:{active:stressed.active,highWater:stressed.highWater,capDropped:stressed.capDropped,emitted:stressed.emitted},max:MOTION_FX_LIMITS[quality].live,perFrame:MOTION_FX_LIMITS[quality].frame};}return JSON.stringify(out);})()"));
+ const x=JSON.parse(run("(()=>{startNewGame();const out={};for(const quality of ['high','medium','low']){graphicsQuality=quality;resetMotionFx();const emissions=[];for(let i=0;i<100;i++)emissions.push(emitMotionFx('PRISM',player.x,player.y));const first=motionFxSnapshot();const cue=[emitMotionFx('WAVE',player.x,player.y),emitMotionFx('BOSS',player.x,player.y),emitMotionFx('NOVA',player.x,player.y)];const cueState=motionFxSnapshot();for(let frame=0;frame<50;frame++){motionFxFrameCount=0;for(let n=0;n<8;n++)emitMotionFx('PRISM',player.x,player.y);}const stressed=motionFxSnapshot();out[quality]={cue,frameTotal:cueState.active,first:{active:first.active,emitted:first.emitted,frameDropped:first.frameDropped},stressed:{active:stressed.active,highWater:stressed.highWater,capDropped:stressed.capDropped,emitted:stressed.emitted},max:MOTION_FX_LIMITS[quality].live,perFrame:MOTION_FX_LIMITS[quality].frame};}return JSON.stringify(out);})()"));
  for(const value of Object.values(x)){
-   assert.equal(value.first.active,value.perFrame);
+   assert.equal(value.first.active,value.perFrame-Math.min(2,value.perFrame-1));
+   assert.deepEqual(value.cue,[true,true,false]);
+   assert.equal(value.frameTotal,value.perFrame);
    assert.ok(value.first.frameDropped>0);
    assert.ok(value.stressed.active<=value.max);
    assert.ok(value.stressed.highWater<=value.max);
