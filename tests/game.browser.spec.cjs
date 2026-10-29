@@ -840,3 +840,90 @@ test('M5.25 reduced-motion and low graphics keep HUD legible without decorative 
  expect(r.shadow).toBe('none');
  expect(r.font).toBeGreaterThanOrEqual(14);
 });
+
+
+test('M5.26 capacitor has a real on-screen warning, delayed detonation and visual feedback',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const r=await page.evaluate(()=>{
+   nextBossTime=5000;totalTime=20;player.invulnTimer=0;player.hasShield=false;
+   const d=spawnFieldDevice('CAPACITOR',player.x+145,player.y);
+   updateHUD();const idle=document.getElementById('fieldDeviceBadge').textContent;
+   const visible=getComputedStyle(document.getElementById('fieldDeviceBadge')).display;
+   triggerFieldDevice(d,'shot');updateFieldDevices(.1);updateHUD();
+   const warning=document.getElementById('fieldDeviceBadge').textContent;
+   const hp=player.hp;
+   renderGame();
+   updateFieldDevices(.5);updateHUD();renderGame();
+   return {idle,visible,warning,hp,afterHp:player.hp,stats:window.getNeonFieldDevices().stats,
+     now:window.getNeonFieldDevices().devices.length};
+ });
+ expect(r.idle).toContain('REAKTÖR');
+ expect(r.visible).not.toBe('none');
+ expect(r.warning).toContain('PATLAYACAK');
+ expect(r.warning).toContain('UZAKLAŞ');
+ expect(r.stats.blasts).toBe(1);
+ expect(r.now).toBe(0);
+ expect(r.hp).toBeGreaterThan(r.afterHp);
+ expect(errors).toEqual([]);
+});
+
+test('M5.26 graviton field changes true enemy simulation speed and renders at all quality tiers',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const r=await page.evaluate(()=>{
+   nextBossTime=5000;
+   const d=spawnFieldDevice('GRAVITON',player.x+115,player.y);
+   const enemy=new Enemy(d.x+20,d.y,'SWARM');enemy.speed=160;
+   triggerFieldDevice(d,'nova');const scale=getFieldEnemyTimeScale(enemy);
+   const screens={};
+   for(const quality of ['high','medium','low']){
+     graphicsQuality=quality;
+     renderGame();
+     updateFieldDeviceHud();
+     screens[quality]={state:window.getNeonFieldDevices().devices[0].state,
+       color:getComputedStyle(document.getElementById('fieldDeviceBadge')).color,
+       label:document.getElementById('fieldDeviceBadge').textContent};
+   }
+   return {scale,screens,stats:window.getNeonFieldDevices().stats};
+ });
+ expect(r.scale).toBe(.55);
+ for(const state of Object.values(r.screens)){
+   expect(state.state).toBe('field');
+   expect(state.label).toContain('YAVAŞ');
+ }
+ expect(r.stats.gravityFields).toBe(1);
+ expect(errors).toEqual([]);
+});
+
+test('M5.26 engineering warnings fit small mobile HUD without blocking touch abilities',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ await page.evaluate(()=>{
+   nextBossTime=5000;
+   const d=spawnFieldDevice('CAPACITOR',player.x,player.y+100);
+   triggerFieldDevice(d,'shot');updateHUD();
+ });
+ for(const [width,height] of [[320,568],[360,740],[768,900],[1440,900]]){
+   await page.setViewportSize({width,height});
+   const x=await page.evaluate(()=>{
+     const chip=document.getElementById('fieldDeviceBadge');
+     const rect=chip.getBoundingClientRect();
+     const dash=document.getElementById('dashBtn').getBoundingClientRect();
+     return {left:rect.left,right:rect.right,bottom:rect.bottom,
+       font:parseFloat(getComputedStyle(chip).fontSize),
+       dashTop:dash.top,dashH:dash.height,
+       scrollWidth:document.documentElement.scrollWidth,viewport:innerWidth};
+   });
+   expect(x.left).toBeGreaterThanOrEqual(-2);
+   expect(x.right).toBeLessThanOrEqual(width+2);
+   expect(x.font).toBeGreaterThanOrEqual(10);
+   expect(x.bottom,'warning must not overlap controls at '+width).toBeLessThan(x.dashTop);
+   expect(x.dashH).toBeGreaterThanOrEqual(44);
+   expect(x.scrollWidth-x.viewport).toBeLessThanOrEqual(3);
+ }
+ expect(errors).toEqual([]);
+});
