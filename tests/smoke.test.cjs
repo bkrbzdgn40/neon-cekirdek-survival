@@ -5361,7 +5361,7 @@ test('idle player at arena edge gets safe entrance instead of unsafe random flan
 
 test('M5.13 spatial crowd pairs peel apart instead of remaining one horizontal collision queue', () => {
   const {run}=setup();
-  const x=JSON.parse(run("(()=>{startNewGame();player.x=820;player.y=300;const a=new Enemy(260,300,'SWARM');const b=new Enemy(278,300,'SWARM');enemies=[a,b];const initial=Math.hypot(a.x-b.x,a.y-b.y);const sampled=sampleEnemyCrowdSteering(.2);const beforeA={x:a.x,y:a.y},beforeB={x:b.x,y:b.y};a.update(.05);b.update(.05);return JSON.stringify({sampled,initial,dist:Math.hypot(a.x-b.x,a.y-b.y),aSide:a.y-beforeA.y,bSide:b.y-beforeB.y,travelA:Math.hypot(a.x-beforeA.x,a.y-beforeA.y),expectedA:a.speed*.05,snapshot:getEnemyCrowdSteeringSnapshot()});})()"));
+  const x=JSON.parse(run("(()=>{startNewGame();player.x=820;player.y=300;const a=new Enemy(260,300,'SWARM');const b=new Enemy(278,300,'SWARM');a.speed=180;b.speed=180;enemies=[a,b];const initial=Math.hypot(a.x-b.x,a.y-b.y);const sampled=sampleEnemyCrowdSteering(.2);const beforeA={x:a.x,y:a.y},beforeB={x:b.x,y:b.y};a.update(.05);b.update(.05);return JSON.stringify({sampled,initial,dist:Math.hypot(a.x-b.x,a.y-b.y),aSide:a.y-beforeA.y,bSide:b.y-beforeB.y,travelA:Math.hypot(a.x-beforeA.x,a.y-beforeA.y),expectedA:a.speed*.05,snapshot:getEnemyCrowdSteeringSnapshot()});})()"));
   assert.equal(x.sampled,true);
   assert.ok(x.dist>x.initial,'nearby enemies should move apart in the same target lane');
   assert.ok(x.aSide*x.bSide<0,'close agents must take mirrored lateral lanes');
