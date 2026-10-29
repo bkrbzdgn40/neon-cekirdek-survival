@@ -50,6 +50,20 @@ async function boot(page) {
     applyGraphicsQuality('high', false);
     player.hp = player.maxHp;
     updateHUD();
+    // Reproducible placement uses the game's real constructors in Chromium.
+    window.__captureSpawnPack=()=>{
+      const specs=[
+        ['SWARM',-260,-135],['SHOOTER',230,-135],
+        ['SHIELD_BEARER',-240,105],['DASHER',245,145],
+        ['ASSASSIN',290,15],['TANK',-110,205],
+        ['SNIPER',-340,15],['SPLITTER',80,-230]
+      ];
+      for(const [type,dx,dy] of specs){
+        const x=Math.max(55,Math.min(worldWidth-55,player.x+dx));
+        const y=Math.max(55,Math.min(worldHeight-55,player.y+dy));
+        spawnEnemy(false,type,false,{x,y});
+      }
+    };
   });
   return errors;
 }
@@ -67,24 +81,11 @@ async function still(page, name, title, description, errors, check) {
   expect(errors).toEqual([]);
   manifest.push({file,title,description,viewport:page.viewportSize(),bytes:png.length});
 }
-const spawnPack = () => {
-  const specs=[
-    ['SWARM',-260,-135],['SHOOTER',230,-135],
-    ['SHIELD_BEARER',-240,105],['DASHER',245,145],
-    ['ASSASSIN',290,15],['TANK',-110,205],
-    ['SNIPER',-340,15],['SPLITTER',80,-230]
-  ];
-  for(const [type,dx,dy] of specs){
-    const x=Math.max(55,Math.min(worldWidth-55,player.x+dx));
-    const y=Math.max(55,Math.min(worldHeight-55,player.y+dy));
-    spawnEnemy(false,type,false,{x,y});
-  }
-};
 
 test('real active combat and cockpit screenshot', async ({page}) => {
   const errors=await boot(page);
   const count=await page.evaluate(() => {
-    spawnPack();
+    window.__captureSpawnPack();
     player.autoShoot();
     return enemies.length;
   });
@@ -96,7 +97,7 @@ test('real active combat and cockpit screenshot', async ({page}) => {
 test('real volatile reactor and visible fuse screenshot', async ({page}) => {
   const errors=await boot(page);
   const x=await page.evaluate(()=>{
-    spawnPack();
+    window.__captureSpawnPack();
     const d=spawnFieldDevice('CAPACITOR',player.x+177,player.y+45);
     triggerFieldDevice(d,'shot');
     updateFieldDeviceHud();
@@ -112,7 +113,7 @@ test('real volatile reactor and visible fuse screenshot', async ({page}) => {
 test('real graviton field and crowd-control screenshot', async ({page}) => {
   const errors=await boot(page);
   const x=await page.evaluate(()=>{
-    spawnPack();
+    window.__captureSpawnPack();
     const d=spawnFieldDevice('GRAVITON',player.x+167,player.y+55);
     triggerFieldDevice(d,'nova');
     updateFieldDeviceHud();
@@ -154,7 +155,7 @@ test('real mobile combat layout screenshot', async ({page}) => {
   await page.setViewportSize({width:390,height:844});
   const errors=await boot(page);
   const result=await page.evaluate(()=>{
-    spawnPack();
+    window.__captureSpawnPack();
     return {playing:gameState==='PLAYING',enemies:enemies.length};
   });
   expect(result.playing).toBe(true);
