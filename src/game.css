@@ -1092,3 +1092,25 @@
         transition:none!important;animation:none!important;
     }
 }
+
+/* Fit four active actions on narrow mobile viewports without hiding status. */
+@media(max-width:639px) {
+    #hud .ability-command-row {
+        gap:3px;
+        width:100%;
+        min-width:0;
+        justify-content:space-between;
+    }
+    #hud .ability-command-row > button {
+        flex:0 1 auto;
+        min-width:0;
+        padding:7px 4px;
+        gap:3px;
+        white-space:nowrap;
+    }
+    #hud .ability-command-row > button > i {font-size:14px;}
+    #hud .ability-command-row #prismStatus,
+    #hud .ability-command-row #dashStatus,
+    #hud .ability-command-row #novaStatus,
+    #hud .ability-command-row #bastionStatus {font-size:9px;}
+}
