@@ -5395,7 +5395,7 @@
             ctx.fillRect(0,0,worldWidth,worldHeight);
             ctx.strokeStyle=d.color;
             ctx.lineWidth=2;
-            ctx.globalAlpha=active?.22:.09;
+            ctx.globalAlpha=active ? .22 : .09;
             const cell=90;
             if(arenaChapter==='FOUNDRY'){
                 for(let x=45;x<worldWidth;x+=cell){
@@ -5409,10 +5409,10 @@
                 for(const y of [worldHeight*.32,worldHeight*.68]){
                     ctx.save();
                     ctx.fillStyle=d.color;
-                    ctx.globalAlpha=danger?.21:warning?.09:.025;
+                    ctx.globalAlpha=danger ? .21 : warning ? .09 : .025;
                     ctx.fillRect(0,y-CHAPTER_RULES.foundryHalfWidth,worldWidth,
                         CHAPTER_RULES.foundryHalfWidth*2);
-                    ctx.globalAlpha=danger?.9:warning?.65:.16;
+                    ctx.globalAlpha=danger ? .9 : warning ? .65 : .16;
                     ctx.strokeStyle=danger?'#fff1c9':d.color;
                     ctx.lineWidth=danger?4:2;
                     if(warning)ctx.setLineDash([12,10]);
@@ -5424,12 +5424,14 @@
                     ctx.restore();
                 }
             } else if(arenaChapter==='GARDEN'){
-                for(const node of getGardenCenters()){
+                const nodes=getGardenCenters();
+                for(let index=0;index<nodes.length;index++){
+                    const node=nodes[index];
                     const r=CHAPTER_RULES.gardenRadius;
                     ctx.save();
                     ctx.translate(node.x,node.y);
                     ctx.strokeStyle=d.color;
-                    ctx.globalAlpha=active?.85:.25;
+                    ctx.globalAlpha=active ? .85 : .25;
                     ctx.lineWidth=2;
                     for(let petal=0;petal<6;petal++){
                         ctx.beginPath();
@@ -5439,8 +5441,6 @@
                         ctx.stroke();
                     }
                     ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke();
-                    const index=getGardenCenters().findIndex(p=>
-                        p.x===node.x&&p.y===node.y);
                     const progress=chapterGardenCharge[index]/CHAPTER_RULES.gardenCharge;
                     if(progress>0){
                         ctx.lineWidth=5;ctx.strokeStyle=d.accent;
@@ -5457,7 +5457,7 @@
                 ctx.save();
                 ctx.strokeStyle=d.color;
                 ctx.lineWidth=2;
-                ctx.globalAlpha=active?.42:.17;
+                ctx.globalAlpha=active ? .42 : .17;
                 ctx.setLineDash([8,12]);
                 ctx.beginPath();ctx.moveTo(nodes[0].x,nodes[0].y);
                 ctx.lineTo(nodes[1].x,nodes[1].y);ctx.stroke();
@@ -5466,7 +5466,7 @@
                     const node=nodes[i],r=CHAPTER_RULES.riftRadius;
                     ctx.save();ctx.translate(node.x,node.y);
                     ctx.strokeStyle=i?d.accent:d.color;
-                    ctx.globalAlpha=active?.85:.3;
+                    ctx.globalAlpha=active ? .85 : .3;
                     for(let ring=0;ring<(low?2:3);ring++){
                         const a=clock*(i?-.8:.8)+ring*.72;
                         ctx.lineWidth=ring?1.5:3;
