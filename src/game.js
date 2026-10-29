@@ -4272,12 +4272,12 @@
         function scoreTacticalDeployment(currentWave, theme, index, fallbackSide, memory, lastSide) {
             const fallback = ((fallbackSide % 4) + 4) % 4;
             const velocity = Math.hypot(memory?.vx || 0, memory?.vy || 0);
-            if (!player || !Number.isFinite(velocity) || velocity < 85 ||
-                (memory?.tracked || 0) < 0.8) {
+            if (!player || !Number.isFinite(velocity)) {
                 return { side: fallback, mode: 'unobserved', clearance: null };
             }
-            const headingX = memory.vx / velocity;
-            const headingY = memory.vy / velocity;
+            const observed = velocity >= 85 && (memory?.tracked || 0) >= 0.8;
+            const headingX = observed ? memory.vx / velocity : 0;
+            const headingY = observed ? memory.vy / velocity : 0;
             const safeDistance = Math.min(210, Math.min(worldWidth, worldHeight) * 0.24);
             const edgeX = [0, 1, 0, -1];
             const edgeY = [-1, 0, 1, 0];
@@ -4304,14 +4304,24 @@
                 return { side, clearance, score };
             });
             const legal = candidates.filter(candidate => candidate.clearance >= safeDistance);
-            // When all edges are tight, prioritize distance over aggression.
-            const choices = legal.length ? legal : candidates;
-            choices.sort((a, b) => (legal.length ? b.score - a.score : b.clearance - a.clearance) ||
+            const fallbackCandidate = candidates.find(candidate => candidate.side === fallback);
+            // Idle players still deserve safe spawns. Keep the legacy random
+            // direction unless it would put an entry almost on top of them.
+            if (!observed && fallbackCandidate.clearance >= safeDistance) {
+                return { side: fallback, mode: 'unobserved',
+                    clearance: Math.round(fallbackCandidate.clearance) };
+            }
+            // If no edge is truly safe, maximize distance, not aggression.
+            const choices = !observed ? candidates : (legal.length ? legal : candidates);
+            choices.sort((a, b) => (!observed || !legal.length ?
+                b.clearance - a.clearance : b.score - a.score) ||
                 (((a.side - fallback + 4) % 4) - ((b.side - fallback + 4) % 4)));
             const best = choices[0];
             return {
-                side: best.side, mode: legal.length ? 'reading-motion' : 'safe-retreat',
-                clearance: Math.round(best.clearance), confidence: Math.round(velocity)
+                side: best.side, mode: !observed ? 'safety-only' :
+                    (legal.length ? 'reading-motion' : 'safe-retreat'),
+                clearance: Math.round(best.clearance),
+                confidence: observed ? Math.round(velocity) : 0
             };
         }
 
