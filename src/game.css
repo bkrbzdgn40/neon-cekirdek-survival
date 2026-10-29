@@ -1034,3 +1034,40 @@
     #hud .arena-showcase-banner,
     #hud .arena-showcase-banner::after { transition:none!important;animation:none!important; }
 }
+
+/* M5.21 Echo Hunter: readable, compact and distinct from the arena chapter banner. */
+#hud .nemesis-banner {
+    --nemesis-progress:0%;
+    position:relative;
+    isolation:isolate;
+    overflow:hidden;
+    border:1px solid rgba(255,135,222,.88);
+    border-radius:10px;
+    padding:7px 15px 10px;
+    margin-top:5px;
+    max-width:min(96vw,700px);
+    color:#ffe5f7;
+    background:linear-gradient(115deg,rgba(60,12,55,.95),rgba(14,9,34,.96));
+    box-shadow:0 6px 20px rgba(0,0,0,.4),inset 3px 0 #ff87de;
+    letter-spacing:.035em;
+    pointer-events:none;
+}
+#hud .nemesis-banner::after {
+    content:'';
+    position:absolute;
+    left:0;
+    bottom:0;
+    height:3px;
+    width:var(--nemesis-progress);
+    background:linear-gradient(90deg,#ff87de,#fff0fa);
+    pointer-events:none;
+}
+@media(max-width:639px) {
+    #hud .nemesis-banner {padding:5px 9px 8px;max-width:95vw;}
+}
+@media(prefers-reduced-motion:reduce){
+    #hud .nemesis-banner,#hud .nemesis-banner::after {
+        transition:none!important;
+        animation:none!important;
+    }
+}
