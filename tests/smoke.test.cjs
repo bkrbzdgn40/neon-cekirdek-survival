@@ -6392,3 +6392,37 @@ test('M5.27 a new game still loads exactly the same playable mechanics without s
   assert.equal(state.level,1);
   assert.equal(state.enemies,0);
 });
+
+
+test('M5.28 capture suite uses the real game and labels all staged evidence before publication',()=>{
+  const root=path.join(__dirname,'..');
+  const capture=fs.readFileSync(path.join(root,'tests','press.capture.spec.cjs'),'utf8');
+  const config=fs.readFileSync(path.join(root,'playwright.capture.config.cjs'),'utf8');
+  const pipeline=fs.readFileSync(path.join(root,'.github','workflows','neon-smoke.yml'),'utf8');
+  const guide=fs.readFileSync(path.join(root,'docs','M5.28-gameplay-evidence.md'),'utf8');
+  assert.match(capture,/page\.goto\('\/index\.html'/);
+  assert.match(capture,/renderGame\(\)/);
+  assert.match(capture,/spawnEnemy\(false,type,false/);
+  assert.match(capture,/spawnFieldDevice\('CAPACITOR'/);
+  assert.match(capture,/spawnBossEncounter\(\)/);
+  assert.match(capture,/triggerLevelUp\(\)/);
+  assert.match(capture,/approved_for_publication: false/);
+  assert.match(capture,/not an organic play session/i);
+  assert.match(capture,/contact-sheet\.html/);
+  assert.match(config,/workers:1/);
+  assert.match(pipeline,/neon-gameplay-evidence/);
+  assert.match(pipeline,/--config=playwright\.capture\.config\.cjs/);
+  assert.match(guide,/Human publishing gate/);
+});
+
+test('M5.28 generated screenshots are ignored in git, not falsely advertised as live gallery',()=>{
+  const root=path.join(__dirname,'..');
+  const ignore=fs.readFileSync(path.join(root,'.gitignore'),'utf8');
+  const showcase=fs.readFileSync(path.join(root,'showcase.html'),'utf8');
+  const media=fs.readFileSync(path.join(root,'docs','PRESSKIT.md'),'utf8');
+  assert.match(ignore,/^press-capture\/$/m);
+  assert.match(showcase,/no approved public screenshot gallery/i);
+  assert.match(media,/No \*\*approved\*\* public screenshots yet/);
+  assert.doesNotMatch(showcase,/src="\.\/press-capture\//);
+  assert.match(showcase,/M5\.28-gameplay-evidence\.md/);
+});
