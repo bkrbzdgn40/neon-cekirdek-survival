@@ -535,3 +535,27 @@ test('M5.22 keyboard C and touch Prism Riposte deflect a real projectile in Chro
  expect(await page.evaluate(()=>getNeonPrismGuard().stats.activations)).toBe(2);
  expect(errors).toEqual([]);
 });
+
+
+test('M5.22 all four touch combat controls fit the phone viewport without overlap',async({page,isMobile})=>{
+ test.skip(!isMobile,'phone-only combat command geometry');
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const ids=['bastionBtn','novaBtn','prismBtn','dashBtn'];
+ const positions=await page.evaluate(ids=>({
+   width:window.innerWidth,
+   buttons:ids.map(id=>{
+     const rect=document.getElementById(id).getBoundingClientRect();
+     return {id,x:rect.x,right:rect.right,width:rect.width,height:rect.height};
+   })
+ }),ids);
+ for(const item of positions.buttons){
+   expect(item.width).toBeGreaterThan(35);
+   expect(item.height).toBeGreaterThan(30);
+   expect(item.x).toBeGreaterThanOrEqual(-1);
+   expect(item.right).toBeLessThanOrEqual(positions.width+1);
+ }
+ for(let i=1;i<positions.buttons.length;i++)
+   expect(positions.buttons[i].x).toBeGreaterThanOrEqual(
+     positions.buttons[i-1].right-1);
+});
