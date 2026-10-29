@@ -24,42 +24,42 @@
     <!-- CRT Scanline Visual Effect -->
     <div class="crt-overlay fixed inset-0 z-10"></div>
 
-    <div id="hud" class="fixed inset-0 pointer-events-none z-20 flex flex-col justify-between p-3 sm:p-5 lg:p-6 hidden">
+    <div id="hud" class="combat-cockpit fixed inset-0 pointer-events-none z-20 flex flex-col justify-between p-3 sm:p-5 lg:p-6 hidden" data-vital="steady" data-combat-alert="patrol">
         <!-- Top Bar -->
-        <div class="flex flex-col gap-2 w-full">
+        <div class="hud-top-deck flex flex-col gap-2 w-full">
             <!-- XP, Kinetic Momentum & Overdrive Progress Bars -->
-            <div class="grid grid-cols-1 md:grid-cols-12 gap-2">
+            <div class="hud-signal-deck grid gap-2" aria-label="Çekirdek durum göstergeleri">
                 <!-- XP BAR -->
-                <div class="md:col-span-5 bg-gray-900/90 h-5 rounded-full overflow-hidden border border-cyan-500/50 p-0.5 relative shadow-[0_0_15px_rgba(0,243,255,0.3)]">
-                    <div id="xpBar" class="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 rounded-full transition-all duration-150" style="width: 0%;"></div>
-                    <div class="absolute inset-0 flex items-center justify-center text-[11px] sm:text-xs font-cyber font-bold tracking-widest text-white drop-shadow">
+                <div class="hud-meter hud-meter-xp bg-gray-900/90 h-5 rounded-full overflow-hidden border border-cyan-500/50 p-0.5 relative shadow-[0_0_15px_rgba(0,243,255,0.3)]" aria-label="Deneyim çubuğu">
+                    <div id="xpBar" role="progressbar" aria-label="Deneyim yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="hud-meter-fill h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 rounded-full transition-all duration-150" style="width: 0%;"></div>
+                    <div class="hud-meter-label absolute inset-0 flex items-center justify-center text-[11px] sm:text-xs font-cyber font-bold tracking-widest text-white drop-shadow">
                         SV <span id="levelText" class="mx-1 text-cyan-300">1</span> · XP <span id="xpText" class="ml-1">0 / 125</span>
                     </div>
                 </div>
                 <!-- KINETIC MOMENTUM BAR -->
-                <div class="md:col-span-3 bg-gray-900/90 h-5 rounded-full overflow-hidden border border-green-400/60 p-0.5 relative shadow-[0_0_15px_rgba(0,255,102,0.25)]">
-                    <div id="momentumBar" class="h-full bg-gradient-to-r from-emerald-500 via-green-400 to-cyan-300 rounded-full transition-all duration-75" style="width: 0%;"></div>
-                    <div id="momentumText" class="absolute inset-0 flex items-center justify-center text-[10px] sm:text-xs font-cyber font-black tracking-wider text-white drop-shadow">
+                <div class="hud-meter hud-meter-momentum bg-gray-900/90 h-5 rounded-full overflow-hidden border border-green-400/60 p-0.5 relative shadow-[0_0_15px_rgba(0,255,102,0.25)]" aria-label="Momentum çubuğu">
+                    <div id="momentumBar" role="progressbar" aria-label="Momentum yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="hud-meter-fill h-full bg-gradient-to-r from-emerald-500 via-green-400 to-cyan-300 rounded-full transition-all duration-75" style="width: 0%;"></div>
+                    <div id="momentumText" class="hud-meter-label absolute inset-0 flex items-center justify-center text-[10px] sm:text-xs font-cyber font-black tracking-wider text-white drop-shadow">
                         MOMENTUM · %0
                     </div>
                 </div>
                 <!-- OVERDRIVE FEVER BAR -->
-                <div class="md:col-span-4 bg-gray-900/90 h-5 rounded-full overflow-hidden border border-pink-500/60 p-0.5 relative shadow-[0_0_15px_rgba(255,0,127,0.3)]">
-                    <div id="overdriveBar" class="h-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600 rounded-full transition-all duration-100" style="width: 0%;"></div>
-                    <div id="overdriveText" class="absolute inset-0 flex items-center justify-center text-[10px] sm:text-xs font-cyber font-black tracking-widest text-white drop-shadow">
+                <div class="hud-meter hud-meter-overdrive bg-gray-900/90 h-5 rounded-full overflow-hidden border border-pink-500/60 p-0.5 relative shadow-[0_0_15px_rgba(255,0,127,0.3)]" aria-label="Cinnet çubuğu">
+                    <div id="overdriveBar" role="progressbar" aria-label="Cinnet enerjisi yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="hud-meter-fill h-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600 rounded-full transition-all duration-100" style="width: 0%;"></div>
+                    <div id="overdriveText" class="hud-meter-label absolute inset-0 flex items-center justify-center text-[10px] sm:text-xs font-cyber font-black tracking-widest text-white drop-shadow">
                         CİNNET · %0
                     </div>
                 </div>
             </div>
 
-            <div class="flex flex-wrap items-center justify-between gap-2 mt-0.5">
+            <div class="hud-information-row flex flex-wrap items-center justify-between gap-2 mt-0.5">
                 <!-- Health, Shield, Defibrillator & Gold -->
-                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-                    <div class="flex items-center gap-3 bg-gray-950/85 border border-pink-500/40 px-3 py-1.5 rounded-xl backdrop-blur-md">
+                <div class="hud-vitals-group flex flex-wrap items-center gap-2 sm:gap-3">
+                    <div class="hud-vitals flex items-center gap-3 bg-gray-950/85 border border-pink-500/40 px-3 py-1.5 rounded-xl backdrop-blur-md">
                         <div class="flex items-center gap-2">
                             <i class="fa-solid fa-heart text-pink-500 animate-pulse"></i>
-                            <div class="w-24 sm:w-36 bg-gray-800 h-3 rounded-full overflow-hidden">
-                                <div id="hpBar" class="bg-gradient-to-r from-red-600 to-pink-500 h-full transition-all duration-150" style="width: 100%;"></div>
+                            <div class="hud-health-track w-24 sm:w-36 bg-gray-800 h-3 rounded-full overflow-hidden">
+                                <div id="hpBar" role="progressbar" aria-label="Can yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" class="bg-gradient-to-r from-red-600 to-pink-500 h-full transition-all duration-150" style="width: 100%;"></div>
                             </div>
                             <span id="hpText" class="text-xs sm:text-sm font-bold w-16 text-right">100/100</span>
                         </div>
@@ -76,7 +76,7 @@
                     </div>
 
                     <!-- Gold Cores Counter -->
-                    <div class="flex items-center gap-2 bg-gray-950/85 border border-yellow-500/40 px-3 py-1.5 rounded-xl backdrop-blur-md">
+                    <div class="hud-gold-panel flex items-center gap-2 bg-gray-950/85 border border-yellow-500/40 px-3 py-1.5 rounded-xl backdrop-blur-md">
                         <i class="fa-solid fa-coins text-yellow-400"></i>
                         <span id="goldHudText" class="font-cyber text-sm font-bold text-yellow-300 text-glow-yellow">0</span>
                     </div>
@@ -93,7 +93,7 @@
                 </div>
 
                 <!-- Wave, timer and Combat Director phase -->
-                <div class="bg-gray-950/85 border border-purple-500/40 px-4 py-1.5 rounded-xl backdrop-blur-md flex items-center gap-3">
+                <div class="hud-wave-panel bg-gray-950/85 border border-purple-500/40 px-4 py-1.5 rounded-xl backdrop-blur-md flex items-center gap-3">
                     <div class="text-center">
                         <span class="text-[10px] text-purple-300 block leading-none">DALGA</span>
                         <span id="waveText" class="font-cyber text-base sm:text-lg font-black text-white text-glow-pink">1</span>
@@ -116,7 +116,7 @@
                 </div>
 
                 <!-- Score, Combo Rank & Pause -->
-                <div class="flex items-center gap-3 bg-gray-950/85 border border-cyan-500/40 px-3 sm:px-4 py-1.5 rounded-xl backdrop-blur-md">
+                <div class="hud-score-panel flex items-center gap-3 bg-gray-950/85 border border-cyan-500/40 px-3 sm:px-4 py-1.5 rounded-xl backdrop-blur-md">
                     <!-- Dynamic Combo Rank Box -->
                     <div id="comboContainer" class="hidden items-center gap-2 bg-gray-900/90 border border-yellow-400 px-2.5 py-0.5 rounded-lg">
                         <div class="text-left">
@@ -141,7 +141,7 @@
                 </div>
             </div>
 
-            <div id="bossHudContainer" class="hidden flex-col items-center w-full max-w-2xl mx-auto mt-1 bg-gray-950/90 border border-red-500/70 px-4 py-2 rounded-xl box-glow-pink">
+            <div id="bossHudContainer" class="hud-boss-console hidden flex-col items-center w-full max-w-2xl mx-auto mt-1 bg-gray-950/90 border border-red-500/70 px-4 py-2 rounded-xl box-glow-pink">
                 <div class="flex justify-between w-full items-center mb-1">
                     <span id="bossNameText" class="font-cyber text-xs sm:text-sm font-black text-red-400 tracking-wider flex items-center gap-2">
                         <i class="fa-solid fa-triangle-exclamation animate-bounce"></i> MEGA-ÇEKİRDEK YIKICI
@@ -175,7 +175,7 @@
             </div>
         </div>
 
-        <div class="flex flex-wrap items-end justify-between gap-2 w-full">
+        <div class="hud-command-deck flex flex-wrap items-end justify-between gap-2 w-full">
             <!-- Control Mode, Audio & Active Modules Dock -->
             <div class="flex flex-wrap items-center gap-2">
                 <div class="pointer-events-auto flex items-center gap-2 bg-gray-950/85 border border-gray-800 px-3 py-2 rounded-xl backdrop-blur-md">
@@ -203,9 +203,9 @@
             </div>
 
             <!-- Dash & EMP Nova Abilities -->
-            <div class="ability-command-row flex items-center gap-3 pointer-events-auto">
+            <div class="ability-command-row hud-action-bay flex items-center gap-3 pointer-events-auto" role="group" aria-label="Aktif savaş yetenekleri">
                 <!-- M5.14: Gold-only stationary defense (independent of upgrade cards) -->
-                <button id="bastionBtn" type="button" disabled aria-keyshortcuts="Q" aria-label="Saha siperi kur" class="bastion-ability-button relative group bg-gray-950/90 border border-emerald-400 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 transition cursor-pointer">
+                <button id="bastionBtn" data-skill="bastion" type="button" disabled aria-keyshortcuts="Q" aria-label="Saha siperi kur" class="bastion-ability-button relative group bg-gray-950/90 border border-emerald-400 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 transition cursor-pointer">
                     <i class="fa-solid fa-shield-halved text-emerald-300 text-lg" aria-hidden="true"></i>
                     <div class="text-left hidden sm:block">
                         <div class="text-xs font-bold text-emerald-300 leading-none">SAHA SİPERİ</div>
@@ -215,7 +215,7 @@
                     <span id="bastionStatus" class="font-cyber text-[10px] font-bold text-emerald-300" aria-live="off">DALGA 4</span>
                 </button>
                 <!-- EMP Nova Ability -->
-                <button id="novaBtn" type="button" class="relative group bg-gray-950/90 border border-purple-500 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer">
+                <button id="novaBtn" data-skill="nova" type="button" class="relative group bg-gray-950/90 border border-purple-500 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer">
                     <div id="novaCooldownOverlay" class="absolute inset-0 bg-purple-950/80 origin-bottom transition-all duration-100" style="height: 0%;"></div>
                     <i class="fa-solid fa-burst text-purple-400 text-lg relative z-10"></i>
                     <div class="text-left relative z-10 hidden sm:block">
@@ -226,7 +226,7 @@
                 </button>
 
                 <!-- M5.22: Timed Prism Riposte, a separate active projectile counter -->
-                <button id="prismBtn" type="button" class="relative group prism-skill-button bg-gray-950/90 border border-sky-300 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer" aria-label="Prizma Karşılığı hazır; C tuşu">
+                <button id="prismBtn" data-skill="prism" type="button" class="relative group prism-skill-button bg-gray-950/90 border border-sky-300 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer" aria-label="Prizma Karşılığı hazır; C tuşu">
                     <div id="prismCooldownOverlay" class="absolute inset-0 bg-sky-950/80 origin-bottom transition-all duration-75" style="height:0%;"></div>
                     <i class="fa-solid fa-shield-halved text-sky-200 text-lg relative z-10" aria-hidden="true"></i>
                     <div class="text-left relative z-10 hidden sm:block">
@@ -237,7 +237,7 @@
                 </button>
 
                 <!-- Dash Ability -->
-                <button id="dashBtn" type="button" class="relative group bg-gray-950/90 border border-cyan-400 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer">
+                <button id="dashBtn" data-skill="dash" type="button" class="relative group bg-gray-950/90 border border-cyan-400 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer">
                     <div id="dashCooldownOverlay" class="absolute inset-0 bg-cyan-950/80 origin-bottom transition-all duration-75" style="height: 0%;"></div>
                     <i class="fa-solid fa-bolt text-cyan-400 text-lg relative z-10"></i>
                     <div class="text-left relative z-10 hidden sm:block">
