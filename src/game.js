@@ -2626,7 +2626,8 @@
                             this.y -= (dy / dist) * (this.speed * 0.6) * dt;
                         }
                         this.actionTimer -= dt;
-                        if (this.actionTimer <= 0 && dist < 560) {
+                        if (this.actionTimer <= 0 && dist < 560 &&
+                            (!combatDirector || combatDirector.claimSquadVolley(this))) {
                             this.actionTimer = Math.max(1.2, 2.3 - wave * 0.06);
                             const angle = Math.atan2(dy, dx);
                             const pSpd = 290 * projSpeedScale;
@@ -2650,7 +2651,8 @@
                         }
                         this.actionTimer -= dt;
                         this.aimAngle = Math.atan2(dy, dx);
-                        if (this.actionTimer <= 0 && dist < 720) {
+                        if (this.actionTimer <= 0 && dist < 720 &&
+                            (!combatDirector || combatDirector.claimSquadVolley(this))) {
                             this.actionTimer = Math.max(1.8, 3.0 - wave * 0.07);
                             const pSpd = 560 * projSpeedScale;
                             enemyProjectiles.push(new EnemyProjectile(this.x, this.y, Math.cos(this.aimAngle) * pSpd, Math.sin(this.aimAngle) * pSpd, 7, Math.round(22 * enemyDmgScale), '#ff00aa'));
@@ -4264,6 +4266,65 @@
         }
 
 
+        // M5.12: Evaluate four candidate rotations only when meaningful player
+        // movement has been observed. Retain the legacy random decision for an
+        // idle/unknown player. No change to encounter kinds, units or token costs.
+        function scoreTacticalDeployment(currentWave, theme, index, fallbackSide, memory, lastSide) {
+            const fallback = ((fallbackSide % 4) + 4) % 4;
+            const velocity = Math.hypot(memory?.vx || 0, memory?.vy || 0);
+            if (!player || !Number.isFinite(velocity)) {
+                return { side: fallback, mode: 'unobserved', clearance: null };
+            }
+            const observed = velocity >= 85 && (memory?.tracked || 0) >= 0.8;
+            const headingX = observed ? memory.vx / velocity : 0;
+            const headingY = observed ? memory.vy / velocity : 0;
+            const safeDistance = Math.min(210, Math.min(worldWidth, worldHeight) * 0.24);
+            const edgeX = [0, 1, 0, -1];
+            const edgeY = [-1, 0, 1, 0];
+            const candidates = [0, 1, 2, 3].map(side => {
+                const plan = getSpecialEncounterPlan(currentWave, theme, side, index);
+                let clearance = Infinity, crowd = 0;
+                for (const unit of plan.units) {
+                    const point = formationEdgePoint(unit.side, unit.slot, unit.count);
+                    clearance = Math.min(clearance, Math.hypot(point.x - player.x, point.y - player.y));
+                    for (const enemy of enemies) {
+                        if (!enemy.dead && Math.hypot(point.x - enemy.x, point.y - enemy.y) < 185)
+                            crowd++;
+                    }
+                }
+                // PINWHEEL deliberately puts the weakest SWARM exit in the
+                // player's current travel direction, rather than sealing it.
+                const exit = plan.units.find(unit => unit.role === 'escape');
+                const front = exit ? exit.side : side;
+                const alignment = headingX * edgeX[front] + headingY * edgeY[front];
+                const distancePenalty = Math.max(0, safeDistance - clearance) /
+                    Math.max(1, safeDistance) * 8;
+                const score = alignment * 2.8 - distancePenalty -
+                    Math.min(4, crowd) * 0.65 - (side === lastSide ? 1.5 : 0);
+                return { side, clearance, score };
+            });
+            const legal = candidates.filter(candidate => candidate.clearance >= safeDistance);
+            const fallbackCandidate = candidates.find(candidate => candidate.side === fallback);
+            // Idle players still deserve safe spawns. Keep the legacy random
+            // direction unless it would put an entry almost on top of them.
+            if (!observed && fallbackCandidate.clearance >= safeDistance) {
+                return { side: fallback, mode: 'unobserved',
+                    clearance: Math.round(fallbackCandidate.clearance) };
+            }
+            // If no edge is truly safe, maximize distance, not aggression.
+            const choices = !observed ? candidates : (legal.length ? legal : candidates);
+            choices.sort((a, b) => (!observed || !legal.length ?
+                b.clearance - a.clearance : b.score - a.score) ||
+                (((a.side - fallback + 4) % 4) - ((b.side - fallback + 4) % 4)));
+            const best = choices[0];
+            return {
+                side: best.side, mode: !observed ? 'safety-only' :
+                    (legal.length ? 'reading-motion' : 'safe-retreat'),
+                clearance: Math.round(best.clearance),
+                confidence: observed ? Math.round(velocity) : 0
+            };
+        }
+
         // Attack lines use the exact same volley configuration as the damage pipeline.
         // Never create a separate gameplay timing or projectile source in rendering.
         const BOSS_PHASE_VOLLEYS = Object.freeze({
@@ -5189,6 +5250,10 @@
                 this.eliteDropsInWindow = 0;
                 this.bossChestAwarded = false;
                 this.pendingEncounter = null;
+                this.tacticalMotion = {vx: 0, vy: 0, tracked: 0};
+                this.lastTacticalSide = null;
+                this.lastTacticalDecision = {side: null, mode: 'unobserved'};
+                this.squadVolleyReady = new Map();
                 this.activeArenaEvent = null;
                 this.nextArenaAt = 88;
                 this.arenaEventIndex = 0;
@@ -5201,7 +5266,7 @@
                 this.stats = {
                     spawned: 0, eliteSpawned: 0, eliteKills: 0, bossKills: 0,
                     encounters: 0, specialEncounters: 0, specialUnits: 0, specialCancelled: 0,
-                    specialByKind:{},bossByPattern:{},
+                    specialByKind:{},bossByPattern:{}, squadShotsDeferred: 0,
                     bossSpecialAttacks: 0, bossAttacksDeferred: 0,
                     arenaOffered: 0, arenaCompleted: 0, arenaExpired: 0, arenaCancelled: 0,
                     arenaByKind:{},
@@ -5238,6 +5303,7 @@
                 // Normal spawns use the selected profile. The existing shared
                 // token budget and hard caps still apply; no extra spawn paths.
                 this.tokens = Math.min(14, this.tokens + dt * this.profile.tokenRate);
+                this.observeTacticalMotion(dt, bossLocked);
                 this.updateSpecialEncounter(dt);
                 this.updateArenaEvent(dt);
                 if (!bossLocked && this.tempoPhaseSeconds[this.profile.phase] !== undefined)
@@ -5355,6 +5421,35 @@
             recordBossPattern(id){
                 this.stats.bossByPattern[id]=(this.stats.bossByPattern[id]||0)+1;
             }
+            observeTacticalMotion(dt, bossLocked) {
+                if (bossLocked || !player || !(dt > 0 && dt <= 0.1) ||
+                    player.isDashing || !Number.isFinite(player.vx) ||
+                    !Number.isFinite(player.vy)) return;
+                const alpha = 1 - Math.exp(-dt / 0.65);
+                this.tacticalMotion.vx += (player.vx - this.tacticalMotion.vx) * alpha;
+                this.tacticalMotion.vy += (player.vy - this.tacticalMotion.vy) * alpha;
+                this.tacticalMotion.tracked = Math.min(6, this.tacticalMotion.tracked + dt);
+            }
+
+            // Only linked ranged squadmates share a short volley slot. Normal
+            // enemies and bosses keep their exact previous fire rates.
+            claimSquadVolley(enemy) {
+                if (!enemy.formationId || enemy.tacticalRole !== 'payload' ||
+                    !getFormationMates(enemy).some(mate => mate.tacticalRole === 'payload' &&
+                        (mate.type === 'SHOOTER' || mate.type === 'SNIPER'))) return true;
+                const next = this.squadVolleyReady.get(enemy.formationId) ?? -Infinity;
+                if (totalTime < next) {
+                    this.stats.squadShotsDeferred++;
+                    return false;
+                }
+                this.squadVolleyReady.set(enemy.formationId, totalTime + 0.75);
+                if (this.squadVolleyReady.size > 20) {
+                    for (const [id, expiry] of this.squadVolleyReady) {
+                        if (expiry < totalTime - 3) this.squadVolleyReady.delete(id);
+                    }
+                }
+                return true;
+            }
             trackSpecialOffer(plan){
                 if(!this.stats.specialByKind[plan.type]){
                     this.stats.specialByKind[plan.type]={
@@ -5389,15 +5484,22 @@
                 }
                 if (!inCombat || bossImminent || this.activeArenaEvent || wave < 3 || totalTime < this.nextEncounterAt ||
                     enemies.length > specialProfile.cap - 12 || this.tokens < 8) return;
-                const side = Math.floor(Math.random() * 4);
+                const fallbackSide = Math.floor(Math.random() * 4);
+                const placement = scoreTacticalDeployment(wave, this.profile.theme,
+                    this.encounterIndex, fallbackSide, this.tacticalMotion, this.lastTacticalSide);
+                const side = placement.side;
+                this.lastTacticalSide = side;
+                this.lastTacticalDecision = { ...placement };
                 this.pendingEncounter = getSpecialEncounterPlan(wave, this.profile.theme, side, this.encounterIndex);
+                this.pendingEncounter.placement = { ...placement };
                 this.trackSpecialOffer(this.pendingEncounter);
                 audio.playThreatCue('raid');
                 this.encounterIndex++;
                 this.lastEncounterAt = totalTime;
                 this.nextEncounterAt = totalTime + SPECIAL_ENCOUNTER_GAP;
                 createFloatingText(player.x, player.y - 70,
-                    `⚠ ${this.pendingEncounter.label}: KENARLARDAN GELİYOR!`, '#ffe600', 16);
+                    '⚠ ' + this.pendingEncounter.label + (placement.mode === 'reading-motion' ?
+                        ': HAREKET HATTINA KARŞI!' : ': KENARLARDAN GELİYOR!'), '#ffe600', 16);
             }
 
             resolveSpecialEncounter() {
@@ -5565,6 +5667,7 @@
                     },
                     threatTokens: Math.round(this.tokens * 10) / 10,
                     pendingEncounter: this.pendingEncounter ? this.pendingEncounter.type : null,
+                    tacticalPlacement: { ...this.lastTacticalDecision },
                     warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
                     arenaEvent: this.activeArenaEvent ? this.activeArenaEvent.kind : null,
                     arenaTimeLeft: this.activeArenaEvent ? Math.round(this.activeArenaEvent.timeLeft) : 0,

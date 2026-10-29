@@ -5295,3 +5295,65 @@ test('tactical HUD hint markup and reduced-motion-safe styling are present',()=>
  assert.match(gameCss,/\.tactical-hint-badge/);
  assert.match(gameCss,/prefers-reduced-motion/);
 });
+
+
+test('spatial Director returns legacy random side without enough trustworthy movement', () => {
+  const { run } = setup();
+  const states = JSON.parse(run("(()=>{startNewGame();wave=16;player.x=worldWidth/2;player.y=worldHeight/2;return JSON.stringify([scoreTacticalDeployment(16,'HUNT',7,3,{vx:0,vy:0,tracked:3},null),scoreTacticalDeployment(16,'HUNT',7,2,{vx:250,vy:0,tracked:.25},null)]);})()"));
+  assert.equal(states[0].side,3);
+  assert.equal(states[1].side,2);
+  assert.ok(states.every(x=>x.mode==='unobserved'));
+});
+
+test('spatial Director rotates PINWHEEL weaker escape towards observed player path', () => {
+  const { run } = setup();
+  const results=JSON.parse(run("(()=>{startNewGame();wave=16;player.x=worldWidth/2;player.y=worldHeight/2;const east=scoreTacticalDeployment(16,'HUNT',7,0,{vx:260,vy:0,tracked:2},null);const west=scoreTacticalDeployment(16,'HUNT',7,0,{vx:-260,vy:0,tracked:2},null);const e=getSpecialEncounterPlan(16,'HUNT',east.side,7).units.find(u=>u.role==='escape').side;const w=getSpecialEncounterPlan(16,'HUNT',west.side,7).units.find(u=>u.role==='escape').side;return JSON.stringify({east,west,e,w});})()"));
+  assert.equal(results.east.mode,'reading-motion');
+  assert.equal(results.west.mode,'reading-motion');
+  assert.equal(results.e,1);
+  assert.equal(results.w,3);
+  assert.ok(results.east.clearance>0 && results.west.clearance>0);
+});
+
+test('spatial Director avoids nearby and crowded spawn candidates without extra tokens', () => {
+  const { run } = setup();
+  const result=JSON.parse(run("(()=>{startNewGame();wave=16;player.x=35;player.y=worldHeight/2;enemies=[new Enemy(-30,worldHeight/2,'SWARM'),new Enemy(-45,worldHeight/2,'SWARM')];const result=scoreTacticalDeployment(16,'HUNT',7,0,{vx:-240,vy:0,tracked:2},null);const distances=[0,1,2,3].map(s=>{const p=getSpecialEncounterPlan(16,'HUNT',s,7);return Math.min(...p.units.map(u=>{const q=formationEdgePoint(u.side,u.slot,u.count);return Math.hypot(q.x-player.x,q.y-player.y);}));});return JSON.stringify({result,distances});})()"));
+  assert.equal(result.result.mode,'safe-retreat');
+  assert.equal(result.result.clearance,Math.round(Math.max(...result.distances)));
+});
+
+test('spatial Director records motion and diagnostic decision only when offering a real raid', () => {
+  const {run}=setup();
+  const record=JSON.parse(run("(()=>{startNewGame();wave=16;totalTime=30;nextBossTime=500;combatDirector.tokens=14;combatDirector.nextEncounterAt=500;player.vx=230;player.vy=0;for(let i=0;i<26;i++)combatDirector.update(.05);combatDirector.nextEncounterAt=0;combatDirector.encounterIndex=7;combatDirector.update(.02);const p=combatDirector.pendingEncounter;const d=combatDirector.getDiagnostics();return JSON.stringify({p:p&&{side:p.side,kind:p.type,placement:p.placement,threatCost:p.threatCost},diag:d.tacticalPlacement,enemyCount:enemies.length,tokens:d.threatTokens});})()"));
+  assert.equal(record.p.kind,'PINWHEEL');
+  assert.equal(record.p.placement.mode,'reading-motion');
+  assert.equal(record.p.side,record.diag.side);
+  assert.equal(record.enemyCount,0);
+  assert.equal(record.p.threatCost,7.6);
+  assert.equal(record.tokens,14);
+});
+
+test('linked squad ranged attacks use staggered fire slots; normals and bosses do not', () => {
+  const {run}=setup();
+  const result=JSON.parse(run("(()=>{startNewGame();totalTime=20;const a=new Enemy(100,100,'SHOOTER',false,{formationId:'A',role:'payload'});const b=new Enemy(200,100,'SHOOTER',false,{formationId:'A',role:'payload'});const solo=new Enemy(200,100,'SHOOTER');enemies=[a,b,solo];const first=combatDirector.claimSquadVolley(a);const denied=combatDirector.claimSquadVolley(b);const normal=combatDirector.claimSquadVolley(solo);totalTime+=.76;const next=combatDirector.claimSquadVolley(b);a.dead=true;const unlinked=combatDirector.claimSquadVolley(b);return JSON.stringify({first,denied,normal,next,unlinked,count:combatDirector.getDiagnostics().squadShotsDeferred});})()"));
+  assert.deepEqual(result,{first:true,denied:false,normal:true,next:true,unlinked:true,count:1});
+});
+
+test('real linked shooters delay simultaneous volley rather than adding projectiles', () => {
+  const {run}=setup();
+  const result=JSON.parse(run("(()=>{startNewGame();wave=8;totalTime=20;player.x=400;player.y=300;const a=new Enemy(330,150,'SHOOTER',false,{formationId:'C',role:'payload'});const b=new Enemy(470,150,'SHOOTER',false,{formationId:'C',role:'payload'});a.actionTimer=0;b.actionTimer=0;enemies=[a,b];a.update(.016);const afterA=enemyProjectiles.length;b.update(.016);const afterB=enemyProjectiles.length;totalTime+=.76;b.update(.016);return JSON.stringify({afterA,afterB,afterDelay:enemyProjectiles.length,denied:combatDirector.stats.squadShotsDeferred,unmodifiedDamage:a.damage===b.damage});})()"));
+  assert.equal(result.afterA,3);
+  assert.equal(result.afterB,3);
+  assert.equal(result.afterDelay,6);
+  assert.equal(result.denied,1);
+  assert.equal(result.unmodifiedDamage,true);
+});
+
+
+test('idle player at arena edge gets safe entrance instead of unsafe random flank', () => {
+  const {run}=setup();
+  const data=JSON.parse(run("(()=>{startNewGame();wave=8;player.x=30;player.y=worldHeight/2;const chosen=scoreTacticalDeployment(8,'SIEGE',1,3,{vx:0,vy:0,tracked:3},null);const blocked=getSpecialEncounterPlan(8,'SIEGE',3,1);const unsafe=Math.min(...blocked.units.map(u=>{const q=formationEdgePoint(u.side,u.slot,u.count);return Math.hypot(q.x-player.x,q.y-player.y);}));return JSON.stringify({chosen,unsafe});})()"));
+  assert.equal(data.chosen.mode,'safety-only');
+  assert.notEqual(data.chosen.side,3);
+  assert.ok(data.chosen.clearance>data.unsafe+80);
+});
