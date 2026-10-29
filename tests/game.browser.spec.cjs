@@ -501,3 +501,37 @@ test('M5.21 Echo Hunter visibly announces stationary, moving and dashing player 
  await expect(page.locator('#nemesisBanner')).toBeVisible();
  expect(errors).toEqual([]);
 });
+
+
+test('M5.22 keyboard C and touch Prism Riposte deflect a real projectile in Chromium',async({page})=>{
+ const errors=[];page.on('pageerror',err=>errors.push(err.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ await page.evaluate(()=>{
+   totalTime=10;nextBossTime=500;
+   const shot=new EnemyProjectile(player.x+72,player.y,-360,0,6,25);
+   enemyProjectiles=[shot];enemies=[];
+ });
+ await page.keyboard.press('c');
+ const result=await page.evaluate(()=>{
+   const wasActive=getNeonPrismGuard().active;
+   const hp=player.hp;
+   updateGame(.016);
+   updatePrismGuardHud();
+   const state=getNeonPrismGuard();
+   return {wasActive,hp,afterHp:player.hp,state,
+     shots:bullets.filter(b=>b.prismRiposte).length,
+     label:document.getElementById('prismStatus').textContent};
+ });
+ expect(result.wasActive).toBe(true);
+ expect(result.state.stats.deflected).toBe(1);
+ expect(result.state.stats.shotsReturned).toBe(1);
+ expect(result.shots).toBe(1);
+ expect(result.afterHp).toBe(result.hp);
+ expect(result.label).toContain('KARŞILA');
+ await expect(page.locator('#prismBtn')).toBeVisible();
+ await page.evaluate(()=>{totalTime+=8.6;updatePrismGuard();updatePrismGuardHud();});
+ await page.locator('#prismBtn').click();
+ expect(await page.evaluate(()=>getNeonPrismGuard().stats.activations)).toBe(2);
+ expect(errors).toEqual([]);
+});
