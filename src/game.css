@@ -1588,6 +1588,6 @@
 html[data-graphics-quality="low"] #hud .hud-action-bay > button,
 html[data-graphics-quality="low"] #hud .hud-meter,
 html[data-graphics-quality="low"] #hud .hud-command-deck{
-    box-shadow:none;
+    box-shadow:none!important;
     backdrop-filter:none;
 }
