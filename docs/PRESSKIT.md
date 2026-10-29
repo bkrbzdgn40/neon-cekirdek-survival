@@ -37,7 +37,7 @@ Neon Çekirdek is a playable independent arena-survival project built entirely f
 ## Media
 
 - **Original vector brand key art:** [`media/neon-core-cover.svg`](../media/neon-core-cover.svg), 1200 × 630 SVG. It is an illustration, **not a screenshot of gameplay**. Avoid describing it as gameplay.
-- **Actual gameplay screenshots:** Not yet provided as approved files in the repository. Do **not** replace these with concept art. Capture directly from `index.html` (recommended 16:9, HUD visible, screenshot from an actual run).
+- **Actual gameplay screenshots:** No **approved** public screenshots yet. [M5.28 gameplay evidence](M5.28-gameplay-evidence.md) produces six screenshot artifacts from the **real** Chromium game engine (explicitly scripted scenarios) for editorial review. They are not organic player-session footage, do not automatically publish and must not replace a real recorded play session. Do **not** substitute concept art for screenshots.
 - **Gameplay video/trailer:** None is represented as published. Footage must be captured from an actual play session, not from the CSS illustration.
 - **Editorial re-use:** There is no published media usage license or public code license in the repository. Contact the maintainer for permission before reuse.
 

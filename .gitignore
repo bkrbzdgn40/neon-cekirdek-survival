@@ -1,0 +1,5 @@
+# Generated from the real Chromium game engine; never commit unreviewed captures.
+press-capture/
+playwright-report/
+test-results/
+node_modules/

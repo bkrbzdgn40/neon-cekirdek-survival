@@ -7,7 +7,7 @@
 **An independently developed, playable browser arena-survival game** built with Canvas 2D and vanilla JavaScript. Survive tactical enemy formations, evolve your modules, use the arena itself as a weapon, and adapt your build as combat pressure rises.
 
 [![Neon smoke tests](https://github.com/bkrbzdgn40/neon-cekirdek-survival/actions/workflows/neon-smoke.yml/badge.svg)](https://github.com/bkrbzdgn40/neon-cekirdek-survival/actions/workflows/neon-smoke.yml)
-**[Showcase source](showcase.html)** · **[Media & factsheet](docs/PRESSKIT.md)** · **[Engineering evidence](#engineering-and-verification)** · **[Türkçe](#türkçe)**
+**[Showcase source](showcase.html)** · **[Media & factsheet](docs/PRESSKIT.md)** · **[Real gameplay capture process](docs/M5.28-gameplay-evidence.md)** · **[Engineering evidence](#engineering-and-verification)** · **[Türkçe](#türkçe)**
 
 > **No public hosted demo is confirmed yet.** This repository contains the playable build (`index.html`) and a new professional showcase (`showcase.html`). Use a local static server as described below. GitHub Pages activation is documented in [Publishing](docs/PUBLISHING.md); a source-file link on GitHub is not a live game.
 
