@@ -172,6 +172,9 @@
         #bossIdentityStrip .boss-id-meter { height:3px; margin-top:3px; border-radius:99px; background:#13243a; overflow:hidden; }
         #bossIdentityStrip .boss-id-meter > span { display:block; height:100%; border-radius:99px; }
         #neonContractPanel { border:1px solid rgba(103,232,249,.28); background:rgba(5,13,27,.82); }
+        .bastion-ability-button:disabled { opacity: .55; cursor: not-allowed; border-color: rgba(71,85,105,.55); }
+        .bastion-ability-button:not(:disabled):hover { box-shadow: 0 0 18px rgba(79,255,224,.2); border-color: #99f6e4; }
+        .bastion-ability-button:focus-visible { outline: 2px solid #4fffe0; outline-offset: 2px; }
         .neon-contract-card { border:1px solid rgba(117,145,173,.38); background:rgba(10,22,39,.9); transition:transform .16s,border-color .16s,box-shadow .16s; }
         .neon-contract-card:hover { transform:translateY(-2px); border-color:rgba(103,232,249,.8); }
         .neon-contract-card.is-selected { border-color:var(--contract-color,#67e8f9); box-shadow:0 0 18px color-mix(in srgb,var(--contract-color,#67e8f9) 28%,transparent); }

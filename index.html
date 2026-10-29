@@ -196,6 +196,16 @@
 
             <!-- Dash & EMP Nova Abilities -->
             <div class="flex items-center gap-3 pointer-events-auto">
+                <!-- M5.14: Gold-only stationary defense (independent of upgrade cards) -->
+                <button id="bastionBtn" type="button" disabled aria-keyshortcuts="Q" aria-label="Saha siperi kur" class="bastion-ability-button relative group bg-gray-950/90 border border-emerald-400 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 transition cursor-pointer">
+                    <i class="fa-solid fa-shield-halved text-emerald-300 text-lg" aria-hidden="true"></i>
+                    <div class="text-left hidden sm:block">
+                        <div class="text-xs font-bold text-emerald-300 leading-none">SAHA SİPERİ</div>
+                        <div class="text-[10px] text-gray-400">[Q] · 8sn / sabit bölge</div>
+                        <div id="bastionCostText" class="text-[10px] font-bold text-yellow-300">70 ALTIN · 3 HAK</div>
+                    </div>
+                    <span id="bastionStatus" class="font-cyber text-[10px] font-bold text-emerald-300" aria-live="off">DALGA 4</span>
+                </button>
                 <!-- EMP Nova Ability -->
                 <button id="novaBtn" type="button" class="relative group bg-gray-950/90 border border-purple-500 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer">
                     <div id="novaCooldownOverlay" class="absolute inset-0 bg-purple-950/80 origin-bottom transition-all duration-100" style="height: 0%;"></div>

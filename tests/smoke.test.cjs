@@ -5412,3 +5412,81 @@ test('M5.13 run reset clears crowd telemetry and no steering persists into a new
  assert.equal(x.now.checks,0);
  assert.equal(x.now.agents,0);
 });
+
+
+test('M5.14 gold bastion cannot be purchased before wave four or in menus', () => {
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{const before=getBastionStatus();startNewGame();totalGold=500;const early=getBastionStatus();const denied=deployBastion();return JSON.stringify({before,early,denied,wallet:totalGold});})()"));
+ assert.equal(out.before.available,false);
+ assert.equal(out.early.reason,'locked');
+ assert.equal(out.denied,false);
+ assert.equal(out.wallet,500);
+});
+
+test('M5.14 gold-only fixed defense purchases exactly once and never alters card progression',()=>{
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{startNewGame();wave=8;nextBossTime=500;totalGold=300;player.x=190;player.y=235;const initial=JSON.stringify(player.upgradeCounts);const first=deployBastion();const second=deployBastion();return JSON.stringify({first,second,cost:getBastionCost(),wallet:totalGold,uses:bastionUses,location:{x:bastion.x,y:bastion.y},saved:JSON.parse(localStorage.getItem(META_SAVE_KEY)).gold,cardUnchanged:JSON.stringify(player.upgradeCounts)===initial,rerollCost,diag:combatDirector.getDiagnostics().bastion});})()"));
+ assert.equal(out.first,true);
+ assert.equal(out.second,false);
+ assert.equal(out.wallet,230);
+ assert.equal(out.saved,230);
+ assert.equal(out.uses,1);
+ assert.deepEqual(out.location,{x:190,y:235});
+ assert.equal(out.cardUnchanged,true);
+ assert.equal(out.rerollCost,15);
+ assert.equal(out.diag.goldSpent,70);
+ assert.equal(out.diag.remaining,2);
+});
+
+test('M5.14 bastion intercepts entering enemy projectiles only, including swept fast crossings',()=>{
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{startNewGame();wave=8;nextBossTime=500;totalGold=300;player.x=420;player.y=330;deployBastion();const enter=new EnemyProjectile(620,330,-900,0,6,23);enter.update(.2);const fast=new EnemyProjectile(640,330,-3000,0,5,23);fast.update(.2);const inside=new EnemyProjectile(420,330,300,0,6,23);inside.update(.1);const miss=new EnemyProjectile(620,500,-900,0,6,23);miss.update(.2);const results=[bastionIntercepts(enter),bastionIntercepts(fast),bastionIntercepts(inside),bastionIntercepts(miss)];return JSON.stringify({results,damage:enter.damage,insideOrigin:inside.previousX===420});})()"));
+ assert.deepEqual(out.results,[true,true,false,false]);
+ assert.equal(out.damage,23);
+ assert.equal(out.insideOrigin,true);
+});
+
+test('M5.14 real simulation uses the shield before projectile-player collision and records spending',()=>{
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{startNewGame();wave=8;nextBossTime=500;totalGold=300;player.x=420;player.y=330;deployBastion();const hp=player.hp;enemyProjectiles=[new EnemyProjectile(560,330,-600,0,6,38)];const d=enemyProjectiles[0];d.update(.05);if(bastionIntercepts(d)){d.dead=true;bastion.blocked++;bastionShotsBlocked++;}return JSON.stringify({gone:d.dead,hp,now:player.hp,cost:getBastionStatus().goldSpent,economy:combatDirector.getEconomySnapshot().fieldDefense,card:currentUpgradeChoices.length});})()"));
+ assert.equal(out.gone,true);
+ assert.equal(out.now,out.hp);
+ assert.equal(out.cost,70);
+ assert.deepEqual(out.economy,{uses:1,goldSpent:70,shotsBlocked:1});
+ assert.equal(out.card,0);
+});
+
+test('M5.14 defense expires, has independent cooldown and boss protection',()=>{
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{startNewGame();wave=8;nextBossTime=500;totalGold=1000;deployBastion();const expiry=bastion.expiresAt;totalTime=expiry+.01;updateBastion();const expired=getBastionStatus();totalTime=33;const ready=getBastionStatus();nextBossTime=40;const bossDenied=deployBastion();nextBossTime=500;const second=deployBastion();return JSON.stringify({expired,ready,bossDenied,second,wallet:totalGold});})()"));
+ assert.equal(out.expired.active,false);
+ assert.equal(out.expired.reason,'cooldown');
+ assert.equal(out.ready.available,true);
+ assert.equal(out.bossDenied,false);
+ assert.equal(out.second,true);
+ assert.equal(out.wallet,820);
+});
+
+test('M5.14 usage cap and fresh run reset prevent unlimited defensive purchase',()=>{
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{startNewGame();wave=8;nextBossTime=1000;totalGold=1000;const purchases=[];for(let i=0;i<4;i++){totalTime=i*40;updateBastion();purchases.push(deployBastion());}const spent=bastionGoldSpent,locked=getBastionStatus();startNewGame();return JSON.stringify({purchases,spent,locked,newRun:getBastionStatus()});})()"));
+ assert.deepEqual(out.purchases,[true,true,true,false]);
+ assert.equal(out.spent,330);
+ assert.equal(out.locked.reason,'used-up');
+ assert.equal(out.newRun.uses,0);
+ assert.equal(out.newRun.goldSpent,0);
+ assert.equal(out.newRun.shotsBlocked,0);
+});
+
+test('M5.14 bastion draw is graphics-only and HUD provides independent button state',()=>{
+ const calls=[];
+ const ctx=new Proxy({}, { get(_obj,key) {return (...args)=>calls.push(String(key));} });
+ const {run}=setup({}, {canvasContext:ctx});
+ const out=JSON.parse(run("(()=>{startNewGame();wave=8;nextBossTime=500;totalGold=200;updateBastionHud();const before=document.getElementById('bastionBtn').disabled;deployBastion();updateBastionHud();drawBastion(ctx);return JSON.stringify({before,after:document.getElementById('bastionBtn').disabled,label:document.getElementById('bastionStatus').textContent});})()"));
+ assert.equal(out.before,false);
+ assert.equal(out.after,true);
+ assert.match(out.label,/8s/);
+ assert.ok(calls.includes('arc'));
+ assert.ok(calls.includes('stroke'));
+ assert.match(html,/id="bastionBtn"/);
+});
