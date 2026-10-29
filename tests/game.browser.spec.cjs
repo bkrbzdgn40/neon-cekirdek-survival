@@ -559,3 +559,108 @@ test('M5.22 all four touch combat controls fit the phone viewport without overla
    expect(positions.buttons[i].x).toBeGreaterThanOrEqual(
      positions.buttons[i-1].right-1);
 });
+
+
+test('M5.23 upgrade cards prioritize readable type and responsive one/two/three-column layout',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ await page.evaluate(()=>triggerLevelUp());
+ await expect(page.locator('#upgradeCardsContainer .upgrade-card')).toHaveCount(3);
+ await page.evaluate(()=>document.fonts.ready);
+ for(const [width,height,expectedColumns] of [[360,740,1],[768,1024,2],[1024,768,2],[1440,900,3]]){
+   await page.setViewportSize({width,height});
+   const result=await page.evaluate(()=>{
+     const modal=document.getElementById('upgradeModal');
+     const cards=[...document.querySelectorAll('#upgradeCardsContainer .upgrade-card')];
+     const cols=getComputedStyle(document.getElementById('upgradeCardsContainer')).gridTemplateColumns
+       .split(' ').filter(Boolean).length;
+     return {cols,overflow:modal.scrollWidth-modal.clientWidth,
+       cards:cards.map(card=>{
+         const r=card.getBoundingClientRect();
+         const desc=card.querySelector('.upgrade-card-desc');
+         const footer=card.querySelector('.upgrade-card-footer');
+         const title=card.querySelector('.upgrade-card-name');
+         const rarity=card.querySelector('.upgrade-rarity-title');
+         const role=card.querySelector('.upgrade-role-label');
+         const parts=[desc,footer,title,rarity,role];
+         const ranges=parts.map(node=>({
+           font:parseFloat(getComputedStyle(node).fontSize),
+           bottom:node.getBoundingClientRect().bottom,
+           right:node.getBoundingClientRect().right,
+           left:node.getBoundingClientRect().left,
+           scrollWidth:node.scrollWidth,clientWidth:node.clientWidth
+         }));
+         return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,
+           width:r.width,height:r.height,parts:ranges};
+       })};
+   });
+   expect(result.cols, 'column count at '+width).toBe(expectedColumns);
+   expect(result.overflow, 'horizontal overflow at '+width).toBeLessThanOrEqual(3);
+   for(const card of result.cards){
+     expect(card.left).toBeGreaterThanOrEqual(-2);
+     expect(card.right).toBeLessThanOrEqual(width+2);
+     expect(card.width).toBeGreaterThan(230);
+     expect(card.parts[0].font).toBeGreaterThanOrEqual(16);
+     expect(card.parts[1].font).toBeGreaterThanOrEqual(13);
+     expect(card.parts[2].font).toBeGreaterThanOrEqual(21);
+     expect(card.parts[3].font).toBeGreaterThanOrEqual(12);
+     expect(card.parts[4].font).toBeGreaterThanOrEqual(12);
+     for(const part of card.parts){
+       expect(part.bottom, 'text clipped vertically at '+width).toBeLessThanOrEqual(card.bottom+2);
+       expect(part.left, 'text clipped left at '+width).toBeGreaterThanOrEqual(card.left-1);
+       expect(part.right, 'text clipped right at '+width).toBeLessThanOrEqual(card.right+1);
+       expect(part.scrollWidth-part.clientWidth,'text overflows at '+width).toBeLessThanOrEqual(2);
+     }
+   }
+ }
+ expect(errors).toEqual([]);
+});
+
+test('M5.23 longest evolution and synergy text stays inside natural-height cards on phones',async({page})=>{
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ await page.evaluate(()=>{
+   triggerLevelUp();
+   const upg=UPGRADES_POOL.find(x=>x.id==='circuit_weaver');
+   const rarity=RARITIES.find(r=>r.id==='LEGENDARY');
+   const presentation=getUpgradeCardPresentation(upg,rarity,2);
+   const card=document.querySelector('#upgradeCardsContainer .upgrade-card');
+   card.setAttribute('data-role','evolution');
+   card.setAttribute('data-rarity','LEGENDARY');
+   card.innerHTML=renderUpgradeCardMarkup(upg,rarity,2,0,presentation,[{
+     name:'Rezonans Senkronizasyonu',
+     desc:'Hareket hâlindeyken oluşan devre ile enerji akışını birleştirerek düşman baskısını dağıtır.'
+   }]);
+ });
+ for(const [width,height] of [[320,568],[375,667],[768,740],[1280,800]]){
+   await page.setViewportSize({width,height});
+   const result=await page.evaluate(()=>{
+     const card=document.querySelector('#upgradeCardsContainer .upgrade-card');
+     const last=card.querySelector('.upgrade-card-footer');
+     const bonus=card.querySelector('.upgrade-evolution-benefit');
+     const synergy=card.querySelector('.upgrade-synergy-benefit');
+     const modal=document.getElementById('upgradeModal');
+     const cr=card.getBoundingClientRect();
+     return {cardLeft:cr.left,cardRight:cr.right,cardBottom:cr.bottom,
+       footerBottom:last.getBoundingClientRect().bottom,
+       bonusBottom:bonus.getBoundingClientRect().bottom,
+       synergyBottom:synergy.getBoundingClientRect().bottom,
+       synergyFont:parseFloat(getComputedStyle(synergy).fontSize),
+       bonusFont:parseFloat(getComputedStyle(bonus).fontSize),
+       horizontalOverflow:modal.scrollWidth-modal.clientWidth};
+   });
+   expect(result.cardLeft).toBeGreaterThanOrEqual(-2);
+   expect(result.cardRight).toBeLessThanOrEqual(width+2);
+   expect(result.footerBottom).toBeLessThanOrEqual(result.cardBottom+2);
+   expect(result.bonusBottom).toBeLessThanOrEqual(result.cardBottom+2);
+   expect(result.synergyBottom).toBeLessThanOrEqual(result.cardBottom+2);
+   expect(result.horizontalOverflow).toBeLessThanOrEqual(3);
+   expect(result.bonusFont).toBeGreaterThanOrEqual(14);
+   expect(result.synergyFont).toBeGreaterThanOrEqual(14);
+   await page.locator('#upgradeCardsContainer .upgrade-card').first().scrollIntoViewIfNeeded();
+   await expect(page.locator('#upgradeCardsContainer .upgrade-card').first()).toBeVisible();
+ }
+ await page.keyboard.press('1');
+ await expect(page.locator('#upgradeModal')).toBeHidden();
+});
