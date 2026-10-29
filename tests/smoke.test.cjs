@@ -5870,3 +5870,92 @@ test('M5.19 reset clears counterplay state without changing gold or module count
  assert.equal(s.gold,s.afterGold);
  assert.equal(s.cards,s.afterCards);
 });
+
+
+test('M5.20 signature operations start on each middle wave, once per wave',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();nextBossTime=1000;const result=[];let lastWave=3;for(const w of [4,5,5,6,7,8,9,10,11,12,13,14]){if(w!==lastWave)totalTime+=(w-lastWave)*16;lastWave=w;wave=w;waveTimer=2;enemies=[new Enemy(360,300,'SHOOTER')];updateArenaChapter(.02);result.push({w,kind:getArenaChapterSnapshot().showcase?.id||null,started:chapterShowcaseStats.started});}return JSON.stringify(result);})()"));
+ assert.equal(x[0].kind,null);
+ assert.equal(x[1].kind,'FOUNDRY');
+ assert.equal(x[2].started,1);
+ assert.equal(x[3].kind,null);
+ assert.equal(x[5].kind,'GARDEN');
+ assert.equal(x[7].kind,null);
+ assert.equal(x[8].kind,'RIFT');
+ assert.equal(x[11].kind,'FOUNDRY');
+ assert.equal(x[11].started,4);
+});
+
+test('M5.20 giant presses telegraph before bounded once-only hits',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();wave=5;waveTimer=2;nextBossTime=1000;totalTime=100;updateArenaChapter(.02);const x0=worldWidth*.28,x1=worldWidth*.72;enemies=Array.from({length:15},()=>new Enemy(x0,worldHeight*.5,'TANK'));for(const e of enemies)e.hp=e.maxHp=5000;player.x=x0;const hp=player.hp;totalTime=101.4;updateArenaChapter(.02);const before={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits};totalTime=101.9;updateArenaChapter(.02);const first={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits,mask:chapterShowcase.pulseMask};updateArenaChapter(.02);const repeated={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits};player.invulnTimer=0;player.x=x1;totalTime=103.9;updateArenaChapter(.02);const after={hp:player.hp,mask:chapterShowcase.pulseMask};return JSON.stringify({hp,before,first,repeated,after});})()"));
+ assert.equal(x.before.hp,x.hp);
+ assert.equal(x.before.hits,0);
+ assert.equal(x.first.hp,x.hp-8);
+ assert.equal(x.first.hits,10);
+ assert.equal(x.first.mask,1);
+ assert.equal(x.repeated.hp,x.first.hp);
+ assert.equal(x.repeated.hits,10);
+ assert.equal(x.after.mask,3);
+ assert.equal(x.after.hp,x.hp-16);
+});
+
+test('M5.20 ion chorus needs two distinct flowers and keeps bosses immune',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();wave=8;waveTimer=2;nextBossTime=1000;totalTime=300;enemies=[new Enemy(600,330,'SHOOTER'),new Enemy(800,420,'TANK')];const boss=new Enemy(700,330,'BOSS_DESTROYER');enemies.push(boss);const gold=totalGold;updateArenaChapter(.02);const nodes=getGardenCenters();player.x=nodes[0].x;player.y=nodes[0].y;updateArenaChapter(1.65);const first=getArenaChapterSnapshot();player.x=nodes[1].x;player.y=nodes[1].y;updateArenaChapter(1.65);const finished=getArenaChapterSnapshot();return JSON.stringify({first,finished,stuns:enemies.slice(0,2).map(e=>e.stunTimer),bossStun:boss.stunTimer,count:enemies.length,gold,afterGold:totalGold});})()"));
+ assert.equal(x.first.showcase.flowerMask,1);
+ assert.equal(x.first.showcase.completed,false);
+ assert.equal(x.finished.showcase.flowerMask,3);
+ assert.equal(x.finished.showcase.completed,true);
+ assert.equal(x.finished.showcaseStats.ionHarmonies,1);
+ assert.ok(x.stuns.every(s=>s>=1.8));
+ assert.equal(x.bossStun,0);
+ assert.equal(x.count,3);
+ assert.equal(x.gold,x.afterGold);
+});
+
+test('M5.20 rift pincer warns and repositions original enemies safely',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();wave=11;waveTimer=2;nextBossTime=1000;totalTime=400;const a=new Enemy(270,280,'ASSASSIN'),b=new Enemy(950,410,'DASHER');enemies=[a,b];const old=[{x:a.x,y:a.y},{x:b.x,y:b.y}];updateArenaChapter(.02);const start=getArenaChapterSnapshot();totalTime+=1.5;updateArenaChapter(.02);const tell={x:a.x,y:a.y};totalTime+=.8;updateArenaChapter(.02);const result=getArenaChapterSnapshot();return JSON.stringify({start,tell,old,result,after:[{x:a.x,y:a.y,stun:a.stunTimer},{x:b.x,y:b.y,stun:b.stunTimer}],player:{x:player.x,y:player.y},count:enemies.length});})()"));
+ assert.equal(x.start.showcase.targets.length,2);
+ assert.equal(x.start.showcase.completed,false);
+ assert.equal(x.tell.x,x.old[0].x);
+ assert.equal(x.tell.y,x.old[0].y);
+ assert.equal(x.result.showcaseStats.pincerFlanks,2);
+ assert.equal(x.result.showcase.completed,true);
+ assert.equal(x.count,2);
+ for(const enemy of x.after){
+   assert.ok(enemy.stun>=.65);
+   assert.ok(Math.hypot(enemy.x-x.player.x,enemy.y-x.player.y)>90);
+ }
+});
+
+test('M5.20 leaving the rift mark evades flanks; boss events cancel the stage',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();wave=11;waveTimer=2;nextBossTime=1000;totalTime=400;const a=new Enemy(270,280,'ASSASSIN');enemies=[a];updateArenaChapter(.02);const orig={x:a.x,y:a.y};player.x+=210;totalTime+=2.3;updateArenaChapter(.02);const avoided=getArenaChapterSnapshot();wave=14;waveTimer=2;updateArenaChapter(.02);const beforeBoss=getArenaChapterSnapshot();combatDirector.activeArenaEvent={kind:'STORM'};updateArenaChapter(.02);const boss=getArenaChapterSnapshot();combatDirector.activeArenaEvent=null;updateArenaChapter(.02);const resumed=getArenaChapterSnapshot();return JSON.stringify({orig,after:{x:a.x,y:a.y},avoided,beforeBoss,boss,resumed});})()"));
+ assert.equal(x.avoided.showcaseStats.pincerEvades,1);
+ assert.equal(x.avoided.showcaseStats.pincerFlanks,0);
+ assert.equal(x.orig.x,x.after.x);
+ assert.equal(x.beforeBoss.showcase?.id,'FOUNDRY');
+ assert.equal(x.boss.showcase,null);
+ assert.equal(x.boss.showcaseStats.cancelled,1);
+ assert.equal(x.resumed.showcase,null);
+});
+
+test('M5.20 low graphics renders distinct press, chorus, and pincer geometry',()=>{
+ const calls=[];
+ const ctx=new Proxy({}, {get(_,name){return(...args)=>calls.push(String(name));}});
+ const {run}=setup({}, {canvasContext:ctx});
+ const x=JSON.parse(run("(()=>{startNewGame();nextBossTime=1000;graphicsQuality='low';const result={};for(const [w,id] of [[5,'FOUNDRY'],[8,'GARDEN'],[11,'RIFT']]){wave=w;waveTimer=2;enemies=[new Enemy(360,300,'SHOOTER')];updateArenaChapter(.02);const count=enemies.length;drawChapterShowcase(ctx);updateArenaChapterHud();result[id]={show:getArenaChapterSnapshot().showcase?.id,count:enemies.length,was:count,banner:document.getElementById('arenaShowcaseBanner').textContent};}return JSON.stringify(result);})()"));
+ assert.equal(x.FOUNDRY.show,'FOUNDRY');
+ assert.equal(x.GARDEN.show,'GARDEN');
+ assert.equal(x.RIFT.show,'RIFT');
+ assert.ok(calls.includes('fillRect'));
+ assert.ok(calls.includes('arc'));
+ assert.ok(calls.includes('lineTo'));
+ assert.ok(Object.values(x).every(a=>a.count===a.was));
+ assert.match(x.FOUNDRY.banner,/KIZIL MAKAS/);
+ assert.match(x.GARDEN.banner,/İYON KOROSU/);
+ assert.match(x.RIFT.banner,/FAZ KISKACI/);
+ assert.match(html,/id="arenaShowcaseBanner"/);
+});

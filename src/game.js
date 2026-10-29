@@ -5203,6 +5203,20 @@
         // Foundry timing starts in its first eligible frame, never mid-pulse.
         let chapterFoundryAnchor = null;
 
+        // M5.20: one cinematic encounter on each chapter's middle wave.
+        // Neither a new spawn budget nor a reward system; existing entities
+        // and arena rules provide the stakes, while the stage owns the visuals.
+        const CHAPTER_SHOWCASES=Object.freeze({
+            FOUNDRY:Object.freeze({name:'KIZIL MAKAS',hint:'İKİ DİKEY PRES · SÜRÜYÜ HATTA ÇEK',color:'#ffb36f',duration:5.2}),
+            GARDEN:Object.freeze({name:'İYON KOROSU',hint:'İKİ FARKLI ÇİÇEĞİ DOLDUR',color:'#86ffe0',duration:14}),
+            RIFT:Object.freeze({name:'FAZ KISKACI',hint:'İŞARETTEN UZAKLAŞ YA DA DÜŞMANI DURDUR',color:'#e3a6ff',duration:4.5})
+        });
+        let chapterShowcase=null;
+        let chapterShowcaseAttemptedWave=0;
+        let chapterShowcaseStats={started:0,completed:0,cancelled:0,
+            pressEnemyHits:0,pressPlayerHits:0,ionHarmonies:0,ionStuns:0,
+            pincerFlanks:0,pincerEvades:0};
+
         function chapterIdForWave(currentWave) {
             if (!Number.isFinite(currentWave) || currentWave < 4) return null;
             return ARENA_CHAPTER_ORDER[Math.floor((currentWave-4)/3)%3];
@@ -5244,11 +5258,17 @@
             chapterRiftReadyAt=0;
             chapterFoundryLastPulse=-1;
             chapterFoundryAnchor=null;
+            chapterShowcase=null;
+            chapterShowcaseAttemptedWave=0;
+            chapterShowcaseStats={started:0,completed:0,cancelled:0,
+                pressEnemyHits:0,pressPlayerHits:0,ionHarmonies:0,ionStuns:0,
+                pincerFlanks:0,pincerEvades:0};
         }
         function startChapterIfChanged() {
             const next = chapterIdForWave(wave);
             if (arenaChapter===next) return false;
             arenaChapter=next;
+            chapterShowcase=null;
             chapterGardenCharge.fill(0);
             chapterGardenReady.fill(-Infinity);
             chapterGardenContested.fill(0);
@@ -5358,6 +5378,7 @@
                     stunned++;
                 }
                 chapterStats.gardenStuns+=stunned;
+                recordShowcaseIonFlower(i);
                 shockwaves.push(new Shockwave(p.x,p.y,
                     CHAPTER_RULES.gardenStunRadius,ARENA_CHAPTERS.GARDEN.color,.48));
                 createFloatingText(p.x,p.y-48,'İYON ÇİÇEĞİ · '+stunned+' SERSEM',
@@ -5485,9 +5506,234 @@
             createFloatingText(dest.x,dest.y-36,'YARIK GEÇİŞİ',
                 ARENA_CHAPTERS.RIFT.accent,15);
         }
+
+        function showcaseClamp(value,radius,max) {
+            return Math.max(radius+10,Math.min(max-radius-10,value));
+        }
+        function chapterShowcaseSnapshot() {
+            if(!chapterShowcase)return null;
+            const op=chapterShowcase;
+            return {id:op.id,name:CHAPTER_SHOWCASES[op.id].name,
+                elapsed:Math.round((totalTime-op.start)*10)/10,
+                remaining:Math.max(0,Math.round((op.endAt-totalTime)*10)/10),
+                pulseMask:op.pulseMask||0,flowerMask:op.flowerMask||0,
+                completed:!!op.completed,
+                targets:op.targets?.map(t=>({enemyId:t.enemyId,x:t.x,y:t.y}))||[]};
+        }
+        function beginChapterShowcase() {
+            if(!arenaChapter||wave<5||(wave-5)%3!==0||
+                chapterShowcaseAttemptedWave===wave||waveTimer<1.2||
+                !chapterEffectsAllowed())return false;
+            let targets=[];
+            if(arenaChapter==='RIFT'){
+                const eligible=enemies.filter(e=>!e.dead&&!e.isBoss&&e.stunTimer<=0&&
+                    ['ASSASSIN','DASHER','SHOOTER'].includes(e.type)&&
+                    (e.state==='CHASE'||e.type==='SHOOTER'));
+                if(!eligible.length)return false;
+                eligible.sort((a,b)=>Math.hypot(a.x-player.x,a.y-player.y)-
+                    Math.hypot(b.x-player.x,b.y-player.y));
+                const offsets=[[-188,-100],[188,100]];
+                targets=eligible.slice(0,2).map((e,i)=>{
+                    const [ox,oy]=offsets[i];
+                    return {enemyId:e.id,
+                        x:showcaseClamp(player.x+ox,e.radius,worldWidth),
+                        y:showcaseClamp(player.y+oy,e.radius,worldHeight)};
+                });
+            }
+            chapterShowcaseAttemptedWave=wave;
+            const spec=CHAPTER_SHOWCASES[arenaChapter];
+            chapterShowcase={id:arenaChapter,start:totalTime,
+                endAt:totalTime+spec.duration, pulseMask:0,flowerMask:0,
+                completed:false,targets,
+                anchorX:player.x,anchorY:player.y};
+            chapterShowcaseStats.started++;
+            if(arenaChapter==='FOUNDRY'){
+                chapterFoundryAnchor=null;
+                chapterFoundryLastPulse=-1;
+            }
+            chapterAnnounceUntil=Math.max(chapterAnnounceUntil,totalTime+3);
+            createFloatingText(player.x,player.y-80,spec.name,spec.color,18);
+            return true;
+        }
+        function cancelChapterShowcase() {
+            if(!chapterShowcase)return;
+            chapterShowcaseStats.cancelled++;
+            chapterShowcase=null;
+            chapterFoundryAnchor=null;
+            chapterFoundryLastPulse=-1;
+        }
+        function fireFoundryPress(index) {
+            const x=worldWidth*(index===0?.28:.72);
+            const width=35;
+            if(Math.abs(player.x-x)<width+player.radius){
+                const hp=player.hp;
+                player.takeDamage(8);
+                if(player.hp<hp)chapterShowcaseStats.pressPlayerHits++;
+            }
+            let hits=0;
+            for(const enemy of enemies){
+                if(hits>=10)break;
+                if(enemy.dead||enemy.isBoss||
+                    Math.abs(enemy.x-x)>width+enemy.radius)continue;
+                enemy.takeDamage(Math.min(85,player.damage*.7+25),0,0,false,false);
+                hits++;
+            }
+            chapterShowcaseStats.pressEnemyHits+=hits;
+            shockwaves.push(new Shockwave(x,worldHeight*.5,130,'#ffb36f',.4));
+        }
+        function recordShowcaseIonFlower(index) {
+            const op=chapterShowcase;
+            if(!op||op.id!=='GARDEN'||op.completed||
+                totalTime>=op.endAt)return;
+            op.flowerMask|=1<<index;
+            if((op.flowerMask & (op.flowerMask-1))===0)return;
+            op.completed=true;
+            op.endAt=Math.min(op.endAt,totalTime+2.5);
+            chapterShowcaseStats.ionHarmonies++;
+            chapterShowcaseStats.completed++;
+            let stunned=0;
+            for(const enemy of enemies){
+                if(stunned>=14)break;
+                if(enemy.dead||enemy.isBoss)continue;
+                enemy.stunTimer=Math.max(enemy.stunTimer,1.8);
+                stunned++;
+            }
+            chapterShowcaseStats.ionStuns+=stunned;
+            shockwaves.push(new Shockwave(worldWidth*.5,worldHeight*.5,
+                Math.min(worldWidth,worldHeight)*.58,'#86ffe0',.8));
+            createFloatingText(player.x,player.y-65,'İYON KOROSU · REZONANS!',
+                '#86ffe0',17);
+        }
+        function resolveRiftPincer(op) {
+            if(Math.hypot(player.x-op.anchorX,player.y-op.anchorY)>155){
+                chapterShowcaseStats.pincerEvades+=op.targets.length;
+                return;
+            }
+            for(const target of op.targets){
+                const enemy=enemies.find(e=>e.id===target.enemyId);
+                if(!enemy||enemy.dead||enemy.isBoss||enemy.stunTimer>0||
+                    Math.hypot(player.x-target.x,player.y-target.y)<
+                    player.radius+enemy.radius+85){
+                    chapterShowcaseStats.pincerEvades++;
+                    continue;
+                }
+                enemy.x=target.x;enemy.y=target.y;
+                enemy.state='CHASE';
+                enemy.stunTimer=Math.max(enemy.stunTimer,.65);
+                enemy.actionTimer=Math.max(enemy.actionTimer,1.2);
+                enemy.pushVx=0;enemy.pushVy=0;
+                enemy.crowdSteerX=0;enemy.crowdSteerY=0;
+                chapterShowcaseStats.pincerFlanks++;
+                shockwaves.push(new Shockwave(enemy.x,enemy.y,108,
+                    '#e3a6ff',.45));
+            }
+        }
+        function updateChapterShowcase() {
+            const op=chapterShowcase;
+            if(!op)return;
+            const elapsed=totalTime-op.start;
+            if(op.id==='FOUNDRY'){
+                for(let i=0;i<2;i++){
+                    const moment=i===0?1.8:3.8;
+                    if(elapsed>=moment&&!(op.pulseMask&(1<<i))){
+                        op.pulseMask|=1<<i;
+                        // Skipped frames cannot apply a hit after its warning.
+                        if(elapsed<moment+.5)fireFoundryPress(i);
+                    }
+                }
+            }else if(op.id==='RIFT'&&!op.completed&&elapsed>=2.2){
+                op.completed=true;
+                if(elapsed<2.7)resolveRiftPincer(op);
+                chapterShowcaseStats.completed++;
+            }
+            if(totalTime>=op.endAt){
+                if(op.id==='FOUNDRY')chapterShowcaseStats.completed++;
+                chapterShowcase=null;
+                chapterFoundryAnchor=null;
+                chapterFoundryLastPulse=-1;
+            }
+        }
+        function drawChapterShowcase(ctx) {
+            if(!chapterShowcase||!chapterEffectsAllowed())return;
+            const op=chapterShowcase;
+            const elapsed=totalTime-op.start;
+            const low=graphicsQuality==='low';
+            ctx.save();
+            if(op.id==='FOUNDRY'){
+                for(let i=0;i<2;i++){
+                    const moment=i===0?1.8:3.8;
+                    if(elapsed>moment+.5)continue;
+                    const x=worldWidth*(i===0?.28:.72);
+                    const active=elapsed>=moment;
+                    ctx.fillStyle=active?'#ffc178':'#ff874b';
+                    ctx.strokeStyle=active?'#fff3cc':'#ffb36f';
+                    ctx.lineWidth=active?5:3;
+                    ctx.globalAlpha=active?.28:.13;
+                    ctx.fillRect(x-35,0,70,worldHeight);
+                    ctx.globalAlpha=active?1:.78;
+                    if(!active)ctx.setLineDash([14,11]);
+                    ctx.beginPath();ctx.moveTo(x-35,0);ctx.lineTo(x-35,worldHeight);
+                    ctx.moveTo(x+35,0);ctx.lineTo(x+35,worldHeight);
+                    ctx.stroke();ctx.setLineDash([]);
+                    // The press teeth make this unmistakably vertical machinery.
+                    const teeth=low?5:10;
+                    for(let k=0;k<teeth;k++){
+                        const y=(k+.5)*worldHeight/teeth;
+                        ctx.beginPath();ctx.moveTo(x-19,y-10);
+                        ctx.lineTo(x,y);ctx.lineTo(x-19,y+10);ctx.stroke();
+                        ctx.beginPath();ctx.moveTo(x+19,y-10);
+                        ctx.lineTo(x,y);ctx.lineTo(x+19,y+10);ctx.stroke();
+                    }
+                }
+            }else if(op.id==='GARDEN'){
+                const nodes=getGardenCenters();
+                ctx.strokeStyle='#86ffe0';ctx.lineWidth=low?2:4;
+                ctx.globalAlpha=op.completed?.9:.5;
+                ctx.beginPath();ctx.moveTo(nodes[0].x,nodes[0].y);
+                ctx.lineTo(nodes[1].x,nodes[1].y);
+                ctx.lineTo(nodes[2].x,nodes[2].y);
+                ctx.closePath();ctx.stroke();
+                for(let i=0;i<nodes.length;i++){
+                    const on=!!(op.flowerMask&(1<<i));
+                    ctx.strokeStyle=on?'#fff5b2':'#86ffe0';
+                    ctx.globalAlpha=on?1:.6;
+                    ctx.lineWidth=on?6:3;
+                    ctx.beginPath();ctx.arc(nodes[i].x,nodes[i].y,
+                        CHAPTER_RULES.gardenRadius+22,0,Math.PI*2);ctx.stroke();
+                    if(on){
+                        ctx.beginPath();ctx.arc(nodes[i].x,nodes[i].y,
+                            CHAPTER_RULES.gardenRadius+28,0,Math.PI*2);ctx.stroke();
+                    }
+                }
+            }else if(op.id==='RIFT'){
+                const gates=getRiftCenters();
+                ctx.strokeStyle='#e3a6ff';ctx.lineWidth=3;
+                ctx.globalAlpha=op.completed?.25:.95;
+                if(!op.completed)ctx.setLineDash([10,8]);
+                for(const target of op.targets){
+                    const from=target.x<worldWidth*.5?gates[0]:gates[1];
+                    ctx.beginPath();ctx.moveTo(from.x,from.y);
+                    ctx.lineTo(target.x,target.y);ctx.stroke();
+                    ctx.beginPath();
+                    for(let k=0;k<4;k++){
+                        const a=k*Math.PI/2;
+                        const x=target.x+Math.cos(a)*50;
+                        const y=target.y+Math.sin(a)*50;
+                        if(k===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+                    }
+                    ctx.closePath();ctx.stroke();
+                    ctx.beginPath();ctx.arc(target.x,target.y,
+                        20+Math.max(0,2.2-elapsed)*8,0,Math.PI*2);ctx.stroke();
+                }
+                ctx.setLineDash([]);
+            }
+            ctx.restore();
+        }
+
         function updateArenaChapter(dt) {
             startChapterIfChanged();
             if(!arenaChapter || !chapterEffectsAllowed()){
+                cancelChapterShowcase();
                 // No banked garden charge or unseen foundry pulse through boss/mission.
                 chapterGardenCharge.fill(0);
                 chapterGardenContested.fill(0);
@@ -5501,18 +5747,24 @@
                 }
                 return;
             }
+            beginChapterShowcase();
             if(arenaChapter==='FOUNDRY'){
-                if(chapterFoundryAnchor===null)chapterFoundryAnchor=totalTime;
-                updateFoundryChapter();
+                if(!chapterShowcase){
+                    if(chapterFoundryAnchor===null)chapterFoundryAnchor=totalTime;
+                    updateFoundryChapter();
+                }
             }
             else if(arenaChapter==='GARDEN')updateGardenChapter(dt);
             else if(arenaChapter==='RIFT')updateRiftChapter();
+            updateChapterShowcase();
         }
         function getArenaChapterSnapshot(){
             return {id:arenaChapter, label:arenaChapter?
                 ARENA_CHAPTERS[arenaChapter].label:null,
                 enabled:!!arenaChapter&&chapterEffectsAllowed(),
-                wave, foundryPhase:arenaChapter==='FOUNDRY'?
+                wave, showcase:chapterShowcaseSnapshot(),
+                showcaseStats:{...chapterShowcaseStats},
+                foundryPhase:arenaChapter==='FOUNDRY'?
                     Math.round(chapterFoundryPhase()*10)/10:null,
                 foundryReadyIn:arenaChapter==='FOUNDRY'&&chapterFoundryAnchor!==null?
                     Math.max(0,Math.round((CHAPTER_RULES.foundryWarn-chapterFoundryPhase())*10)/10):null,
@@ -5556,6 +5808,16 @@
                     'GEÇİT ŞARJDA · '+Math.ceil(chapterRiftReadyAt-totalTime)+' sn':
                     'İKİ GEÇİT AKTİF';
             }
+            if(chapterShowcase){
+                const op=chapterShowcase;
+                if(op.id==='FOUNDRY')message='KIZIL MAKAS · DİKEY PRESLERDEN KAÇ';
+                else if(op.id==='GARDEN'){
+                    const secured=[0,1,2].filter(i=>op.flowerMask&(1<<i)).length;
+                    message=op.completed?'İYON KOROSU · REZONANS!':
+                        'İYON KOROSU · '+secured+'/2 ÇİÇEK';
+                }else message=op.completed?'FAZ KISKACI · TAMAMLANDI':
+                    'FAZ KISKACI · İŞARETLERDEN UZAKLAŞ';
+            }
             status.textContent=message;
             if(mobile){
                 mobile.classList.toggle('hidden',!d);
@@ -5564,9 +5826,26 @@
             const show=!!d && gameState==='PLAYING'&&totalTime<chapterAnnounceUntil;
             announcement.classList.toggle('hidden',!show);
             if(show){
-                announcement.textContent=d.label+' · '+d.caption;
-                announcement.style.borderColor=d.color;
-                announcement.style.color=d.accent;
+                const op=chapterShowcase;
+                const spec=op&&CHAPTER_SHOWCASES[op.id];
+                announcement.textContent=spec?spec.name+' · '+spec.hint:
+                    d.label+' · '+d.caption;
+                announcement.style.borderColor=spec?spec.color:d.color;
+                announcement.style.color=spec?spec.color:d.accent;
+            }
+            const banner=document.getElementById('arenaShowcaseBanner');
+            if(banner){
+                banner.classList.toggle('hidden',!chapterShowcase);
+                if(chapterShowcase){
+                    const spec=CHAPTER_SHOWCASES[chapterShowcase.id];
+                    const progress=Math.min(100,Math.max(0,
+                        (totalTime-chapterShowcase.start)/
+                        Math.max(.1,chapterShowcase.endAt-chapterShowcase.start)*100));
+                    banner.textContent=spec.name+' · '+spec.hint;
+                    banner.style.borderColor=spec.color;
+                    banner.style.color=spec.color;
+                    banner.style.setProperty?.('--operation-progress',progress.toFixed(1)+'%');
+                }
             }
         }
         function drawArenaChapter(ctx) {
@@ -7622,6 +7901,7 @@
             drawBackgroundGrid();
             drawArenaAtmosphere();
             drawArenaChapter(ctx);
+            drawChapterShowcase(ctx);
             drawBossArenaPresence(ctx);
             drawSpecialEncounterWarning();
             drawTacticalLinks();

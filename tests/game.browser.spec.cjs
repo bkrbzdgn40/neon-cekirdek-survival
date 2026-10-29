@@ -432,3 +432,29 @@ test('M5.19 contested garden and warned rift pursuit have readable HUD in Chromi
  expect(result.gold).toBe(50);
  expect(errors).toEqual([]);
 });
+
+
+test('M5.20 three signature operations display unique stage callouts in Chromium',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const stages=await page.evaluate(()=>{
+   nextBossTime=1000;
+   const result={};
+   for(const [w,id] of [[5,'FOUNDRY'],[8,'GARDEN'],[11,'RIFT']]){
+     wave=w;waveTimer=2;enemies=[new Enemy(360,300,'SHOOTER')];
+     updateArenaChapter(.02);updateArenaChapterHud();
+     const banner=document.getElementById('arenaShowcaseBanner');
+     result[id]={name:banner.textContent,hidden:banner.classList.contains('hidden'),
+       telemetry:getArenaChapterSnapshot().showcase,gold:totalGold};
+   }
+   return result;
+ });
+ expect(stages.FOUNDRY.name).toContain('KIZIL MAKAS');
+ expect(stages.GARDEN.name).toContain('İYON KOROSU');
+ expect(stages.RIFT.name).toContain('FAZ KISKACI');
+ expect(Object.values(stages).every(x=>!x.hidden&&x.telemetry?.id)).toBe(true);
+ expect(Object.values(stages).every(x=>x.gold===50)).toBe(true);
+ await expect(page.locator('#arenaShowcaseBanner')).toBeVisible();
+ expect(errors).toEqual([]);
+});
