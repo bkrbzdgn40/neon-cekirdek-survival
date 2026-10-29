@@ -28,24 +28,24 @@
         <!-- Top Bar -->
         <div class="hud-top-deck flex flex-col gap-2 w-full">
             <!-- XP, Kinetic Momentum & Overdrive Progress Bars -->
-            <div class="hud-signal-deck grid grid-cols-1 md:grid-cols-12 gap-2" aria-label="Çekirdek durum göstergeleri">
+            <div class="hud-signal-deck grid gap-2" aria-label="Çekirdek durum göstergeleri">
                 <!-- XP BAR -->
-                <div class="hud-meter hud-meter-xp md:col-span-5 bg-gray-900/90 h-5 rounded-full overflow-hidden border border-cyan-500/50 p-0.5 relative shadow-[0_0_15px_rgba(0,243,255,0.3)]" aria-label="Deneyim çubuğu">
-                    <div id="xpBar" class="hud-meter-fill h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 rounded-full transition-all duration-150" style="width: 0%;"></div>
+                <div class="hud-meter hud-meter-xp bg-gray-900/90 h-5 rounded-full overflow-hidden border border-cyan-500/50 p-0.5 relative shadow-[0_0_15px_rgba(0,243,255,0.3)]" aria-label="Deneyim çubuğu">
+                    <div id="xpBar" role="progressbar" aria-label="Deneyim yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="hud-meter-fill h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 rounded-full transition-all duration-150" style="width: 0%;"></div>
                     <div class="hud-meter-label absolute inset-0 flex items-center justify-center text-[11px] sm:text-xs font-cyber font-bold tracking-widest text-white drop-shadow">
                         SV <span id="levelText" class="mx-1 text-cyan-300">1</span> · XP <span id="xpText" class="ml-1">0 / 125</span>
                     </div>
                 </div>
                 <!-- KINETIC MOMENTUM BAR -->
-                <div class="hud-meter hud-meter-momentum md:col-span-3 bg-gray-900/90 h-5 rounded-full overflow-hidden border border-green-400/60 p-0.5 relative shadow-[0_0_15px_rgba(0,255,102,0.25)]" aria-label="Momentum çubuğu">
-                    <div id="momentumBar" class="hud-meter-fill h-full bg-gradient-to-r from-emerald-500 via-green-400 to-cyan-300 rounded-full transition-all duration-75" style="width: 0%;"></div>
+                <div class="hud-meter hud-meter-momentum bg-gray-900/90 h-5 rounded-full overflow-hidden border border-green-400/60 p-0.5 relative shadow-[0_0_15px_rgba(0,255,102,0.25)]" aria-label="Momentum çubuğu">
+                    <div id="momentumBar" role="progressbar" aria-label="Momentum yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="hud-meter-fill h-full bg-gradient-to-r from-emerald-500 via-green-400 to-cyan-300 rounded-full transition-all duration-75" style="width: 0%;"></div>
                     <div id="momentumText" class="hud-meter-label absolute inset-0 flex items-center justify-center text-[10px] sm:text-xs font-cyber font-black tracking-wider text-white drop-shadow">
                         MOMENTUM · %0
                     </div>
                 </div>
                 <!-- OVERDRIVE FEVER BAR -->
-                <div class="hud-meter hud-meter-overdrive md:col-span-4 bg-gray-900/90 h-5 rounded-full overflow-hidden border border-pink-500/60 p-0.5 relative shadow-[0_0_15px_rgba(255,0,127,0.3)]" aria-label="Cinnet çubuğu">
-                    <div id="overdriveBar" class="hud-meter-fill h-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600 rounded-full transition-all duration-100" style="width: 0%;"></div>
+                <div class="hud-meter hud-meter-overdrive bg-gray-900/90 h-5 rounded-full overflow-hidden border border-pink-500/60 p-0.5 relative shadow-[0_0_15px_rgba(255,0,127,0.3)]" aria-label="Cinnet çubuğu">
+                    <div id="overdriveBar" role="progressbar" aria-label="Cinnet enerjisi yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="hud-meter-fill h-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600 rounded-full transition-all duration-100" style="width: 0%;"></div>
                     <div id="overdriveText" class="hud-meter-label absolute inset-0 flex items-center justify-center text-[10px] sm:text-xs font-cyber font-black tracking-widest text-white drop-shadow">
                         CİNNET · %0
                     </div>
@@ -59,7 +59,7 @@
                         <div class="flex items-center gap-2">
                             <i class="fa-solid fa-heart text-pink-500 animate-pulse"></i>
                             <div class="hud-health-track w-24 sm:w-36 bg-gray-800 h-3 rounded-full overflow-hidden">
-                                <div id="hpBar" class="bg-gradient-to-r from-red-600 to-pink-500 h-full transition-all duration-150" style="width: 100%;"></div>
+                                <div id="hpBar" role="progressbar" aria-label="Can yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" class="bg-gradient-to-r from-red-600 to-pink-500 h-full transition-all duration-150" style="width: 100%;"></div>
                             </div>
                             <span id="hpText" class="text-xs sm:text-sm font-bold w-16 text-right">100/100</span>
                         </div>
