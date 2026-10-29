@@ -5959,3 +5959,89 @@ test('M5.20 low graphics renders distinct press, chorus, and pincer geometry',()
  assert.match(x.RIFT.banner,/FAZ KISKACI/);
  assert.match(html,/id="arenaShowcaseBanner"/);
 });
+
+
+test('M5.21 Echo Hunter promotes one existing eligible foe on scheduled waves, never creates enemies',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();nextBossTime=5000;wave=7;waveTimer=2;totalTime=100;enemies=[new Enemy(70,70,'SHOOTER'),new Enemy(110,90,'DASHER')];const before=enemies.length;updateNemesis(.02);const first=getNemesisSnapshot();updateNemesis(.02);const same=getNemesisSnapshot();wave=8;waveTimer=2;totalTime=116;updateNemesis(.02);const after=getNemesisSnapshot();wave=13;waveTimer=2;totalTime=196;updateNemesis(.02);const later=getNemesisSnapshot();return JSON.stringify({before,afterCount:enemies.length,first,same,after,later,gold:totalGold,upgradeCount:UPGRADES_POOL.length});})()"));
+ assert.equal(x.before,x.afterCount);
+ assert.equal(x.first.active,true);
+ assert.equal(x.first.wave,7);
+ assert.equal(x.first.stats.started,1);
+ assert.equal(x.same.stats.started,1);
+ assert.equal(x.after.active,false);
+ assert.equal(x.later.active,true);
+ assert.equal(x.later.stats.started,2);
+ assert.equal(x.gold,50);
+ assert.equal(x.upgradeCount,13);
+});
+
+test('M5.21 stationary player receives a 1.45s warning and only one bounded hit',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();nextBossTime=5000;wave=7;waveTimer=2;totalTime=100;enemies=[new Enemy(70,70,'TANK')];updateNemesis(.02);const hp=player.hp;totalTime=101.65;updateNemesis(.02);const tell=getNemesisSnapshot();totalTime=102.7;updateNemesis(.02);const warningHp=player.hp;totalTime=103.12;updateNemesis(.02);const after=getNemesisSnapshot(),hitHp=player.hp;updateNemesis(.02);return JSON.stringify({hp,tell,warningHp,hitHp,after,repeatedHp:player.hp});})()"));
+ assert.equal(x.tell.attack.kind,'LOCK');
+ assert.equal(x.tell.attack.title,'SABİT NOKTA');
+ assert.ok(x.tell.attack.warning>=1.4);
+ assert.equal(x.warningHp,x.hp);
+ assert.equal(x.hitHp,x.hp-8);
+ assert.equal(x.after.stats.attacks,1);
+ assert.equal(x.after.stats.hits,1);
+ assert.equal(x.after.attack,null);
+ assert.equal(x.repeatedHp,x.hitHp);
+});
+
+test('M5.21 movement history selects trail markers with real positions and allows escape',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();nextBossTime=5000;wave=7;waveTimer=2;totalTime=100;enemies=[new Enemy(70,70,'SNIPER')];updateNemesis(.02);const hp=player.hp;for(let i=0;i<9;i++){totalTime+=.2;player.x+=30;updateNemesis(.02);}const tell=getNemesisSnapshot();player.x=worldWidth*.9;player.y=worldHeight*.9;totalTime=tell.attack?totalTime+tell.attack.warning+.02:totalTime;updateNemesis(.02);return JSON.stringify({hp,tell,after:getNemesisSnapshot(),hpAfter:player.hp});})()"));
+ assert.equal(x.tell.attack.kind,'TRAIL');
+ assert.ok(x.tell.attack.centers.length>=2&&x.tell.attack.centers.length<=3);
+ assert.equal(x.hpAfter,x.hp);
+ assert.equal(x.after.stats.trail,1);
+ assert.equal(x.after.stats.evaded,1);
+});
+
+test('M5.21 recent dash triggers cross-lock but both crossing beams can be dodged',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();nextBossTime=5000;wave=7;waveTimer=2;totalTime=100;enemies=[new Enemy(70,70,'DASHER')];updateNemesis(.02);totalTime=100.6;player.isDashing=true;updateNemesis(.02);player.isDashing=false;totalTime=101.7;updateNemesis(.02);const tell=getNemesisSnapshot();const hp=player.hp;player.x+=95;totalTime+=1.5;updateNemesis(.02);return JSON.stringify({tell,hp,after:player.hp,stats:getNemesisSnapshot().stats});})()"));
+ assert.equal(x.tell.attack.kind,'CROSS');
+ assert.equal(x.tell.attack.title,'ÇAPRAZ KİLİT');
+ assert.equal(x.hp,x.after);
+ assert.equal(x.stats.cross,1);
+ assert.equal(x.stats.evaded,1);
+});
+
+test('M5.21 stun cancels the marked strike, death defeats hunter, bosses suppress it',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();nextBossTime=5000;wave=7;waveTimer=2;totalTime=100;const e=new Enemy(70,70,'SHOOTER');enemies=[e];updateNemesis(.02);totalTime=101.7;updateNemesis(.02);const attacking=!!nemesis.attack;e.stunTimer=1.5;updateNemesis(.02);const interrupted=getNemesisSnapshot();e.dead=true;updateNemesis(.02);const defeated=getNemesisSnapshot();wave=13;totalTime=200;waveTimer=2;enemies=[new Enemy(70,70,'SHOOTER')];updateNemesis(.02);combatDirector.activeArenaEvent={kind:'STORM'};updateNemesis(.02);const suppressed=getNemesisSnapshot();return JSON.stringify({attacking,interrupted,defeated,suppressed});})()"));
+ assert.equal(x.attacking,true);
+ assert.equal(x.interrupted.attack,null);
+ assert.equal(x.interrupted.stats.interrupted,1);
+ assert.equal(x.defeated.stats.defeated,1);
+ assert.equal(x.suppressed.active,false);
+ assert.equal(x.suppressed.stats.suppressed,1);
+});
+
+test('M5.21 reset, boss priority and mobile HUD honor safety and accessibility',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();wave=7;waveTimer=2;totalTime=100;nextBossTime=103;enemies=[new Enemy(70,70,'ASSASSIN')];updateNemesis(.02);const bossGuard=getNemesisSnapshot();nextBossTime=5000;updateNemesis(.02);totalTime+=1.65;updateNemesis(.02);updateNemesisHud();const banner=document.getElementById('nemesisBanner').textContent;const before=getNemesisSnapshot();startNewGame();return JSON.stringify({bossGuard,banner,before,after:getNemesisSnapshot(),gold:totalGold});})()"));
+ assert.equal(x.bossGuard.active,false);
+ assert.equal(x.before.active,true);
+ assert.match(x.banner,/YANKI AVCISI.*SABİT NOKTA/);
+ assert.equal(x.after.active,false);
+ assert.equal(x.after.stats.started,0);
+ assert.equal(x.gold,50);
+ assert.match(html,/id="nemesisBanner"/);
+ assert.match(html,/aria-label="Yankı Avcısı tehdidi"/);
+});
+
+test('M5.21 low-VFX Echo Hunter identity and warning geometry are rendered without spawning',()=>{
+ const calls=[];
+ const ctx=new Proxy({}, {get(_,name){return(...args)=>calls.push(String(name));}});
+ const {run}=setup({}, {canvasContext:ctx});
+ const x=JSON.parse(run("(()=>{startNewGame();wave=7;waveTimer=2;nextBossTime=5000;totalTime=100;graphicsQuality='low';enemies=[new Enemy(70,70,'SNIPER')];updateNemesis(.02);totalTime+=1.7;updateNemesis(.02);const before=enemies.length;drawNemesisThreat(ctx);drawNemesisIdentity(ctx);return JSON.stringify({before,after:enemies.length,kind:getNemesisSnapshot().attack?.kind});})()"));
+ assert.equal(x.before,x.after);
+ assert.equal(x.kind,'LOCK');
+ assert.ok(calls.includes('arc'));
+ assert.ok(calls.includes('lineTo'));
+ assert.ok(calls.includes('fill'));
+});
