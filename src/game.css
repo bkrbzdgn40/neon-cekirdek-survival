@@ -1591,3 +1591,40 @@ html[data-graphics-quality="low"] #hud .hud-command-deck{
     box-shadow:none!important;
     backdrop-filter:none;
 }
+
+
+/* M5.26 | Field engineering cues. These are restrained status chips,
+   not full-screen overlays that compete with danger telegraphs. */
+#hud .field-device-badge {
+    max-width:min(96vw,690px);
+    min-width:0;
+    padding:7px 14px;
+    border:1px solid rgba(255,182,110,.72);
+    border-radius:8px;
+    background:linear-gradient(115deg,rgba(48,28,15,.97),rgba(13,15,29,.98));
+    box-shadow:inset 3px 0 #ffc183,0 6px 15px rgba(0,0,0,.3);
+    font:800 11px/1.45 'Segoe UI',system-ui,sans-serif;
+    letter-spacing:.025em;
+    color:#ffe7cc;
+    text-wrap:balance;
+    overflow-wrap:break-word;
+    pointer-events:none;
+}
+#hud .field-device-badge[data-kind="GRAVITON"] {
+    color:#c4f3ff;
+    border-color:rgba(125,227,255,.75);
+    background:linear-gradient(115deg,rgba(12,47,66,.98),rgba(13,16,31,.98));
+    box-shadow:inset 3px 0 #80daff,0 6px 15px rgba(0,0,0,.26);
+}
+#hud .field-device-badge[data-state="armed"] {
+    border-color:#ffad7b;
+    box-shadow:inset 4px 0 #ff7350,0 0 13px rgba(255,108,62,.23);
+    color:#fff0de;
+}
+@media(max-width:639px){
+    #hud .field-device-badge{padding:5px 9px;font-size:10px;max-width:96vw;}
+}
+@media(prefers-reduced-motion:reduce){
+    #hud .field-device-badge{animation:none!important;transition:none!important;}
+}
+html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}

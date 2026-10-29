@@ -6291,3 +6291,53 @@ test('M5.25 combat skills expose visual readiness without modifying their mechan
  assert.ok(data.damage>0);
  assert.equal(data.gold,50);
 });
+
+
+test('M5.26 wave-gated engineering alternates devices, offers paired reactors, and honors boss lockouts',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();worldWidth=1000;worldHeight=800;player.x=500;player.y=400;nextBossTime=800;conduitZones=[];activeQuest.point=null;combatDirector.activeArenaEvent=null;Math.random=()=>.3;wave=1;const early=maybeSpawnFieldDevice();wave=2;const first=maybeSpawnFieldDevice(),repeat=maybeSpawnFieldDevice();const firstKinds=fieldDevices.map(d=>d.kind);wave=5;const second=maybeSpawnFieldDevice();const both=fieldDevices.map(d=>d.kind);fieldDevices=[];wave=8;const pairOk=maybeSpawnFieldDevice();const pair=fieldDevices.map(d=>({x:d.x,y:d.y,kind:d.kind}));fieldDevices=[];wave=11;activeBosses=[new Enemy(150,150,'BOSS_DESTROYER')];const blocked=maybeSpawnFieldDevice();return JSON.stringify({early,first,repeat,firstKinds,second,both,pairOk,pair,blocked});})()"));
+ assert.equal(x.early,false);assert.equal(x.first,true);assert.equal(x.repeat,false);
+ assert.deepEqual(x.firstKinds,['CAPACITOR']);assert.equal(x.second,true);
+ assert.deepEqual(x.both,['CAPACITOR','GRAVITON']);assert.equal(x.pairOk,true);
+ assert.equal(x.pair.length,2);assert.ok(x.pair.every(d=>d.kind==='CAPACITOR'));
+ assert.ok(Math.hypot(x.pair[0].x-x.pair[1].x,x.pair[0].y-x.pair[1].y)<=190);
+ assert.equal(x.blocked,false);
+});
+
+test('M5.26 swept plasma shots, player dash and EMP Nova all activate field devices once',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();nextBossTime=500;const d=spawnFieldDevice('CAPACITOR',player.x+110,player.y);const b=new Bullet(d.x-90,d.y,800,0,20,5,1,0);b.previousX=d.x-90;b.x=d.x+90;bullets.push(b);updateFieldDevices(.016);const shot={state:d.state,source:d.source,dead:b.dead};const duplicate=triggerFieldDevice(d,'shot');fieldDevices=[];const q=spawnFieldDevice('CAPACITOR',player.x+22,player.y);player.isDashing=true;updateFieldDevices(.016);const dash={state:q.state,source:q.source};player.isDashing=false;fieldDevices=[];player.novaCooldown=0;const g=spawnFieldDevice('GRAVITON',player.x+115,player.y);player.triggerNova();return JSON.stringify({shot,duplicate,dash,gravity:{state:g.state,source:g.source},stats:fieldDeviceStats});})()"));
+ assert.deepEqual(x.shot,{state:'armed',source:'shot',dead:true});
+ assert.equal(x.duplicate,false);assert.deepEqual(x.dash,{state:'armed',source:'dash'});
+ assert.deepEqual(x.gravity,{state:'field',source:'nova'});
+ assert.equal(x.stats.shotsCaptured,1);assert.equal(x.stats.gravityFields,1);
+});
+
+test('M5.26 volatile reactor has a visible fuse, limited friendly-fire risk and delayed chained blasts',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();nextBossTime=500;player.hasShield=false;player.invulnTimer=0;const a=spawnFieldDevice('CAPACITOR',player.x+90,player.y),b=spawnFieldDevice('CAPACITOR',player.x+205,player.y);const near=new Enemy(a.x+35,a.y,'TANK'),far=new Enemy(a.x+350,a.y,'TANK'),boss=new Enemy(a.x+15,a.y,'BOSS_TITAN');near.hp=500;far.hp=500;boss.hp=500;enemies.push(near,far,boss);const hp=player.hp,gold=totalGold;triggerFieldDevice(a,'shot');updateFieldDevices(.2);const delay={hp:player.hp,enemyHp:near.hp,blasts:fieldDeviceStats.blasts};updateFieldDevices(.34);const afterFirst={hp:player.hp,near:near.hp,far:far.hp,boss:boss.hp,chains:fieldDeviceStats.chainReactions,blasts:fieldDeviceStats.blasts};updateFieldDevices(.23);return JSON.stringify({delay,afterFirst,end:{...fieldDeviceStats},remaining:fieldDevices.length,gold,finalGold:totalGold,initialHp:hp});})()"));
+ assert.equal(x.delay.blasts,0);assert.equal(x.delay.enemyHp,500);
+ assert.ok(x.afterFirst.hp<x.initialHp);assert.ok(x.afterFirst.near<500);
+ assert.equal(x.afterFirst.far,500);assert.equal(x.afterFirst.boss,500);
+ assert.equal(x.afterFirst.chains,1);assert.equal(x.afterFirst.blasts,1);
+ assert.equal(x.end.blasts,2);assert.equal(x.remaining,0);
+ assert.equal(x.end.playerHits,1);assert.equal(x.gold,x.finalGold);
+});
+
+test('M5.26 graviton slows normal enemies but not bosses and expires without touching build or loot',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();const d=spawnFieldDevice('GRAVITON',player.x+110,player.y);const near=new Enemy(d.x+30,d.y,'SWARM'),far=new Enemy(d.x+380,d.y,'SWARM'),boss=new Enemy(d.x,d.y,'BOSS_VOID');const before=getFieldEnemyTimeScale(near);triggerFieldDevice(d,'shot');const active=[getFieldEnemyTimeScale(near),getFieldEnemyTimeScale(far),getFieldEnemyTimeScale(boss)];const gold=totalGold;updateFieldDevices(4.3);return JSON.stringify({before,active,after:getFieldEnemyTimeScale(near),count:fieldDevices.length,gold,finalGold:totalGold,stats:fieldDeviceStats});})()"));
+ assert.equal(x.before,1);assert.deepEqual(x.active,[.55,1,1]);
+ assert.equal(x.after,1);assert.equal(x.count,0);
+ assert.equal(x.gold,x.finalGold);assert.equal(x.stats.gravityFields,1);
+});
+
+test('M5.26 hard device cap, boss cancellation, timeout and new-run reset',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();spawnFieldDevice('CAPACITOR',player.x+90,player.y);spawnFieldDevice('GRAVITON',player.x+160,player.y);const before=window.getNeonFieldDevices();const third=spawnFieldDevice('CAPACITOR',player.x,player.y);spawnBossEncounter();const boss=window.getNeonFieldDevices();fieldDevices=[];spawnFieldDevice('CAPACITOR',player.x+80,player.y);for(let i=0;i<900;i++)updateFieldDevices(.016);const expired=window.getNeonFieldDevices();startNewGame();return JSON.stringify({before,third:third===null,boss,expired,reset:window.getNeonFieldDevices()});})()"));
+ assert.equal(x.before.limit,2);assert.equal(x.before.devices.length,2);
+ assert.equal(x.third,true);assert.equal(x.boss.devices.length,0);
+ assert.equal(x.boss.stats.cancelled,2);assert.equal(x.expired.stats.expired,1);
+ assert.equal(x.expired.devices.length,0);assert.equal(x.reset.devices.length,0);
+ assert.equal(x.reset.stats.spawned,0);
+});
