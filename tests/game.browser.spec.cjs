@@ -747,3 +747,92 @@ test('M5.24 reduced motion keeps boss/wave readability but avoids repeated dash 
  expect(result.s.active).toBe(2);
  expect(errors).toEqual([]);
 });
+
+
+test('M5.25 cockpit fits 320–1440px without covering command controls or losing readable gauges',async({page})=>{
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ await page.evaluate(()=>{nextBossTime=5000;updateHUD();});
+ for(const [width,height] of [[320,568],[360,740],[390,844],[768,800],[1024,768],[1440,900]]){
+   await page.setViewportSize({width,height});
+   const v=await page.evaluate(()=>{
+     const rect=id=>{const r=document.getElementById(id).getBoundingClientRect();
+       return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
+     const bars=['xpBar','momentumBar','overdriveBar'].map(rect);
+     const skills=['bastionBtn','novaBtn','prismBtn','dashBtn'].map(rect);
+     const labels=['xpText','momentumText','overdriveText'].map(id=>{
+       const n=document.getElementById(id);
+       return {text:n.textContent,font:parseFloat(getComputedStyle(n).fontSize)};
+     });
+     return {bars,skills,labels,top:rect('hud').top,
+       wave:rect('waveText'),score:rect('scoreText'),
+       row:document.querySelector('.hud-information-row').getBoundingClientRect().bottom,
+       command:document.querySelector('.hud-command-deck').getBoundingClientRect().top,
+       overflow:document.documentElement.scrollWidth-innerWidth,
+       columns:getComputedStyle(document.querySelector('.hud-signal-deck')).gridTemplateColumns.split(' ').length};
+   });
+   expect(v.overflow, 'horizontal overflow at '+width).toBeLessThanOrEqual(3);
+   expect(v.columns).toBe(width<640?2:3);
+   for(const item of [...v.bars,...v.skills,v.wave,v.score]){
+     expect(item.left, 'item left at '+width).toBeGreaterThanOrEqual(-2);
+     expect(item.right,'item right at '+width).toBeLessThanOrEqual(width+2);
+     expect(item.width).toBeGreaterThan(0);
+   }
+   expect(v.row,'top HUD overlaps action bay at '+width).toBeLessThan(v.command);
+   for(const button of v.skills)expect(button.height).toBeGreaterThanOrEqual(43);
+   for(const label of v.labels)expect(label.font).toBeGreaterThanOrEqual(11);
+   for(let i=1;i<v.skills.length;i++){
+     expect(v.skills[i].left,'combat skills overlap at '+width)
+       .toBeGreaterThanOrEqual(v.skills[i-1].right-2);
+   }
+ }
+ expect(errors).toEqual([]);
+});
+
+test('M5.25 damage and boss state change cockpit hierarchy, progress bars remain accessible',async({page})=>{
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const r=await page.evaluate(()=>{
+   nextBossTime=5000;
+   updateHUD();
+   const initial=document.getElementById('hud').dataset.vital;
+   player.hp=player.maxHp*.2;
+   updateHUD();
+   const critical=document.getElementById('hud').dataset.vital;
+   const hp=document.getElementById('hpBar');
+   const hpAria={role:hp.getAttribute('role'),value:hp.getAttribute('aria-valuenow')};
+   const s=['dashBtn','novaBtn','prismBtn'].map(id=>document.getElementById(id).dataset.ready);
+   const arch=new Enemy(player.x+140,player.y,'BOSS_DESTROYER');
+   activeBosses.push(arch);
+   updateHUD();
+   const boss=document.getElementById('hud').dataset.combatAlert;
+   const color=getComputedStyle(document.querySelector('.hud-wave-panel')).borderTopColor;
+   return {initial,critical,hpAria,s,boss,color};
+ });
+ expect(r.initial).toBe('steady');
+ expect(r.critical).toBe('critical');
+ expect(r.hpAria).toEqual({role:'progressbar',value:'20'});
+ expect(r.s).toEqual(['true','true','true']);
+ expect(r.boss).toBe('boss');
+ expect(r.color).toBe('rgba(255, 98, 138, 0.8)');
+ expect(errors).toEqual([]);
+});
+
+test('M5.25 reduced-motion and low graphics keep HUD legible without decorative animation cost',async({page})=>{
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const r=await page.evaluate(()=>{
+   player.hp=player.maxHp*.15;updateHUD();
+   const first=getComputedStyle(document.querySelector('.hud-vitals')).animationName;
+   applyGraphicsQuality('low',false);
+   const slot=getComputedStyle(document.getElementById('dashBtn'));
+   const title=getComputedStyle(document.getElementById('waveText'));
+   return {animation:first,shadow:slot.boxShadow,font:parseFloat(title.fontSize)};
+ });
+ expect(r.animation).toBe('none');
+ expect(r.shadow).toBe('none');
+ expect(r.font).toBeGreaterThanOrEqual(14);
+});
