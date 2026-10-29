@@ -1417,6 +1417,7 @@
                 audio.playDash();
                 screenShake = 6;
                 shockwaves.push(new Shockwave(this.x, this.y, 85, '#00f3ff', 0.25));
+                motionDashLastX=this.x;motionDashLastY=this.y;motionDashClock=0;
             }
 
             triggerNova() {
@@ -1426,6 +1427,7 @@
                 screenShake = 18;
                 const novaRadius = 290;
                 shockwaves.push(new Shockwave(this.x, this.y, novaRadius, '#b000ff', 0.45));
+                emitMotionFx('NOVA',this.x,this.y,{radius:novaRadius});
 
                 for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
                     const ep = enemyProjectiles[i];
@@ -3011,6 +3013,10 @@
                     }
                 }
 
+                if(this.isBoss||this.isElite||this.id%4===0){
+                    emitMotionFx(this.isBoss?'BOSS':this.isElite?'ELITE':'KILL',
+                        this.x,this.y,{radius:this.isBoss?135:60});
+                }
                 for (let i = 0; i < (this.isBoss ? 48 : 12); i++) {
                     const angle = Math.random() * Math.PI * 2;
                     const spd = Math.random() * 220 + 50;
@@ -3731,6 +3737,243 @@
         let spawnTimer = 0;
         let conduitSpawnTimer = 4.0;
         const MAX_VISIBLE_PARTICLES = 420;
+
+        // M5.24: event-driven motion grammar, separate from gameplay and the
+        // existing particle budget. No emitters, per-frame DOM, or image assets.
+        const MOTION_FX_LIMITS=Object.freeze({
+            high:Object.freeze({live:64,frame:8,facets:9,ambient:3}),
+            medium:Object.freeze({live:30,frame:5,facets:6,ambient:2}),
+            low:Object.freeze({live:12,frame:3,facets:3,ambient:0})
+        });
+        const MOTION_FX_LIFE=Object.freeze({
+            DASH:.31,NOVA:.65,PRISM:.37,KILL:.32,
+            ELITE:.58,WAVE:.72,BOSS:1.05,OVERDRIVE:.68
+        });
+        const MOTION_FX_COLORS=Object.freeze({
+            DASH:'#66efff',NOVA:'#d8a2ff',PRISM:'#bffaff',
+            KILL:'#ff8aaf',ELITE:'#ffde93',WAVE:'#75f7ff',
+            BOSS:'#ff6d97',OVERDRIVE:'#ff5fb8'
+        });
+        let motionFx=[],motionFxFrameCount=0,motionDashClock=0;
+        let motionDashLastX=0,motionDashLastY=0;
+        let motionFxStats={emitted:0,drawn:0,culled:0,
+            capDropped:0,frameDropped:0,qualityDropped:0,
+            highWater:0,byKind:{}};
+        function resetMotionFx(){
+            motionFx=[];motionFxFrameCount=0;motionDashClock=0;
+            motionDashLastX=0;motionDashLastY=0;
+            motionFxStats={emitted:0,drawn:0,culled:0,
+                capDropped:0,frameDropped:0,qualityDropped:0,
+                highWater:0,byKind:{}};
+        }
+        function emitMotionFx(kind,x,y,options=null){
+            if(gameState!=='PLAYING'||!Number.isFinite(x)||!Number.isFinite(y)||
+                !Object.hasOwn(MOTION_FX_LIFE,kind))return false;
+            // Reduced motion never animates ambient / continuous dash trails.
+            if(PREFERS_REDUCED_VFX_MOTION&&(kind==='DASH'||kind==='KILL'))
+                {motionFxStats.qualityDropped++;return false;}
+            if(graphicsQuality==='low'&&(kind==='DASH'||kind==='KILL'))
+                {motionFxStats.qualityDropped++;return false;}
+            const critical=kind==='BOSS'||kind==='WAVE'||kind==='NOVA'||kind==='OVERDRIVE';
+            if(!isFxInsideViewport(x,y,120,80)){
+                motionFxStats.culled++;return false;
+            }
+            const budget=MOTION_FX_LIMITS[graphicsQuality];
+            if(motionFxFrameCount>=budget.frame&&!critical){
+                motionFxStats.frameDropped++;return false;
+            }
+            if(motionFx.length>=budget.live){
+                if(!critical){motionFxStats.capDropped++;return false;}
+                // Replace an old low-priority flourish, never expand allocation.
+                const index=motionFx.findIndex(e=>e.kind==='DASH'||
+                    e.kind==='KILL'||e.kind==='PRISM');
+                if(index<0){motionFxStats.capDropped++;return false;}
+                motionFx.splice(index,1);
+            }
+            const duration=MOTION_FX_LIFE[kind]*
+                (PREFERS_REDUCED_VFX_MOTION?.45:1);
+            motionFx.push({kind,x,y,fromX:options?.fromX??x,
+                fromY:options?.fromY??y,angle:options?.angle??0,
+                radius:options?.radius??72,age:0,duration,
+                seed:motionFxStats.emitted+1});
+            motionFxFrameCount++;
+            motionFxStats.emitted++;
+            motionFxStats.byKind[kind]=(motionFxStats.byKind[kind]||0)+1;
+            motionFxStats.highWater=Math.max(motionFxStats.highWater,motionFx.length);
+            return true;
+        }
+        function updateMotionFx(dt){
+            for(let i=motionFx.length-1;i>=0;i--){
+                const e=motionFx[i];
+                e.age+=dt;
+                if(e.age>=e.duration)motionFx.splice(i,1);
+            }
+        }
+        function sampleMotionDash(dt){
+            if(!player)return;
+            if(!player.isDashing){
+                motionDashClock=0;
+                motionDashLastX=player.x;motionDashLastY=player.y;
+                return;
+            }
+            motionDashClock+=dt;
+            const cadence=graphicsQuality==='high'?.035:.075;
+            if(motionDashClock<cadence)return;
+            motionDashClock%=cadence;
+            emitMotionFx('DASH',player.x,player.y,{
+                fromX:motionDashLastX,fromY:motionDashLastY,
+                angle:Math.atan2(player.y-motionDashLastY,
+                    player.x-motionDashLastX)});
+            motionDashLastX=player.x;motionDashLastY=player.y;
+        }
+        function motionFxSnapshot(){
+            return {active:motionFx.length,
+                limit:MOTION_FX_LIMITS[graphicsQuality].live,
+                perFrame:MOTION_FX_LIMITS[graphicsQuality].frame,
+                byKind:{...motionFxStats.byKind},...motionFxStats,
+                kinds:motionFx.map(e=>e.kind)};
+        }
+        function drawMotionBackdrop(target){
+            if(gameState!=='PLAYING'||PREFERS_REDUCED_VFX_MOTION)return;
+            const budget=MOTION_FX_LIMITS[graphicsQuality];
+            if(!budget.ambient)return;
+            const w=worldWidth,h=worldHeight;
+            const tone=arenaChapter==='FOUNDRY'?'#ff9c69':
+                arenaChapter==='GARDEN'?'#80ffcb':
+                arenaChapter==='RIFT'?'#bb87ff':'#42d5ed';
+            target.save();
+            target.strokeStyle=tone;
+            target.lineWidth=1;
+            target.globalAlpha=.12;
+            // Constant work: two or three thin drifting locator rays, not a
+            // full-screen animated particle grid or expensive gradients.
+            for(let i=0;i<budget.ambient;i++){
+                const x=((totalTime*(10+i*3)+i*w/budget.ambient)%Math.max(1,w));
+                target.beginPath();
+                target.moveTo(x,0);
+                target.lineTo(x-36,h);
+                target.stroke();
+            }
+            target.restore();
+        }
+        function drawMotionFx(target){
+            const budget=MOTION_FX_LIMITS[graphicsQuality];
+            const begin=Math.max(0,motionFx.length-budget.live);
+            for(let index=begin;index<motionFx.length;index++){
+                const fx=motionFx[index];
+                if(!isFxInsideViewport(fx.x,fx.y,fx.radius,90)){
+                    if(performanceOverlayOn)pc3RenderCounts.skipped++;
+                    continue;
+                }
+                const progress=Math.min(1,fx.age/fx.duration);
+                const fade=1-progress;
+                const steps=budget.facets;
+                const color=MOTION_FX_COLORS[fx.kind];
+                target.save();
+                target.translate(fx.x,fx.y);
+                target.rotate(fx.angle);
+                target.strokeStyle=color;
+                target.fillStyle=color;
+                target.lineWidth=2;
+                target.globalAlpha=Math.min(1,fade*.9);
+                if(fx.kind==='DASH'){
+                    const dx=fx.fromX-fx.x,dy=fx.fromY-fx.y;
+                    const length=Math.min(82,Math.hypot(dx,dy));
+                    const theta=Math.atan2(dy,dx)-fx.angle;
+                    const ux=Math.cos(theta),uy=Math.sin(theta);
+                    for(const side of [-1,1]){
+                        const ox=-uy*side*8,oy=ux*side*8;
+                        target.beginPath();
+                        target.moveTo(ox,oy);
+                        target.lineTo(ox+ux*(length+20*fade),
+                            oy+uy*(length+20*fade));
+                        target.lineWidth=side===1?3:1.5;
+                        target.stroke();
+                    }
+                }else if(fx.kind==='PRISM'){
+                    // A crystal splinter fan; angle follows the incoming shot.
+                    for(let i=0;i<steps;i++){
+                        const a=-1.05+i*2.1/Math.max(1,steps-1);
+                        const distance=(14+progress*53)*(i%2===0?1:.75);
+                        const x=Math.cos(a)*distance,y=Math.sin(a)*distance;
+                        target.beginPath();
+                        target.moveTo(x,y-6*fade);
+                        target.lineTo(x+4*fade,y);
+                        target.lineTo(x,y+11*fade);
+                        target.lineTo(x-4*fade,y);
+                        target.closePath();target.stroke();
+                    }
+                }else if(fx.kind==='KILL'||fx.kind==='ELITE'){
+                    // Ordinary kills are tiny; elite kills get a distinct
+                    // hexagonal execution stamp without spawning new particles.
+                    const points=fx.kind==='ELITE'?6:3;
+                    const reach=(fx.kind==='ELITE'?52:23)*(0.3+.7*progress);
+                    for(let i=0;i<points;i++){
+                        const a=i*2*Math.PI/points+fx.seed*.39;
+                        const x=Math.cos(a)*reach,y=Math.sin(a)*reach;
+                        target.beginPath();
+                        target.moveTo(x,y-7*fade);
+                        target.lineTo(x+6*fade,y+4*fade);
+                        target.lineTo(x-6*fade,y+4*fade);
+                        target.closePath();
+                        target.stroke();
+                    }
+                    if(fx.kind==='ELITE'){
+                        target.beginPath();
+                        for(let i=0;i<=6;i++){
+                            const a=i*Math.PI/3-Math.PI/6;
+                            const x=Math.cos(a)*reach*.7,y=Math.sin(a)*reach*.7;
+                            if(i===0)target.moveTo(x,y);else target.lineTo(x,y);
+                        }
+                        target.stroke();
+                    }
+                }else if(fx.kind==='NOVA'||fx.kind==='OVERDRIVE'){
+                    // Counter-rotating energy petals; sparse lines, no blur.
+                    for(let i=0;i<steps;i++){
+                        const a=i*2*Math.PI/steps+(PREFERS_REDUCED_VFX_MOTION?
+                            0:progress*(fx.kind==='NOVA'?.55:-.9));
+                        const reach=(fx.kind==='NOVA'?fx.radius:100)*
+                            (.24+progress*.72);
+                        target.beginPath();
+                        target.moveTo(Math.cos(a)*reach,Math.sin(a)*reach);
+                        target.lineTo(Math.cos(a+.16)*(reach+16*fade),
+                            Math.sin(a+.16)*(reach+16*fade));
+                        target.lineTo(Math.cos(a+.32)*(reach+27*fade),
+                            Math.sin(a+.32)*(reach+27*fade));
+                        target.stroke();
+                    }
+                }else if(fx.kind==='WAVE'||fx.kind==='BOSS'){
+                    // Chapter-start compass vs. threatening boss summon seal.
+                    const sides=fx.kind==='BOSS'?8:4;
+                    const r=fx.radius*(.38+.64*progress);
+                    for(let i=0;i<sides;i++){
+                        const a=i*2*Math.PI/sides+
+                            (PREFERS_REDUCED_VFX_MOTION?0:progress*.3);
+                        const x=Math.cos(a)*r,y=Math.sin(a)*r;
+                        target.beginPath();
+                        target.moveTo(x+Math.cos(a-.32)*12*fade,
+                            y+Math.sin(a-.32)*12*fade);
+                        target.lineTo(x,y);
+                        target.lineTo(x+Math.cos(a+.32)*12*fade,
+                            y+Math.sin(a+.32)*12*fade);
+                        target.stroke();
+                    }
+                    if(fx.kind==='BOSS'){
+                        target.beginPath();
+                        target.arc(0,0,r*.7,0,Math.PI*2);
+                        target.stroke();
+                        target.beginPath();
+                        target.moveTo(-r*.24,0);target.lineTo(r*.24,0);
+                        target.moveTo(0,-r*.24);target.lineTo(0,r*.24);
+                        target.stroke();
+                    }
+                }
+                target.restore();
+                if(performanceOverlayOn)pc3RenderCounts.visible++;
+                motionFxStats.drawn++;
+            }
+        }
+
         const MAX_FLOATING_TEXTS = 110;
         const BULLET_GRID_SIZE = 96;
         const HUD_REFRESH_INTERVAL = 0.10;
@@ -6322,6 +6565,7 @@
                 prismStats.shotsReturned++;
             }
             shockwaves.push(new Shockwave(ep.x,ep.y,43,'#bffaff',.17));
+            emitMotionFx('PRISM',ep.x,ep.y,{angle:Math.atan2(-ep.vy,-ep.vx)});
             return true;
         }
         function updatePrismGuard(){
@@ -7607,6 +7851,7 @@
                 const boss = new Enemy(pos.x, pos.y, arch.type, false);
                 enemies.push(boss);
                 activeBosses.push(boss);
+                emitMotionFx('BOSS',boss.x,boss.y,{radius:150});
                 spawnedNames.push(arch.name);
             }
 
@@ -7645,6 +7890,7 @@
             }
 
             weaponImpactFrameCount = 0;
+            motionFxFrameCount = 0;
             totalTime += dt;
             waveTimer += dt;
             if (slowMoTimer > 0) slowMoTimer = Math.max(0, slowMoTimer - dt);
@@ -7670,6 +7916,7 @@
                 wave++;
                 createFloatingText(player.x, player.y - 45, `DALGA ${wave} BAŞLADI!`, '#ff007f', 20);
                 shockwaves.push(new Shockwave(player.x, player.y, 240, '#ff007f', 0.45));
+                emitMotionFx('WAVE',player.x,player.y,{radius:150});
             }
 
             activeBosses = activeBosses.filter(b => !b.dead);
@@ -7727,6 +7974,7 @@
             }
 
             player.update(dt);
+            sampleMotionDash(dt);
 
             gridOffset.x = (gridOffset.x - player.vx * 0.15 * dt) % 48;
             gridOffset.y = (gridOffset.y - player.vy * 0.15 * dt) % 48;
@@ -7860,6 +8108,7 @@
                 if (powerups[i].dead) powerups.splice(i, 1);
             }
 
+            updateMotionFx(dt);
             for (let i = particles.length - 1; i >= 0; i--) {
                 particles[i].update(dt);
                 if (particles[i].life <= 0) particles.splice(i, 1);
@@ -8325,6 +8574,7 @@
 
             drawBackgroundGrid();
             drawArenaAtmosphere();
+            drawMotionBackdrop(ctx);
             drawArenaChapter(ctx);
             drawChapterShowcase(ctx);
             drawNemesisThreat(ctx);
@@ -8362,6 +8612,7 @@
             for (const cz of conduitZones) cz.draw(ctx);
             if (combatDirector?.activeArenaEvent) combatDirector.activeArenaEvent.draw(ctx);
             for (const sw of shockwaves) sw.draw(ctx);
+            drawMotionFx(ctx);
             for (const vfx of bossDeathVfx) drawBossDeathVfx(ctx,vfx);
             // A glow cannot affect visible pixels if its entire padded area
             // falls outside the canvas. Keep critical boss/beam/warning art uncullable.
@@ -8791,6 +9042,7 @@
             resetPc3Telemetry();
             resetEnemyCrowdSteering();
             resetChapterBiome();
+            resetMotionFx();
             resetNemesis();
             resetPrismGuard();
             phaseEchoes = [];
@@ -10271,6 +10523,7 @@
         window.getNeonArenaChapter = () => getArenaChapterSnapshot();
         window.getNeonNemesis = () => getNemesisSnapshot();
         window.getNeonPrismGuard = () => getPrismGuardSnapshot();
+        window.getNeonMotionFx = () => motionFxSnapshot();
         window.getNeonBuildSnapshot = () => player ? {
             modules: { ...player.upgradeCounts },
             evolutions: [...player.evolutions],
