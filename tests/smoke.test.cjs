@@ -5490,3 +5490,88 @@ test('M5.14 bastion draw is graphics-only and HUD provides independent button st
  assert.ok(calls.includes('stroke'));
  assert.match(html,/id="bastionBtn"/);
 });
+
+
+test('M5.15 Phase Echo is a selectable 12th card and build guide reflects 36 total tiers',()=>{
+ const {run}=setup();
+ const d=JSON.parse(run("(()=>{startNewGame();const card=UPGRADES_POOL.find(u=>u.id==='phase_echo');const pool=UPGRADES_POOL.length;const guide=getBuildGuideModel(player);return JSON.stringify({pool,cardName:card.name,role:getUpgradeCardPresentation(card,RARITIES[0],0).role,evo:EVOLUTION_DEFS.phase_echo.name,guide:guide.totalTiers});})()"));
+ assert.equal(d.pool,12);
+ assert.equal(d.cardName,'Faz Yankısı');
+ assert.equal(d.role,'weapon');
+ assert.equal(d.evo,'Çift Yankı');
+ assert.equal(d.guide,0);
+ assert.match(gameJs,/UPGRADES_POOL\.length \* MAX_MODULE_TIER/);
+});
+
+test('M5.15 dash creates a bounded hologram that redirects at most six nearby melee foes',()=>{
+ const {run}=setup();
+ const d=JSON.parse(run("(()=>{startNewGame();gameState='PLAYING';player.upgradeCounts.phase_echo=1;player.refreshBuildTraits();player.x=350;player.y=300;enemies=Array.from({length:12},(_,i)=>new Enemy(360+i*3,300,'SWARM'));const original={x:player.x,y:player.y};player.triggerDash();const started=player.isDashing;player.update(.2);const echo=phaseEchoes[0];return JSON.stringify({started,deployed:phaseEchoes.length,origin:{x:echo.x,y:echo.y},playerMoved:player.x!==original.x,targets:echo.targets.length,redirect:getPhaseEchoTarget(enemies[0])!==null,stats:player.buildStats,readyAt:player.phaseEchoReadyAt});})()"));
+ assert.equal(d.started,true);
+ assert.equal(d.deployed,1);
+ assert.deepEqual(d.origin,{x:350,y:300});
+ assert.equal(d.playerMoved,true);
+ assert.equal(d.targets,6);
+ assert.equal(d.redirect,true);
+ assert.equal(d.stats.phaseEchoes,1);
+ assert.equal(d.stats.phaseEchoTargets,6);
+ assert.equal(d.readyAt,6);
+});
+
+test('M5.15 Echo never distracts bosses, shooters, specialist flankers or shield guards',()=>{
+ const {run}=setup();
+ const d=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts.phase_echo=1;player.refreshBuildTraits();player.x=400;player.y=300;const types=['SWARM','SNIPER','SHOOTER','ASSASSIN','DASHER','GRAV_WELL','KAMIKAZE','BOSS_PRISM'];enemies=types.map((t,i)=>new Enemy(410,290+i,t));const guard=new Enemy(410,290,'SHIELD_BEARER',false,{formationId:'X',role:'guard'});enemies.push(guard);const deployed=deployPhaseEcho(player,{x:400,y:300});return JSON.stringify({deployed,results:enemies.map(e=>({type:e.type,role:e.tacticalRole||null,redirect:!!getPhaseEchoTarget(e)}))});})()"));
+ assert.equal(d.deployed,true);
+ assert.deepEqual(d.results.filter(e=>e.redirect).map(e=>e.type),['SWARM']);
+});
+
+test('M5.15 redirect changes existing chase aim but never changes enemy speed or player gold',()=>{
+ const {run}=setup();
+ const d=JSON.parse(run("(()=>{startNewGame();player.x=650;player.y=300;player.upgradeCounts.phase_echo=1;player.refreshBuildTraits();const a=new Enemy(400,300,'SWARM');const b=new Enemy(400,300,'SWARM');a.speed=160;b.speed=160;enemies=[a];const deployed=deployPhaseEcho(player,{x:400,y:150});const goldBefore=totalGold;const speed=a.speed;const before={x:a.x,y:a.y};a.update(.1);const after={x:a.x,y:a.y};return JSON.stringify({deployed,before,after,goldBefore,goldAfter:totalGold,speed,afterSpeed:a.speed,lured:!!getPhaseEchoTarget(a),otherTarget:getPhaseEchoTarget(b)});})()"));
+ assert.equal(d.deployed,true);
+ assert.ok(d.after.y<d.before.y);
+ assert.equal(d.goldAfter,d.goldBefore);
+ assert.equal(d.afterSpeed,d.speed);
+ assert.equal(d.otherTarget,null);
+});
+
+test('M5.15 empty cast does not waste cooldown; expired echo stops redirecting',()=>{
+ const {run}=setup();
+ const d=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts.phase_echo=1;player.refreshBuildTraits();const noTarget=deployPhaseEcho(player,{x:300,y:300});const ready=player.phaseEchoReadyAt;const e=new Enemy(320,300,'SWARM');enemies=[e];const deployed=deployPhaseEcho(player,{x:300,y:300});const active=!!getPhaseEchoTarget(e);totalTime=3.0;updatePhaseEchoes();return JSON.stringify({noTarget,ready,deployed,active,expired:phaseEchoes.length,redirect:!!getPhaseEchoTarget(e)});})()"));
+ assert.equal(d.noTarget,false);
+ assert.equal(d.ready,0);
+ assert.equal(d.deployed,true);
+ assert.equal(d.active,true);
+ assert.equal(d.expired,0);
+ assert.equal(d.redirect,false);
+});
+
+test('M5.15 tier 1 replaces oldest echo, tier 3 can support two and never three',()=>{
+ const {run}=setup();
+ const d=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts.phase_echo=1;player.refreshBuildTraits();const a=new Enemy(300,300,'SWARM');const b=new Enemy(500,300,'SWARM');enemies=[a,b];deployPhaseEcho(player,{x:300,y:300});totalTime=6.1;deployPhaseEcho(player,{x:500,y:300});const ordinary=phaseEchoes.map(e=>e.x);player.upgradeCounts.phase_echo=3;player.refreshBuildTraits();phaseEchoes=[];player.phaseEchoReadyAt=0;totalTime=10;deployPhaseEcho(player,{x:300,y:300});totalTime=13.1;deployPhaseEcho(player,{x:500,y:300});const evolved=phaseEchoes.map(e=>e.x);totalTime=16.2;deployPhaseEcho(player,{x:300,y:300});return JSON.stringify({ordinary,evolved,cap:phaseEchoes.length,stats:player.buildStats});})()"));
+ assert.deepEqual(d.ordinary,[500]);
+ assert.deepEqual(d.evolved,[300,500]);
+ assert.equal(d.cap,2);
+ assert.equal(d.stats.phaseEchoes,5);
+});
+
+test('M5.15 new run resets echo state and does not touch altin, cards or reroll prices',()=>{
+ const {run}=setup();
+ const d=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts.phase_echo=1;player.refreshBuildTraits();enemies=[new Enemy(300,300,'SWARM')];deployPhaseEcho(player,{x:300,y:300});const before=getPhaseEchoSnapshot();const gold=totalGold;const reroll=rerollCost;startNewGame();return JSON.stringify({before,after:getPhaseEchoSnapshot(),gold,afterGold:totalGold,reroll,afterReroll:rerollCost});})()"));
+ assert.equal(d.before.active,1);
+ assert.equal(d.after.active,0);
+ assert.equal(d.after.deployed,0);
+ assert.equal(d.gold,d.afterGold);
+ assert.equal(d.reroll,d.afterReroll);
+});
+
+test('M5.15 high and low graphics draw echo without adding simulation entities',()=>{
+ const calls=[];
+ const ctx=new Proxy({}, {get(_,key){return (...a)=>calls.push(String(key));}});
+ const {run}=setup({}, {canvasContext:ctx});
+ const d=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts.phase_echo=1;player.refreshBuildTraits();enemies=[new Enemy(300,300,'SWARM')];deployPhaseEcho(player,{x:300,y:300});graphicsQuality='high';drawPhaseEchoes(ctx);graphicsQuality='low';drawPhaseEchoes(ctx);return JSON.stringify({active:getPhaseEchoSnapshot().active,projectiles:enemyProjectiles.length,bullets:bullets.length,upgrades:player.upgradeCounts});})()"));
+ assert.ok(calls.filter(c=>c==='arc').length>=4);
+ assert.equal(d.active,1);
+ assert.equal(d.projectiles,0);
+ assert.equal(d.bullets,0);
+ assert.equal(d.upgrades.phase_echo,1);
+});

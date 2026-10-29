@@ -289,3 +289,29 @@ test('gold-only bastion can be deployed via the combat HUD without opening upgra
  expect(await page.evaluate(()=>totalGold)).toBe(430);
  expect(errors).toEqual([]);
 });
+
+
+test('Phase Echo upgrade produces a visible tactical decoy after dash without spending gold', async ({page})=>{
+ const errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const before=await page.evaluate(()=>{
+   player.upgradeCounts.phase_echo=1;
+   player.refreshBuildTraits();
+   player.takeDamage=()=>{};
+   nextBossTime=500;
+   enemies=[new Enemy(player.x+30,player.y,'SWARM')];
+   const gold=totalGold;
+   player.triggerDash();
+   player.update(.2);
+   return {gold,deployed:window.getNeonPhaseEcho().deployed,active:window.getNeonPhaseEcho().active,
+     redirected:getPhaseEchoTarget(enemies[0])!==null,card:player.upgradeCounts.phase_echo};
+ });
+ expect(before.deployed).toBe(1);
+ expect(before.active).toBe(1);
+ expect(before.redirected).toBe(true);
+ expect(before.card).toBe(1);
+ expect(await page.evaluate(()=>totalGold)).toBe(before.gold);
+ expect(errors).toEqual([]);
+});
