@@ -31,7 +31,7 @@ The expected GitHub Pages *URL pattern* is `https://<owner>.github.io/<repo>/` f
 
 - Short project About description (e.g., **"Playable browser arena-survival game with tactical encounters, evolving builds and reactive neon combat."**).
 - Topics, after human review: `browser-game`, `arena-survival`, `canvas2d`, `javascript`, `roguelite`, `game-development`. The current API connector does not update repository topics, so these are suggestions, not completed changes.
-- Real screenshots and optional short real-game trailer, with UI visible. Do not use illustration as a fake screenshot.
+- Review the [M5.28 real-render screenshot artifact process](M5.28-gameplay-evidence.md), select authentic captures only after editorial checking, and record a real non-scripted play session. Do not use the illustration as a fake gameplay screenshot.
 - Current press-kit contact channel and permission/licensing decision from the maintainer.
 - No fake external reviews, performance numbers, commercial release date or store page.
 
