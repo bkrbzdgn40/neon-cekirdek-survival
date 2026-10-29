@@ -43,6 +43,16 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Exercise desktop and mobile game flows
         run: npx playwright test
+      - name: Capture review-only real game screenshots
+        run: npx playwright test --config=playwright.capture.config.cjs
+      - name: Upload unapproved gameplay evidence for editorial review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-gameplay-evidence
+          path: press-capture/
+          if-no-files-found: warn
+          retention-days: 30
       - name: Upload browser test artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
