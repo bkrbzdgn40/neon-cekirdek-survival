@@ -47,6 +47,9 @@ async function boot(page) {
     wave = 10;
     score = 26540;
     screenShake = 0;
+    // Freeze update-only simulation for a stable honest engine-render frame.
+    // This is test fixture control, not part of the actual shipped gameplay.
+    hitStopTimer = 999;
     applyGraphicsQuality('high', false);
     player.hp = player.maxHp;
     updateHUD();
