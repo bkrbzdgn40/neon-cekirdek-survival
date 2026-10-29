@@ -6158,3 +6158,85 @@ test('M5.23 readable upgrade cards preserve every original description and selec
  assert.match(gameCss,/#upgradeCardsContainer \.upgrade-role-label \{[\s\S]*?font:750 12px/);
  assert.match(gameCss,/@media \(min-width:1100px\)/);
 });
+
+
+test('M5.24 motion effects use separate, strictly bounded per-profile live and per-frame budgets',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();const out={};for(const quality of ['high','medium','low']){graphicsQuality=quality;resetMotionFx();const emissions=[];for(let i=0;i<100;i++)emissions.push(emitMotionFx('PRISM',player.x,player.y));const first=motionFxSnapshot();for(let frame=0;frame<50;frame++){motionFxFrameCount=0;for(let n=0;n<8;n++)emitMotionFx('PRISM',player.x,player.y);}const stressed=motionFxSnapshot();out[quality]={first:{active:first.active,emitted:first.emitted,frameDropped:first.frameDropped},stressed:{active:stressed.active,highWater:stressed.highWater,capDropped:stressed.capDropped,emitted:stressed.emitted},max:MOTION_FX_LIMITS[quality].live,perFrame:MOTION_FX_LIMITS[quality].frame};}return JSON.stringify(out);})()"));
+ for(const value of Object.values(x)){
+   assert.equal(value.first.active,value.perFrame);
+   assert.ok(value.first.frameDropped>0);
+   assert.ok(value.stressed.active<=value.max);
+   assert.ok(value.stressed.highWater<=value.max);
+   assert.ok(value.stressed.capDropped>0);
+ }
+ assert.equal(x.high.max,64);
+ assert.equal(x.medium.max,30);
+ assert.equal(x.low.max,12);
+});
+
+test('M5.24 real dash, EMP Nova, Overdrive and prism riposte trigger distinct bounded animation motifs',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();graphicsQuality='high';nextBossTime=500;totalTime=10;const before={gold:totalGold,score,kills};player.dashDir={x:1,y:0};player.triggerDash();updateGame(.04);const afterDash=motionFxSnapshot();player.triggerNova();const afterNova=motionFxSnapshot();player.addOverdrive(200);const afterOverdrive=motionFxSnapshot();const ep=new EnemyProjectile(player.x+60,player.y,-300,0,6,15);enemyProjectiles=[ep];player.isDashing=false;activatePrismGuard();const blocked=deflectPrismProjectile(ep);const afterParry=motionFxSnapshot();return JSON.stringify({before,after:{gold:totalGold,score,kills},dash:afterDash.byKind.DASH,nova:afterNova.byKind.NOVA,overdrive:afterOverdrive.byKind.OVERDRIVE,prism:afterParry.byKind.PRISM,blocked,active:afterParry.active});})()"));
+ assert.ok(x.dash>=1);
+ assert.equal(x.nova,1);
+ assert.equal(x.overdrive,1);
+ assert.equal(x.prism,1);
+ assert.equal(x.blocked,true);
+ assert.ok(x.active<=64);
+ assert.deepEqual(x.before,x.after);
+});
+
+test('M5.24 elite/boss and wave events emit identity cues without adding enemies or economy ties',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();graphicsQuality='high';nextBossTime=500;totalTime=10;const before=enemies.length;waveTimer=16.01;updateGame(.016);const afterWave=motionFxSnapshot().byKind.WAVE||0;const elite=new Enemy(player.x+80,player.y,'SHOOTER',true);elite.dead=false;enemies.push(elite);elite.die();const afterElite=motionFxSnapshot().byKind.ELITE||0;spawnBossEncounter();const bosses=motionFxSnapshot().byKind.BOSS||0;return JSON.stringify({before,afterWave,afterElite,bosses,bossCount:activeBosses.length,cap:motionFxSnapshot().limit});})()"));
+ assert.equal(x.before,0);
+ assert.equal(x.afterWave,1);
+ assert.ok(x.afterElite>=1);
+ assert.ok(x.bosses>=1);
+ assert.ok(x.bossCount>=1);
+ assert.equal(x.cap,64);
+});
+
+test('M5.24 offscreen rejection, short lifetime and new run reset prevent accumulating motion FX',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();graphicsQuality='high';const far=emitMotionFx('PRISM',-100000,-100000);const near=emitMotionFx('BOSS',player.x,player.y);const before=motionFxSnapshot();updateMotionFx(2);const after=motionFxSnapshot();startNewGame();return JSON.stringify({far,near,before,after,reset:motionFxSnapshot()});})()"));
+ assert.equal(x.far,false);
+ assert.equal(x.near,true);
+ assert.equal(x.before.culled,1);
+ assert.equal(x.before.active,1);
+ assert.equal(x.after.active,0);
+ assert.equal(x.reset.active,0);
+ assert.equal(x.reset.emitted,0);
+ assert.equal(x.reset.highWater,0);
+});
+
+test('M5.24 low graphics renders limited silhouettes, skips ambient and repeated micro-kill FX',()=>{
+ const calls=[];
+ const ctx=new Proxy({}, {get(_,k){return(...args)=>calls.push(String(k));}});
+ const {run}=setup({}, {canvasContext:ctx});
+ const x=JSON.parse(run("(()=>{startNewGame();graphicsQuality='low';const dash=emitMotionFx('DASH',player.x,player.y);const kill=emitMotionFx('KILL',player.x,player.y);const boss=emitMotionFx('BOSS',player.x,player.y);drawMotionBackdrop(ctx);drawMotionFx(ctx);return JSON.stringify({dash,kill,boss,s:motionFxSnapshot()});})()"));
+ assert.equal(x.dash,false);
+ assert.equal(x.kill,false);
+ assert.equal(x.boss,true);
+ assert.equal(x.s.active,1);
+ assert.ok(x.s.qualityDropped>=2);
+ assert.ok(calls.includes('arc'));
+ assert.ok(calls.includes('lineTo'));
+ assert.ok(calls.includes('stroke'));
+ assert.ok(!calls.includes('fillRect'));
+});
+
+test('M5.24 cinematic extras preserve existing particle, weapon impact and lightning caps',()=>{
+ assert.match(gameCode,/const MAX_VISIBLE_PARTICLES = 420;/);
+ assert.match(gameCode,/const MAX_WEAPON_IMPACTS = 56;/);
+ assert.match(gameCode,/const MAX_LIGHTNING_ARCS = 32;/);
+ assert.match(gameCode,/const MOTION_FX_LIMITS=Object\.freeze/);
+ assert.match(gameCode,/PREFERS_REDUCED_VFX_MOTION&&\(kind==='DASH'\|\|kind==='KILL'\)/);
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();return JSON.stringify({motion:window.getNeonMotionFx(),particles:particles.length,impacts:weaponImpacts.length,lightning:lightningBolts.length})})()"));
+ assert.equal(x.motion.active,0);
+ assert.equal(x.particles,0);
+ assert.equal(x.impacts,0);
+ assert.equal(x.lightning,0);
+});
