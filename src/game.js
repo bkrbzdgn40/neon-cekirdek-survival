@@ -3814,6 +3814,17 @@
                     continue;
                 const d=spawnFieldDevice(kind,x,y);
                 if(d){
+                    // From wave 8 onward the volatile variant forms a paired
+                    // chain-reactor puzzle, never more than two devices.
+                    if(kind==='CAPACITOR'&&wave>=8){
+                        const directions=[-1,1];
+                        for(const side of directions){
+                            const otherX=x+side*116;
+                            if(otherX<55||otherX>worldWidth-55||
+                                Math.hypot(otherX-player.x,y-player.y)<88)continue;
+                            if(spawnFieldDevice('CAPACITOR',otherX,y))break;
+                        }
+                    }
                     createFloatingText(x,y-35,kind==='CAPACITOR'?
                         'REAKTÖR SAHADA':'GRAVİTON SAHADA',
                         FIELD_DEVICE_TYPES[kind].color,13);
