@@ -1095,6 +1095,7 @@
                     screenShake = 12;
                     audio.playJackpot();
                     shockwaves.push(new Shockwave(this.x, this.y, 220, '#ff007f', 0.4));
+                    emitMotionFx('OVERDRIVE',this.x,this.y,{radius:145});
                     showDopamineBanner('SİBER CİNNET', '#ff007f');
                     document.getElementById('overdriveOverlay').classList.remove('hidden');
                     if (this.evolutions.has('overdrive_boost')) {
