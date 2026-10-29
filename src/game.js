@@ -3562,7 +3562,7 @@
                 apply: () => { /* Passive ability uses upgradeCounts, not combat stats. */ }
             },
             {
-                id: 'multishot'
+                id: 'multishot',
                 name: 'Çatallı Plazma',
                 icon: 'fa-solid fa-burst',
                 color: '#00f3ff',
