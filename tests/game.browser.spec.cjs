@@ -759,7 +759,11 @@ test('M5.25 cockpit fits 320–1440px without covering command controls or losin
    const v=await page.evaluate(()=>{
      const rect=id=>{const r=document.getElementById(id).getBoundingClientRect();
        return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
-     const bars=['xpBar','momentumBar','overdriveBar'].map(rect);
+     // Gauge containers always have geometry; a valid 0% fill is zero-width.
+     const bars=['xpBar','momentumBar','overdriveBar'].map(id=>{
+       const r=document.getElementById(id).closest('.hud-meter').getBoundingClientRect();
+       return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};
+     });
      const skills=['bastionBtn','novaBtn','prismBtn','dashBtn'].map(rect);
      const labels=['xpText','momentumText','overdriveText'].map(id=>{
        const n=document.getElementById(id);
