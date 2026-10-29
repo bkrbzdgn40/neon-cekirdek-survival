@@ -5778,3 +5778,38 @@ test('M5.17 arena chapters render distinct canvas geometry at low graphics witho
  assert.match(html,/id="arenaChapterAnnouncement"/);
  assert.match(html,/\[data-arena-chapter="FOUNDRY"\]/);
 });
+
+
+test('M5.18 foundry offers a full warning on entry and after a suppressed boss or mission',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();nextBossTime=500;wave=4;totalTime=1.7;player.y=worldHeight*.32;const hp=player.hp;updateArenaChapter(.02);const start=getArenaChapterSnapshot();totalTime=3.2;updateArenaChapter(.02);const first=player.hp;combatDirector.activeArenaEvent={kind:'STORM'};totalTime=3.7;updateArenaChapter(.02);const blocked=getArenaChapterSnapshot();combatDirector.activeArenaEvent=null;totalTime=4.7;updateArenaChapter(.02);const restart=getArenaChapterSnapshot();const protectedHp=player.hp;player.invulnTimer=0;totalTime=6.2;updateArenaChapter(.02);return JSON.stringify({hp,start,first,blocked,restart,protectedHp,finalHp:player.hp,stats:getArenaChapterSnapshot()});})()"));
+ assert.equal(s.start.foundryPhase,0);
+ assert.equal(s.start.foundryReadyIn,1.5);
+ assert.equal(s.first,s.hp-9);
+ assert.equal(s.blocked.enabled,false);
+ assert.equal(s.restart.foundryPhase,0);
+ assert.equal(s.restart.foundryReadyIn,1.5);
+ assert.equal(s.protectedHp,s.first);
+ assert.equal(s.stats.foundryPlayerHits,2);
+ assert.equal(s.finalHp,s.first-9);
+});
+
+test('M5.18 portal seeks a safe nearby landing only if its exit is crowded',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();nextBossTime=500;wave=10;totalTime=10;updateArenaChapter(.02);const gates=getRiftCenters();player.x=gates[0].x;player.y=gates[0].y;enemies=[new Enemy(gates[1].x,gates[1].y,'TANK')];updateArenaChapter(.02);const crowded={distance:Math.hypot(player.x-gates[1].x,player.y-gates[1].y),reroutes:chapterStats.riftReroutes};startNewGame();wave=10;nextBossTime=500;updateArenaChapter(.02);const free=getRiftCenters();player.x=free[0].x;player.y=free[0].y;enemies=[];updateArenaChapter(.02);return JSON.stringify({crowded,freeDistance:Math.hypot(player.x-free[1].x,player.y-free[1].y),freeReroutes:chapterStats.riftReroutes});})()"));
+ assert.ok(s.crowded.distance>45,'crowded exit should move off the enemy');
+ assert.equal(s.crowded.reroutes,1);
+ assert.ok(s.freeDistance<1,'empty portal stays at its center');
+ assert.equal(s.freeReroutes,0);
+});
+
+test('M5.18 mobile status and honest cooldown arcs expose terrain mechanics',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();nextBossTime=500;wave=7;updateArenaChapter(.02);updateArenaChapterHud();const garden=document.getElementById('arenaChapterMobile').textContent;wave=10;updateArenaChapter(.02);updateArenaChapterHud();const rift=document.getElementById('arenaChapterMobile').textContent;return JSON.stringify({garden,rift});})()"));
+ assert.match(s.garden,/BAHÇE.*İYON/);
+ assert.match(s.rift,/YARIK.*GEÇİT/);
+ assert.match(html,/id="arenaChapterMobile"/);
+ assert.match(html,/aria-live="off"/);
+ assert.match(gameCode,/const readyIn=Math.max\(0,chapterGardenReady\[index\]-totalTime\)/);
+ assert.match(gameCode,/const remaining=chapterRiftReadyAt-totalTime/);
+});
