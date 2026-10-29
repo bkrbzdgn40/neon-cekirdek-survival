@@ -225,6 +225,17 @@
                     <span id="novaStatus" class="font-cyber text-xs font-bold text-green-400 relative z-10">HAZIR</span>
                 </button>
 
+                <!-- M5.22: Timed Prism Riposte, a separate active projectile counter -->
+                <button id="prismBtn" type="button" class="relative group prism-skill-button bg-gray-950/90 border border-sky-300 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer" aria-label="Prizma Karşılığı hazır; C tuşu">
+                    <div id="prismCooldownOverlay" class="absolute inset-0 bg-sky-950/80 origin-bottom transition-all duration-75" style="height:0%;"></div>
+                    <i class="fa-solid fa-shield-halved text-sky-200 text-lg relative z-10" aria-hidden="true"></i>
+                    <div class="text-left relative z-10 hidden sm:block">
+                        <div class="text-xs font-bold text-sky-200 leading-none">PRİZMA KARŞILIĞI</div>
+                        <div class="text-[10px] text-gray-400">[C] · YAKLAŞAN MERMİYİ GERİ GÖNDER</div>
+                    </div>
+                    <span id="prismStatus" class="font-cyber text-xs font-bold text-green-400 relative z-10" aria-live="off">HAZIR</span>
+                </button>
+
                 <!-- Dash Ability -->
                 <button id="dashBtn" type="button" class="relative group bg-gray-950/90 border border-cyan-400 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer">
                     <div id="dashCooldownOverlay" class="absolute inset-0 bg-cyan-950/80 origin-bottom transition-all duration-75" style="height: 0%;"></div>
