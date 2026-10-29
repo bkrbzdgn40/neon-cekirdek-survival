@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+<title id="title">Neon Çekirdek | Brand key art</title>
+<desc id="desc">Original abstract promotional key art, not an in-game screenshot. A glowing geometric reactor inside a science-fiction arena.</desc>
+<defs>
+<linearGradient id="bg" x2="1" y2="1"><stop stop-color="#060e22"/><stop offset=".58" stop-color="#0b1226"/><stop offset="1" stop-color="#190f2a"/></linearGradient>
+<linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#7ff7ef"/><stop offset=".52" stop-color="#46bfff"/><stop offset="1" stop-color="#aa6bff"/></linearGradient>
+<linearGradient id="beam" x2="1" y2="0"><stop stop-color="#5df8ec"/><stop offset="1" stop-color="#a66bff"/></linearGradient>
+<radialGradient id="halo"><stop stop-color="#35bfff" stop-opacity=".28"/><stop offset=".68" stop-color="#946cff" stop-opacity=".10"/><stop offset="1" stop-color="#35bfff" stop-opacity="0"/></radialGradient>
+<pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse"><path d="M36 0H0V36" fill="none" stroke="#69cfff" stroke-opacity=".095" stroke-width="1"/></pattern>
+</defs>
+<rect width="1200" height="630" fill="url(#bg)"/><rect width="1200" height="630" fill="url(#grid)"/>
+<path d="M0 85H1200 M0 545H1200 M60 0V630 M1140 0V630" stroke="#5ad8ed" stroke-opacity=".24" fill="none"/>
+<path d="M0 80H170M1030 80H1200M0 552H170M1030 552H1200" stroke="#61e7f5" stroke-width="3" fill="none"/>
+<circle cx="860" cy="315" r="302" fill="url(#halo)"/>
+<g transform="translate(860 315)" fill="none">
+<circle r="228" stroke="#6eddef" stroke-opacity=".20" stroke-width="1"/>
+<circle r="190" stroke="#b38eff" stroke-opacity=".32" stroke-width="2" stroke-dasharray="4 12"/>
+<circle r="154" stroke="url(#beam)" stroke-width="5" stroke-opacity=".85" stroke-dasharray="118 22 10 22"/>
+<circle r="134" stroke="#ffffff" stroke-opacity=".21" stroke-width="1"/>
+<path d="M0-202L31-165M143-143L166-111M202 0L165 31M143 143L111 166M0 202L-31 165M-143 143L-166 111M-202 0L-165-31M-143-143L-111-166" stroke="#90efff" stroke-width="3" stroke-linecap="round"/>
+<path d="M0-110L94-54V54L0 110L-94 54V-54Z" fill="#08233f" stroke="url(#a)" stroke-width="8"/>
+<path d="M0-81L70-40V40L0 81L-70 40V-40Z" fill="#173857" stroke="#9ee8ff" stroke-opacity=".72" stroke-width="2"/>
+<path d="M0-55L50-26V26L0 55L-50 26V-26Z" fill="url(#a)" fill-opacity=".42" stroke="#d1fcff" stroke-width="4"/>
+<path d="M0-135V-70 M0 70V135 M-142 0H-82M82 0H142" stroke="#e7fdff" stroke-width="2" stroke-opacity=".55"/>
+<path d="M-110-110L-150-150 M110 110L150 150 M110-110L150-150 M-110 110L-150 150" stroke="#b979ff" stroke-width="3" stroke-opacity=".65"/>
+</g>
+<g font-family="Arial, Helvetica, sans-serif" fill="#effbff">
+<text x="94" y="150" font-size="20" font-weight="700" letter-spacing="6" fill="#6decfa">INDEPENDENT BROWSER SURVIVAL</text>
+<text x="92" y="268" font-size="86" font-weight="900" letter-spacing="-3">NEON</text>
+<text x="92" y="357" font-size="84" font-weight="900" letter-spacing="-3" fill="#72f4f0">ÇEKİRDEK</text>
+<path d="M94 382H558" stroke="url(#beam)" stroke-width="5"/>
+<text x="94" y="430" font-size="23" font-weight="700" letter-spacing="3" fill="#c9c5ef">SURVIVE. EVOLVE. OUTSMART.</text>
+<text x="94" y="525" font-size="16" letter-spacing="2" fill="#a8c3d9">ORIGINAL BRAND KEY ART  /  NOT A GAMEPLAY SCREENSHOT</text>
+</g>
+</svg>

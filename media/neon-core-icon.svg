@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title"><title id="title">Neon Çekirdek icon</title>
+<defs><linearGradient id="a" x1="0" x2="1" y2="1"><stop stop-color="#98fff1"/><stop offset="1" stop-color="#987aff"/></linearGradient></defs>
+<rect width="128" height="128" rx="27" fill="#071329"/>
+<path d="M64 9L111 36V92L64 119L17 92V36Z" fill="#0d2943" stroke="url(#a)" stroke-width="6"/>
+<path d="M64 29L94 46V82L64 99L34 82V46Z" fill="#153651" stroke="#8ef6f0" stroke-width="3"/>
+<path d="M64 43L82 54V74L64 85L46 74V54Z" fill="#63dff2" fill-opacity=".37" stroke="#e5feff" stroke-width="4"/>
+<path d="M64 14V30M114 64H99M64 114V98M14 64H29" stroke="#ff87a9" stroke-width="4" stroke-linecap="round"/>
+</svg>

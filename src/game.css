@@ -1628,3 +1628,14 @@ html[data-graphics-quality="low"] #hud .hud-command-deck{
     #hud .field-device-badge{animation:none!important;transition:none!important;}
 }
 html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
+
+/* M5.27: discoverable presentation without changing the playable menu flow. */
+#startMenuShell .showcase-menu-link{
+    display:inline-flex;align-items:center;gap:7px;margin-top:9px;
+    color:#a5f5ee;border-bottom:1px solid #498b92;padding-bottom:3px;
+    font:800 11px/1.5 'Segoe UI',system-ui,sans-serif;
+    letter-spacing:.04em;text-decoration:none;
+    max-width:100%;width:max-content;
+}
+#startMenuShell .showcase-menu-link:hover{color:#fff;border-color:#c5fdff;}
+#startMenuShell .showcase-menu-link:focus-visible{outline:2px solid #c5fdff;outline-offset:3px;}
