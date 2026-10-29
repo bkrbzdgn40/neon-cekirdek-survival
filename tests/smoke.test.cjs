@@ -6137,3 +6137,24 @@ test('M5.22 HUD and low-VFX prism sector are accessible with no artificial movem
  assert.match(html,/id="prismCooldownOverlay"/);
  assert.match(html,/\[C\]/);
 });
+
+
+test('M5.23 readable upgrade cards preserve every original description and selection semantics',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{startNewGame();const variants=[];for(const u of UPGRADES_POOL){for(const r of RARITIES){const currentLvl=u.id==='circuit_weaver'?2:0;const p=getUpgradeCardPresentation(u,r,currentLvl);const markup=renderUpgradeCardMarkup(u,r,currentLvl,0,p,[]);variants.push({id:u.id,rarity:r.id,description:u.getDesc(r),markup,role:p.role});}}const gold=totalGold;triggerLevelUp();return JSON.stringify({variants,count:UPGRADES_POOL.length,choiceCount:currentUpgradeChoices.length,gold,afterGold:totalGold});})()"));
+ assert.equal(x.count,13);
+ assert.equal(x.variants.length,52);
+ assert.equal(x.choiceCount,3);
+ assert.equal(x.gold,x.afterGold);
+ for(const card of x.variants){
+   assert.ok(card.markup.includes(card.description),'original gameplay copy missing: '+card.id);
+   assert.match(card.markup,/upgrade-card-header/);
+   assert.match(card.markup,/upgrade-card-labels/);
+   assert.match(card.markup,/upgrade-card-tier-row/);
+   assert.match(card.markup,/upgrade-card-footer/);
+   assert.match(card.markup,/upgrade-rarity-title/);
+ }
+ assert.match(gameCss,/#upgradeCardsContainer \.upgrade-card-desc \{[\s\S]*?font-size:16px/);
+ assert.match(gameCss,/#upgradeCardsContainer \.upgrade-role-label \{[\s\S]*?font:750 12px/);
+ assert.match(gameCss,/@media \(min-width:1100px\)/);
+});

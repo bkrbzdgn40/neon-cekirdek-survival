@@ -8953,9 +8953,9 @@
                 ${role==='evolution'?'<span class="upgrade-evolution-orbit" aria-hidden="true"></span>':''}
                 ${role==='weapon'?'<span class="upgrade-weapon-brackets" aria-hidden="true"></span><span class="upgrade-weapon-scan" aria-hidden="true"></span>':''}
                 <div class="upgrade-card-body">
-                    <div class="flex items-start justify-between gap-2 mb-4">
+                    <div class="upgrade-card-header">
                         <div class="upgrade-icon" aria-hidden="true"><i class="${upg.icon}"></i></div>
-                        <div class="flex flex-col items-end gap-2 text-right">
+                        <div class="upgrade-card-labels">
                             <span class="upgrade-rarity-label">
                                 <span class="upgrade-rarity-gem" aria-hidden="true"><i class="${rarityMotif.icon}"></i></span>
                                 <span class="upgrade-rarity-title">[${index+1}] ${isLegendary?'✦ ':''}${rarityMotif.tag}</span>
@@ -8963,19 +8963,19 @@
                             <span class="upgrade-role-label"><i class="${roleIcon}"></i>${label}</span>
                         </div>
                     </div>
-                    <h3 class="upgrade-card-name font-cyber text-base sm:text-lg font-black mb-2">${upg.name}</h3>
+                    <h3 class="upgrade-card-name font-cyber font-black">${upg.name}</h3>
                     <p class="upgrade-card-desc">${upg.getDesc(rarity)}</p>
-                    <div class="flex items-center justify-between flex-wrap gap-2 mt-4">
-                        <span class="text-[11px] font-cyber text-slate-300">KADEME ${currentLvl} → ${currentLvl+1}</span>
+                    <div class="upgrade-card-tier-row">
+                        <span class="upgrade-card-tier-label">KADEME ${currentLvl} → ${currentLvl+1}</span>
                         <span class="upgrade-tier-track" aria-label="${currentLvl} / ${MAX_MODULE_TIER} kademe">${tiers}</span>
                     </div>
                     ${evolution?`<div class="upgrade-evolution-benefit">
-                        <strong class="font-cyber block mb-1 text-purple-200">✦ ${evolution.name}</strong>
+                        <strong class="upgrade-bonus-heading block mb-1 text-purple-200">✦ ${evolution.name}</strong>
                         ${evolution.desc}
                     </div>`:''}
                     ${unlocks.map(s=>`<p class="upgrade-synergy-benefit"><strong>YENİ SİNERJİ:</strong> ${s.name} · ${s.desc}</p>`).join('')}
                 </div>
-                <div class="upgrade-card-footer mt-5 pt-3 flex items-center justify-between gap-2 text-[11px] font-cyber font-bold">
+                <div class="upgrade-card-footer flex items-center justify-between gap-2 font-bold">
                     <span>${role==='evolution'?'[ '+(index+1)+' ] EVRİMİ AÇ':
                         role==='weapon'?'[ '+(index+1)+' ] SİLAHI GÜÇLENDİR':
                         '[ '+(index+1)+' ] MODÜLÜ ENTEGRE ET'}</span>
@@ -9031,7 +9031,7 @@
                 const presentation=getUpgradeCardPresentation(upg,rarity,currentLvl);
                 const card=document.createElement('button');
                 card.type='button';
-                card.className='upgrade-card rounded-2xl p-5 sm:p-6 text-left flex flex-col justify-between cursor-pointer group relative';
+                card.className='upgrade-card rounded-2xl text-left flex flex-col justify-between cursor-pointer group relative';
                 card.setAttribute('data-role',presentation.role);
                 card.setAttribute('data-rarity',rarity.id);
                 card.setAttribute('aria-label',
