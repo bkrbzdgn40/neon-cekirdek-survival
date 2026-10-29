@@ -259,3 +259,33 @@ test('self-hosted assets preserve responsive layout and fonts without any extern
   expect(info.iconFont).toContain('Font Awesome');
   expect(external).toEqual([]);
 });
+
+
+test('gold-only bastion can be deployed via the combat HUD without opening upgrade cards', async ({ page }) => {
+ const errors=[];
+ page.on('pageerror', err=>errors.push(err.message));
+ await page.goto('/index.html', {waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ await page.evaluate(()=>{
+   player.takeDamage=()=>{};
+   wave=8; nextBossTime=500; totalGold=500;
+   player.x=worldWidth/2;player.y=worldHeight/2;
+   updateHUD();
+ });
+ await expect(page.locator('#bastionBtn')).toBeEnabled();
+ await page.locator('#bastionBtn').click();
+ await expect(page.locator('#bastionStatus')).toContainText('s');
+ const state=await page.evaluate(()=>({
+   gold:totalGold, deployed:!!bastion, position: bastion?{x:bastion.x,y:bastion.y}:null,
+   upgrades:player.upgradeCounts, used:window.getNeonBastionStatus().uses,
+   modal:document.getElementById('upgradeModal').classList.contains('hidden')
+ }));
+ expect(state.gold).toBe(430);
+ expect(state.deployed).toBe(true);
+ expect(state.used).toBe(1);
+ expect(state.modal).toBe(true);
+ expect(Object.keys(state.upgrades)).toHaveLength(0);
+ await page.keyboard.press('q');
+ expect(await page.evaluate(()=>totalGold)).toBe(430);
+ expect(errors).toEqual([]);
+});

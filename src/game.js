@@ -1956,6 +1956,8 @@
             constructor(x, y, vx, vy, radius, damage, color = '#ff0055') {
                 this.x = x;
                 this.y = y;
+                this.previousX = x;
+                this.previousY = y;
                 this.vx = vx;
                 this.vy = vy;
                 this.radius = radius;
@@ -1965,6 +1967,8 @@
             }
 
             update(dt) {
+                this.previousX = this.x;
+                this.previousY = this.y;
                 this.x += this.vx * dt;
                 this.y += this.vy * dt;
                 if (this.x < -40 || this.x > worldWidth + 40 || this.y < -40 || this.y > worldHeight + 40) {
@@ -4137,6 +4141,144 @@
             ASSASSIN: 2.1, GRAV_WELL: 2.6
         };
 
+        // M5.14: an independent gold sink, with no connection to level-up cards.
+        // A stationary shield counters *incoming* projectiles, not collision damage
+        // or melee enemies. No extra projectiles, XP or upgrade choices are created.
+        const BASTION = Object.freeze({
+            radius: 132, duration: 8, cooldown: 32,
+            maxUses: 3, baseCost: 70, stepCost: 40, bossBuffer: 11
+        });
+        let bastion = null;
+        let bastionReadyAt = 0;
+        let bastionUses = 0;
+        let bastionGoldSpent = 0;
+        let bastionShotsBlocked = 0;
+        function getBastionCost() {
+            return BASTION.baseCost + bastionUses * BASTION.stepCost;
+        }
+        function getBastionStatus() {
+            const activeTime = bastion ? Math.max(0, bastion.expiresAt - totalTime) : 0;
+            const cooldown = Math.max(0, bastionReadyAt - totalTime);
+            const cost = getBastionCost();
+            let reason = null;
+            if (gameState !== 'PLAYING' || !player) reason = 'not-playing';
+            else if (bastion && activeTime > 0) reason = 'active';
+            else if (bastionUses >= BASTION.maxUses) reason = 'used-up';
+            else if (wave < 4) reason = 'locked';
+            else if (activeBosses.some(b => !b.dead) ||
+                nextBossTime - totalTime <= BASTION.duration + BASTION.bossBuffer)
+                reason = 'boss-window';
+            else if (cooldown > 0) reason = 'cooldown';
+            else if (totalGold < cost) reason = 'gold';
+            return {
+                active: activeTime > 0,
+                secondsLeft: Math.ceil(activeTime),
+                cooldown: Math.ceil(cooldown),
+                cost, uses: bastionUses, remaining: BASTION.maxUses - bastionUses,
+                goldSpent: bastionGoldSpent, shotsBlocked: bastionShotsBlocked,
+                available: reason === null, reason
+            };
+        }
+        function deployBastion() {
+            if (!getBastionStatus().available) return false;
+            const cost = getBastionCost();
+            // This is a single atomic purchase for an eight-second position.
+            totalGold -= cost;
+            bastionGoldSpent += cost;
+            bastionUses++;
+            bastionReadyAt = totalTime + BASTION.cooldown;
+            bastion = { x: player.x, y: player.y, radius: BASTION.radius,
+                expiresAt: totalTime + BASTION.duration, startedAt: totalTime,
+                blocked: 0 };
+            saveMetaProgress();
+            shockwaves.push(new Shockwave(bastion.x, bastion.y,
+                BASTION.radius, '#4fffe0', .4));
+            audio.playThreatCue('event');
+            createFloatingText(player.x, player.y - 62,
+                'SİPER KURULDU · MENZİLLİ ATEŞİ ENGELLE', '#4fffe0', 15);
+            return true;
+        }
+        function updateBastion() {
+            if (bastion && totalTime >= bastion.expiresAt) bastion = null;
+        }
+        // Swept segment/circle check prevents high-speed shots skipping the ring.
+        // Shots born inside the dome are not erased, and bullets leaving it pass.
+        function bastionIntercepts(projectile) {
+            if (!bastion || totalTime >= bastion.expiresAt || !projectile ||
+                projectile.dead) return false;
+            const sx = projectile.previousX - bastion.x;
+            const sy = projectile.previousY - bastion.y;
+            const radius = bastion.radius - Math.max(0, projectile.radius || 0);
+            if (!(radius > 0)) return false;
+            if (sx * sx + sy * sy <= radius * radius) return false;
+            const dx = projectile.x - projectile.previousX;
+            const dy = projectile.y - projectile.previousY;
+            const len2 = dx * dx + dy * dy;
+            if (!(len2 > 0)) return false;
+            const t = Math.max(0, Math.min(1, -(sx * dx + sy * dy) / len2));
+            const closestX = sx + dx * t;
+            const closestY = sy + dy * t;
+            return closestX * closestX + closestY * closestY <= radius * radius;
+        }
+        function drawBastion(ctx) {
+            if (!bastion || gameState !== 'PLAYING') return;
+            const timeLeft = Math.max(0, bastion.expiresAt - totalTime);
+            if (!timeLeft) return;
+            const progress = timeLeft / BASTION.duration;
+            ctx.save();
+            ctx.translate(bastion.x, bastion.y);
+            ctx.strokeStyle = '#4fffe0';
+            ctx.fillStyle = '#4fffe0';
+            ctx.lineWidth = 2.5;
+            ctx.globalAlpha = .5 + .25 * progress;
+            if (graphicsQuality === 'high') {
+                ctx.shadowBlur = getGraphicsBlur(18);
+                ctx.shadowColor = '#4fffe0';
+                ctx.globalAlpha = .07;
+                ctx.beginPath();
+                ctx.arc(0, 0, bastion.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = .6;
+            }
+            ctx.beginPath();
+            ctx.arc(0, 0, bastion.radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.lineWidth = 5;
+            ctx.globalAlpha = .85;
+            ctx.beginPath();
+            ctx.arc(0, 0, bastion.radius - 5, -Math.PI / 2,
+                -Math.PI / 2 + Math.PI * 2 * progress);
+            ctx.stroke();
+            ctx.restore();
+        }
+        function updateBastionHud() {
+            const button = document.getElementById('bastionBtn');
+            const status = document.getElementById('bastionStatus');
+            const amount = document.getElementById('bastionCostText');
+            if (!button || !status || !amount) return;
+            const info = getBastionStatus();
+            button.disabled = !info.available;
+            amount.textContent = info.remaining ?
+                info.cost + ' ALTIN · ' + info.remaining + ' HAK' : 'HAK BİTTİ';
+            const titles = {
+                'not-playing': 'Yalnızca savaşta kurulabilir',
+                active: 'Siperin süresi bitiyor',
+                'used-up': 'Bu koşunun tüm siper hakları kullanıldı',
+                locked: 'Dalga 4 itibarıyla açılır',
+                'boss-window': 'Boss öncesi ve sırasında kullanılamaz',
+                cooldown: 'Siper yeniden hazır olmayı bekliyor',
+                gold: 'Yeterli altın yok'
+            };
+            status.textContent = info.active ? info.secondsLeft + 's' :
+                info.reason === 'cooldown' ? info.cooldown + 's' :
+                info.reason === 'boss-window' ? 'BOSS' :
+                info.reason === 'locked' ? 'DALGA 4' :
+                info.reason === 'gold' ? 'ALTIN YOK' :
+                info.reason === 'used-up' ? 'BİTTİ' : 'HAZIR';
+            button.title = (titles[info.reason] || 'Siper kur') +
+                ' · Q · ' + info.cost + ' altın';
+        }
+
         // M5.13: low-frequency local steering. One indexed snapshot per 0.18s,
         // never a full enemy-vs-enemy scan per animation frame.
         const CROWD_CELL = 88;
@@ -5771,6 +5913,8 @@
                     goldBySource:{...this.stats.goldBySource},
                     goldSession:sessionGold,
                     goldTracked:Object.values(this.stats.goldBySource).reduce((a,v)=>a+v,0),
+                    fieldDefense: { uses: bastionUses, goldSpent: bastionGoldSpent,
+                        shotsBlocked: bastionShotsBlocked },
                     onGround:lootChests.length,
                     eliteChanceWindow:this.getEliteChanceWindow(),
                     eliteDropsInWindow:this.eliteChanceWindow===this.getEliteChanceWindow()?
@@ -5805,6 +5949,7 @@
                     pendingEncounter: this.pendingEncounter ? this.pendingEncounter.type : null,
                     tacticalPlacement: { ...this.lastTacticalDecision },
                     crowdSteering: getEnemyCrowdSteeringSnapshot(),
+                    bastion: getBastionStatus(),
                     warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
                     arenaEvent: this.activeArenaEvent ? this.activeArenaEvent.kind : null,
                     arenaTimeLeft: this.activeArenaEvent ? Math.round(this.activeArenaEvent.timeLeft) : 0,
@@ -5924,6 +6069,7 @@
             totalTime += dt;
             waveTimer += dt;
             if (slowMoTimer > 0) slowMoTimer = Math.max(0, slowMoTimer - dt);
+            updateBastion();
 
             if (bannerHideTimer > 0) {
                 bannerHideTimer -= dt;
@@ -6029,6 +6175,11 @@
                     continue;
                 }
                 ep.update(dt * enemyTimeScale);
+                if (bastionIntercepts(ep)) {
+                    ep.dead = true;
+                    bastion.blocked++;
+                    bastionShotsBlocked++;
+                }
                 if (!ep.dead && Math.hypot(ep.x - player.x, ep.y - player.y) < ep.radius + player.radius) {
                     player.takeDamage(ep.damage);
                     ep.dead = true;
@@ -6588,6 +6739,7 @@
             drawBossArenaPresence(ctx);
             drawSpecialEncounterWarning();
             drawTacticalLinks();
+            drawBastion(ctx);
             drawBossAttackTelegraphs(ctx);
 
             if (gameState === 'MENU') {
@@ -6900,6 +7052,7 @@
             }
 
             document.getElementById('goldHudText').textContent = totalGold.toLocaleString('tr-TR');
+            updateBastionHud();
 
             const shieldInd = document.getElementById('shieldIndicator');
             const shieldTxt = document.getElementById('shieldText');
@@ -7038,6 +7191,11 @@
             clearGameplayInput();
             resetPc3Telemetry();
             resetEnemyCrowdSteering();
+            bastion = null;
+            bastionReadyAt = 0;
+            bastionUses = 0;
+            bastionGoldSpent = 0;
+            bastionShotsBlocked = 0;
             activeContractId = selectedContractId;
             contractMasteryRecordedThisRun = false;
             lastBossGradientColor = null;
@@ -8080,6 +8238,12 @@
                     player.triggerDash();
                 } else if (e.code === 'KeyE') {
                     player.triggerNova();
+                } else if (e.code === 'KeyQ') {
+                    // Do not spend gold while keyboard focus is on another control.
+                    if (!isInteractiveKeyTarget(e.target)) {
+                        e.preventDefault();
+                        deployBastion();
+                    }
                 } else if (e.code === 'KeyM') {
                     toggleControlMode();
                 } else if (e.code === 'Tab' && activeBosses.some(b => !b.dead)) {
@@ -8218,6 +8382,9 @@
         });
         document.getElementById('novaBtn').addEventListener('click', () => {
             if (gameState === 'PLAYING' && player) player.triggerNova();
+        });
+        document.getElementById('bastionBtn').addEventListener('click', () => {
+            deployBastion();
         });
 
         document.getElementById('soundToggleBtn').addEventListener('click', () => {
@@ -8488,6 +8655,7 @@
         window.getNeonIntensityHistory = () => combatDirector ?
             combatDirector.intensityObserver.getHistory() : [];
         window.getNeonEconomySnapshot = () => combatDirector ? combatDirector.getEconomySnapshot() : null;
+        window.getNeonBastionStatus = () => getBastionStatus();
         window.getNeonBuildSnapshot = () => player ? {
             modules: { ...player.upgradeCounts },
             evolutions: [...player.evolutions],
