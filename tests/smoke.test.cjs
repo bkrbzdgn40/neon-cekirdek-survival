@@ -5661,3 +5661,120 @@ test('M5.16 circuit visualization has bounded draw path and distinct high/low ef
  assert.equal(s.trace,3);
  assert.equal(s.stats.closures,0);
 });
+
+
+test('M5.17 chapters rotate every three waves with unique art and a boss-safe mode',()=>{
+ const {run}=setup();
+ const x=JSON.parse(run("(()=>{const at=[1,3,4,5,6,7,8,9,10,11,12,13,16,19].map(w=>chapterIdForWave(w));return JSON.stringify({at,keys:Object.keys(ARENA_CHAPTERS),colors:Object.values(ARENA_CHAPTERS).map(x=>x.color),bounds:{cycle:CHAPTER_RULES.foundryCycle,garden:CHAPTER_RULES.gardenCharge,warp:CHAPTER_RULES.riftCooldown}});})()"));
+ assert.deepEqual(x.at,[null,null,'FOUNDRY','FOUNDRY','FOUNDRY','GARDEN','GARDEN','GARDEN','RIFT','RIFT','RIFT','FOUNDRY','GARDEN','RIFT']);
+ assert.deepEqual(x.keys,['FOUNDRY','GARDEN','RIFT']);
+ assert.equal(new Set(x.colors).size,3);
+ assert.equal(x.bounds.cycle,6);
+});
+
+test('M5.17 chapter announces wave transitions with readable HUD names and status',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();const initial=getArenaChapterSnapshot();wave=4;updateArenaChapter(.1);updateArenaChapterHud();const badge=document.getElementById('arenaChapterBadge').textContent;const msg=document.getElementById('arenaChapterStatus').textContent;const activated=getArenaChapterSnapshot();wave=7;updateArenaChapter(.1);const garden=getArenaChapterSnapshot();wave=10;updateArenaChapter(.1);const rift=getArenaChapterSnapshot();return JSON.stringify({initial,activated,badge,msg,garden,rift,attr:document.getElementById('hud')._attrs['data-arena-chapter']});})()"));
+ assert.equal(s.initial.id,null);
+ assert.equal(s.activated.id,'FOUNDRY');
+ assert.equal(s.activated.changes,1);
+ assert.match(s.badge,/DÖKÜMHANE/);
+ assert.match(s.msg,/YÜKLENİYOR|KAÇ|SOĞUYOR/);
+ assert.equal(s.garden.id,'GARDEN');
+ assert.equal(s.rift.id,'RIFT');
+ assert.equal(s.rift.changes,3);
+ assert.equal(s.attr,'FOUNDRY');
+});
+
+test('M5.17 foundry warns before the heat pulse and damages at most twelve normal enemies once',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();wave=4;nextBossTime=500;totalTime=0;updateArenaChapter(.1);const y=worldHeight*.32;player.y=y;enemies=Array.from({length:18},(_,i)=>new Enemy(220+i*18,y,'TANK'));for(const e of enemies)e.hp=e.maxHp=2000;const boss=new Enemy(220,y,'BOSS_DESTROYER');boss.hp=boss.maxHp=2000;enemies.push(boss);const hp=player.hp;totalTime=1.2;updateArenaChapter(.1);const warned=enemies.filter(e=>e.hp<2000).length;totalTime=1.6;updateArenaChapter(.1);const once=enemies.filter(e=>e.hp<2000).length;const mid=player.hp;updateArenaChapter(.1);const twice=enemies.filter(e=>e.hp<2000).length;return JSON.stringify({hp,warned,once,twice,mid,bossHp:boss.hp,stats:getArenaChapterSnapshot()});})()"));
+ assert.equal(s.warned,0);
+ assert.equal(s.once,12);
+ assert.equal(s.twice,12);
+ assert.equal(s.mid,s.hp-9);
+ assert.equal(s.bossHp,2000);
+ assert.equal(s.stats.foundryEnemyHits,12);
+ assert.equal(s.stats.foundryPlayerHits,1);
+});
+
+test('M5.17 existing event and boss encounters suppress chapter effects and charge',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();wave=7;nextBossTime=500;player.x=worldWidth*.25;player.y=worldHeight*.38;updateArenaChapter(.2);updateArenaChapter(1);const charge=chapterGardenCharge[0];combatDirector.activeArenaEvent={kind:'RELAY',dead:false};updateArenaChapter(3);const during=chapterGardenCharge[0];const allowedEvent=chapterEffectsAllowed();combatDirector.activeArenaEvent=null;activeBosses=[new Enemy(500,300,'BOSS_DESTROYER')];updateArenaChapter(4);const allowedBoss=chapterEffectsAllowed();activeBosses=[];nextBossTime=totalTime+3;const allowedWarning=chapterEffectsAllowed();gameState='PAUSED';const allowedPause=chapterEffectsAllowed();return JSON.stringify({charge,during,allowedEvent,allowedBoss,allowedWarning,allowedPause,id:arenaChapter});})()"));
+ assert.ok(s.charge>0);
+ assert.equal(s.during,0);
+ assert.equal(s.allowedEvent,false);
+ assert.equal(s.allowedBoss,false);
+ assert.equal(s.allowedWarning,false);
+ assert.equal(s.allowedPause,false);
+ assert.equal(s.id,'GARDEN');
+});
+
+test('M5.17 garden charges exactly one node, stuns at most eight foes and respects cooldown',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();wave=7;nextBossTime=500;const node=getGardenCenters()[0];player.x=node.x;player.y=node.y;enemies=Array.from({length:12},()=>new Enemy(node.x+18,node.y+14,'TANK'));const boss=new Enemy(node.x,node.y,'BOSS_DESTROYER');enemies.push(boss);updateArenaChapter(.1);updateArenaChapter(.8);const half=chapterGardenCharge[0];updateArenaChapter(.85);const hits=enemies.filter(e=>e.stunTimer>0).length;const after=getArenaChapterSnapshot();updateArenaChapter(4);return JSON.stringify({half,hits,bossStun:boss.stunTimer,after,final:getArenaChapterSnapshot()});})()"));
+ assert.ok(s.half>0);
+ assert.equal(s.hits,8);
+ assert.equal(s.bossStun,0);
+ assert.equal(s.after.gardenBursts,1);
+ assert.equal(s.after.gardenStuns,8);
+ assert.ok(s.after.gardenReadyIn[0]>0);
+ assert.equal(s.final.gardenBursts,1);
+});
+
+test('M5.17 garden partial charge decays when player leaves a node',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();wave=7;nextBossTime=500;const node=getGardenCenters()[0];player.x=node.x;player.y=node.y;updateArenaChapter(.3);updateArenaChapter(.8);const held=chapterGardenCharge[0];player.x=worldWidth*.95;player.y=worldHeight*.95;updateArenaChapter(.3);return JSON.stringify({held,left:chapterGardenCharge[0],bursts:chapterStats.gardenBursts});})()"));
+ assert.ok(s.held>0);
+ assert.ok(s.left<s.held);
+ assert.equal(s.bursts,0);
+});
+
+test('M5.17 rift gate teleports once, re-arms on exit, preserves gold and breaks circuit trail',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();wave=10;nextBossTime=500;totalTime=175;updateArenaChapter(.01);const nodes=getRiftCenters();player.x=nodes[0].x;player.y=nodes[0].y;player.circuitTrace=[{x:120,y:180},{x:260,y:180}];player.circuitLength=140;player.vx=200;const gold=totalGold;updateArenaChapter(.02);const first={x:player.x,y:player.y,warps:chapterStats.riftWarps,invuln:player.invulnTimer,trace:player.circuitTrace.length,vx:player.vx};updateArenaChapter(.02);const blocked=chapterStats.riftWarps;player.x=worldWidth*.5;player.y=worldHeight*.5;updateArenaChapter(.02);totalTime+=12;player.x=nodes[1].x;player.y=nodes[1].y;updateArenaChapter(.02);return JSON.stringify({first,blocked,after:{x:player.x,y:player.y},warps:chapterStats.riftWarps,gold,saved:totalGold,expected:nodes[0]});})()"));
+ assert.equal(s.first.warps,1);
+ assert.ok(s.first.invuln>=.55);
+ assert.equal(s.first.trace,0);
+ assert.equal(s.first.vx,0);
+ assert.equal(s.blocked,1);
+ assert.equal(s.warps,2);
+ assert.ok(Math.abs(s.after.x-s.expected.x)<1);
+ assert.equal(s.gold,s.saved);
+});
+
+test('M5.17 rift does not activate near boss warning or during an arena mission',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();wave=10;nextBossTime=200;totalTime=196.5;const a=getRiftCenters()[0];player.x=a.x;player.y=a.y;updateArenaChapter(.02);const danger=getArenaChapterSnapshot();totalTime=180;combatDirector.activeArenaEvent={kind:'STORM'};updateArenaChapter(.02);const event=getArenaChapterSnapshot();return JSON.stringify({danger,event,warps:chapterStats.riftWarps,x:player.x});})()"));
+ assert.equal(s.danger.enabled,false);
+ assert.equal(s.event.enabled,false);
+ assert.equal(s.warps,0);
+});
+
+test('M5.17 new run resets all three chapters and metrics and keeps legacy progression',()=>{
+ const {run}=setup();
+ const s=JSON.parse(run("(()=>{startNewGame();wave=10;nextBossTime=500;updateArenaChapter(.01);const gate=getRiftCenters()[0];player.x=gate.x;player.y=gate.y;updateArenaChapter(.02);const before=getArenaChapterSnapshot();const gold=totalGold,choices=UPGRADES_POOL.length;startNewGame();return JSON.stringify({before,now:getArenaChapterSnapshot(),gold,afterGold:totalGold,choices,afterChoices:UPGRADES_POOL.length});})()"));
+ assert.equal(s.before.riftWarps,1);
+ assert.equal(s.now.id,null);
+ assert.equal(s.now.changes,0);
+ assert.equal(s.now.riftWarps,0);
+ assert.equal(s.gold,s.afterGold);
+ assert.equal(s.choices,s.afterChoices);
+ assert.equal(s.choices,13);
+});
+
+test('M5.17 arena chapters render distinct canvas geometry at low graphics without new enemies',()=>{
+ const calls=[];
+ const ctx=new Proxy({}, {get(_,name){return(...args)=>calls.push(String(name));}});
+ const {run}=setup({}, {canvasContext:ctx});
+ const s=JSON.parse(run("(()=>{startNewGame();nextBossTime=500;graphicsQuality='low';const result={};for(const [w,id] of [[4,'FOUNDRY'],[7,'GARDEN'],[10,'RIFT']]){wave=w;updateArenaChapter(.05);const before=enemies.length;drawArenaChapter(ctx);result[id]={count:enemies.length-before,mode:arenaChapter};}return JSON.stringify(result);})()"));
+ assert.equal(s.FOUNDRY.mode,'FOUNDRY');
+ assert.equal(s.GARDEN.mode,'GARDEN');
+ assert.equal(s.RIFT.mode,'RIFT');
+ assert.equal(Object.values(s).every(x=>x.count===0),true);
+ assert.ok(calls.includes('fillRect'));
+ assert.ok(calls.includes('ellipse'));
+ assert.ok(calls.includes('arc'));
+ assert.match(html,/id="arenaChapterAnnouncement"/);
+ assert.match(html,/\[data-arena-chapter="FOUNDRY"\]/);
+});

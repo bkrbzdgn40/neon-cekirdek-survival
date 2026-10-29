@@ -945,3 +945,38 @@
         #reviveModal:not(.hidden), #gameOverModal:not(.hidden),
         #shopModal:not(.hidden) { display: flex; }
         #hud:not(.hidden) { display: flex; flex-direction: column; }
+
+/* M5.17: Arena chapters carry their own constrained visual identity. */
+#hud .arena-chapter-chip {
+    color:#b5ebff; border-color:rgba(67,197,231,.45);
+    background:linear-gradient(110deg,rgba(12,26,41,.94),rgba(2,9,22,.94));
+    box-shadow:inset 2px 0 0 rgba(74,228,255,.45);
+    white-space:nowrap;
+}
+#hud[data-arena-chapter="FOUNDRY"] .arena-chapter-chip {
+    color:#ffd392;border-color:rgba(255,151,87,.58);
+    box-shadow:inset 2px 0 0 #ff9757,0 0 14px rgba(255,151,87,.1);
+    background:linear-gradient(110deg,rgba(56,22,18,.96),rgba(19,12,21,.94));
+}
+#hud[data-arena-chapter="GARDEN"] .arena-chapter-chip {
+    color:#b3ffe0;border-color:rgba(111,255,198,.55);
+    box-shadow:inset 2px 0 0 #6fffc6,0 0 14px rgba(111,255,198,.1);
+    background:linear-gradient(110deg,rgba(9,47,40,.96),rgba(6,22,24,.94));
+}
+#hud[data-arena-chapter="RIFT"] .arena-chapter-chip {
+    color:#ebe1ff;border-color:rgba(189,147,255,.58);
+    box-shadow:inset 2px 0 0 #bd93ff,0 0 14px rgba(189,147,255,.1);
+    background:linear-gradient(110deg,rgba(39,23,76,.96),rgba(15,13,32,.94));
+}
+#hud .arena-chapter-announcement {
+    max-width:min(94vw,740px);border:1px solid #5de7ff;
+    background:rgba(5,10,23,.88);
+    box-shadow:0 8px 26px rgba(0,0,0,.5);
+    text-shadow:0 0 12px currentColor;
+    pointer-events:none;
+}
+@media (prefers-reduced-motion: reduce) {
+    #hud .arena-chapter-chip, #hud .arena-chapter-announcement {
+        animation:none!important; transition:none!important;
+    }
+}
