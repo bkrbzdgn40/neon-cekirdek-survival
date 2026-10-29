@@ -3206,6 +3206,60 @@ test('neon contracts are selectable, bounded and only modify their declared run 
  assert.ok(x.label.length>5);
 });
 
+test('contract mastery starts with four isolated cosmetic records',()=>{
+ const {run}=setup();
+ const out=JSON.parse(run("JSON.stringify({list:window.getNeonContractMastery(),markup:document.getElementById('neonContractOptions').innerHTML})"));
+ assert.deepEqual(Object.keys(out.list),['STANDARD','REDLINE','BLACKOUT','OVERCHARGE']);
+ assert.ok(Object.values(out.list).every(entry=>entry.runs===0&&entry.bestWave===0&&entry.bestScore===0&&entry.bestDurationSeconds===0));
+ assert.match(out.markup,/USTALIK/);
+ assert.match(out.markup,/DALGA/);
+});
+
+test('contract mastery records one completed run in the active bucket and remains defensive',()=>{
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{selectNeonContract('REDLINE');startNewGame();wave=8;score=123;totalTime=95;triggerGameOver();const first=window.getNeonContractMastery();triggerGameOver();const second=window.getNeonContractMastery();first.REDLINE.bestWave=999;return JSON.stringify({first:second,after:window.getNeonContractMastery(),report:window.getNeonFinalReport().contract});})()"));
+ assert.equal(out.first.REDLINE.runs,1);
+ assert.equal(out.first.REDLINE.bestWave,8);
+ assert.equal(out.first.REDLINE.bestScore,123);
+ assert.equal(out.first.REDLINE.bestDurationSeconds,95);
+ assert.equal(out.after.REDLINE.bestWave,8);
+ assert.equal(out.after.STANDARD.runs,0);
+ assert.equal(out.report.id,'REDLINE');
+});
+
+test('contract mastery sanitizes corrupt storage and persists independent progress',()=>{
+ const stored={'neonCekirdek.contractMastery.v1':JSON.stringify({version:99,REDLINE:{runs:-4,bestWave:'oops'}})};
+ const {run}=setup(stored);
+ const out=JSON.parse(run("(()=>{const before=window.getNeonContractMastery();selectNeonContract('BLACKOUT');startNewGame();wave=16;score=400;totalTime=180;triggerGameOver();return JSON.stringify({before,after:window.getNeonContractMastery(),raw:localStorage.getItem('neonCekirdek.contractMastery.v1')});})()"));
+ assert.equal(out.before.REDLINE.runs,0);
+ assert.equal(out.after.BLACKOUT.runs,1);
+ assert.equal(out.after.REDLINE.runs,0);
+ assert.match(out.raw,/BLACKOUT/);
+});
+
+test('contract mastery ignores instant runs and exposes three wave tiers',()=>{
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{selectNeonContract('STANDARD');startNewGame();wave=2;totalTime=29.999;triggerGameOver();const ignored=window.getNeonContractMastery().STANDARD;startNewGame();wave=8;totalTime=30;triggerGameOver();const tier1=getContractMasteryTier(window.getNeonContractMastery().STANDARD);startNewGame();wave=16;totalTime=40;triggerGameOver();const tier2=getContractMasteryTier(window.getNeonContractMastery().STANDARD);startNewGame();wave=24;totalTime=50;triggerGameOver();const tier3=getContractMasteryTier(window.getNeonContractMastery().STANDARD);return JSON.stringify({ignored,tier1,tier2,tier3});})()"));
+ assert.equal(out.ignored.runs,0);
+ assert.equal(out.tier1,1);
+ assert.equal(out.tier2,2);
+ assert.equal(out.tier3,3);
+});
+
+test('contract mastery requires both the minimum time and wave boundary',()=>{
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{selectNeonContract('REDLINE');startNewGame();wave=3;totalTime=29.99;triggerGameOver();const short=window.getNeonContractMastery().REDLINE.runs;startNewGame();wave=2;totalTime=30;triggerGameOver();const lowWave=window.getNeonContractMastery().REDLINE.runs;startNewGame();wave=3;totalTime=30;triggerGameOver();const valid=window.getNeonContractMastery().REDLINE.runs;return JSON.stringify({short,lowWave,valid});})()"));
+ assert.deepEqual(out,{short:0,lowWave:0,valid:1});
+});
+
+test('contract mastery storage failure never blocks a finished run',()=>{
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{selectNeonContract('OVERCHARGE');startNewGame();wave=5;totalTime=60;const original=localStorage.setItem;localStorage.setItem=()=>{throw Error('denied')};triggerGameOver();localStorage.setItem=original;return JSON.stringify({state:gameState,runs:window.getNeonContractMastery().OVERCHARGE.runs,report:!!window.getNeonFinalReport()});})()"));
+ assert.equal(out.state,'GAME_OVER');
+ assert.equal(out.runs,1);
+ assert.equal(out.report,true);
+});
+
 
 test('M5.5 new full-screen debrief has accessible responsive tabs and retained safe actions',()=>{
  assert.match(html,/id="gameOverModal"[^>]+role="dialog" aria-modal="true"/);
@@ -5162,4 +5216,82 @@ test('PINWHEEL actual Director respects warning, threat budget and boss cancella
   assert.equal(out.cancel.cancelled,1);
   assert.equal(out.cancel.units,0);
   assert.equal(out.cancel.tokensSpent,0);
+});
+
+test('tactical encounter plans expose readable role links without changing threat cost', () => {
+ const {run}=setup();
+ const info=JSON.parse(run("(()=>{const p=getSpecialEncounterPlan(8,'SIEGE',0,2);return JSON.stringify({type:p.type,formation:p.formationId,roles:p.units.map(u=>u.role),cost:p.threatCost,real:p.units.reduce((n,u)=>n+ENEMY_THREAT_COST[u.type],0)});})()"));
+ assert.equal(info.type,'ESCORT');
+ assert.match(info.formation,/^ESCORT:8:0:2$/);
+ assert.deepEqual(info.roles,['screen','guard','payload','screen']);
+ assert.equal(info.cost,info.real);
+});
+
+test('escort formations attach shield and payload enemies to one tactical link', () => {
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{startNewGame();const shield=new Enemy(380,300,'SHIELD_BEARER',false,{formationId:'ESCORT:8:0:2',role:'guard'});const sniper=new Enemy(520,300,'SNIPER',false,{formationId:'ESCORT:8:0:2',role:'payload'});enemies=[shield,sniper];player.x=120;player.y=300;const point=getTacticalCoverPoint(sniper);shield.dead=true;const after=getTacticalCoverPoint(sniper);return JSON.stringify({shieldRole:shield.tacticalRole,payloadRole:sniper.tacticalRole,point,after});})()"));
+ assert.equal(out.shieldRole,'guard');
+ assert.equal(out.payloadRole,'payload');
+ assert.ok(out.point && out.point.x>out.shieldRole.length);
+ assert.equal(out.after,null);
+});
+
+test('tactical link renderer is cosmetic and safe with a live escort', () => {
+ const calls=[];
+ const context=new Proxy({}, { get(_,key) { return (...args)=>calls.push({kind:String(key),args}); } });
+ const {run}=setup({}, {canvasContext:context});
+ run("(()=>{startNewGame();gameState='PLAYING';const shield=new Enemy(380,300,'SHIELD_BEARER',false,{formationId:'LINK',role:'guard'});const shooter=new Enemy(520,300,'SHOOTER',false,{formationId:'LINK',role:'payload'});enemies=[shield,shooter];drawTacticalLinks();})()");
+ assert.ok(calls.some(x=>x.kind==='lineTo'));
+ assert.ok(calls.some(x=>x.kind==='stroke'));
+});
+
+test('tactical cover changes formation positioning but not enemy combat stats', () => {
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{startNewGame();player.x=100;player.y=300;const plain=new Enemy(700,300,'SHOOTER');const shield=new Enemy(300,300,'SHIELD_BEARER',false,{formationId:'T',role:'guard'});const linked=new Enemy(700,300,'SHOOTER',false,{formationId:'T',role:'payload'});enemies=[shield,linked];const before={x:linked.x,hp:linked.maxHp,damage:linked.damage,speed:linked.speed};linked.update(.1);return JSON.stringify({moved:linked.x<before.x,stats:{hp:linked.maxHp,damage:linked.damage,speed:linked.speed},plain:{hp:plain.maxHp,damage:plain.damage,speed:plain.speed}});})()"));
+ assert.equal(out.moved,true);
+ assert.deepEqual(out.stats,out.plain);
+});
+
+test('flank roles approach from mirrored tangential angles without changing speed', () => {
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{startNewGame();const a=new Enemy(100,300,'DASHER',false,{formationId:'F',role:'flank',side:0,slot:0});const b=new Enemy(100,300,'DASHER',false,{formationId:'F',role:'flank',side:0,slot:1});const plain=new Enemy(100,300,'DASHER');const va=getTacticalFlankVector(a,300,0,300);const vb=getTacticalFlankVector(b,300,0,300);return JSON.stringify({a:va,b:vb,plain:{x:plain.speed},speedA:a.speed,speedB:b.speed});})()"));
+ assert.ok(out.a.y * out.b.y < 0);
+ assert.ok(Math.abs(out.a.x)>0.5 && Math.abs(out.b.x)>0.5);
+ assert.equal(out.speedA,out.plain.x);
+ assert.equal(out.speedB,out.plain.x);
+});
+
+test('special warning previews tactical roles at the incoming edge', () => {
+ const calls=[];
+ const context=new Proxy({}, { get(_,key) { return (...args)=>calls.push({kind:String(key),args}); } });
+ const {run}=setup({}, {canvasContext:context});
+ run("(()=>{startNewGame();gameState='PLAYING';graphicsQuality='high';combatDirector.pendingEncounter=getSpecialEncounterPlan(8,'SIEGE',0,2);drawSpecialEncounterWarning();})()");
+ const labels=calls.filter(x=>x.kind==='fillText').map(x=>String(x.args[0]));
+ assert.ok(labels.some(label=>label.includes('KALKAN')));
+ assert.ok(labels.some(label=>label.includes('MENZIL')));
+});
+
+test('low graphics profile keeps the tactical warning readable without role text', () => {
+ const calls=[];
+ const context=new Proxy({}, { get(_,key) { return (...args)=>calls.push({kind:String(key),args}); } });
+ const {run}=setup({}, {canvasContext:context});
+ run("(()=>{startNewGame();gameState='PLAYING';graphicsQuality='low';combatDirector.pendingEncounter=getSpecialEncounterPlan(8,'SIEGE',0,2);drawSpecialEncounterWarning();})()");
+ const labels=calls.filter(x=>x.kind==='fillText').map(x=>String(x.args[0]));
+ assert.equal(labels.some(label=>label.includes('KALKAN') || label.includes('MENZIL')),false);
+ assert.ok(labels.some(label=>label.includes('KESK')) || labels.some(label=>label.includes('KOR')));
+});
+
+test('tactical HUD hint follows pending and live formation state, then hides after guard death', () => {
+ const {run}=setup();
+ const out=JSON.parse(run("(()=>{startNewGame();const plan=getSpecialEncounterPlan(8,'SIEGE',0,2);combatDirector.pendingEncounter=plan;const pending=getTacticalHintState();combatDirector.pendingEncounter=null;const guard=new Enemy(300,300,'SHIELD_BEARER',false,{formationId:'H',role:'guard'});const payload=new Enemy(420,300,'SNIPER',false,{formationId:'H',role:'payload'});enemies=[guard,payload];const live=getTacticalHintState();guard.dead=true;const gone=getTacticalHintState();return JSON.stringify({pending,live,gone});})()"));
+ assert.equal(out.pending.kind,'guard');
+ assert.match(out.pending.text,/KALKAN/);
+ assert.equal(out.live.kind,'guard');
+ assert.equal(out.gone,null);
+});
+
+test('tactical HUD hint markup and reduced-motion-safe styling are present',()=>{
+ assert.match(html,/id="tacticalHintBadge"/);
+ assert.match(gameCss,/\.tactical-hint-badge/);
+ assert.match(gameCss,/prefers-reduced-motion/);
 });

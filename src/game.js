@@ -618,6 +618,76 @@
         ]);
         let selectedContractId = 'STANDARD';
         let activeContractId = 'STANDARD';
+        const CONTRACT_MASTERY_SAVE_KEY = 'neonCekirdek.contractMastery.v1';
+        const CONTRACT_MASTERY_VERSION = 1;
+        function createEmptyContractMastery() {
+            return {
+                version: CONTRACT_MASTERY_VERSION,
+                contracts: Object.fromEntries(NEON_CONTRACTS.map(contract => [contract.id, {
+                    runs: 0, bestWave: 0, bestScore: 0, bestDurationSeconds: 0
+                }]))
+            };
+        }
+        function sanitizeContractMastery(data) {
+            const empty = createEmptyContractMastery();
+            if (!data || data.version !== CONTRACT_MASTERY_VERSION ||
+                !data.contracts || typeof data.contracts !== 'object') return empty;
+            for (const contract of NEON_CONTRACTS) {
+                const raw = data.contracts[contract.id];
+                if (!raw || typeof raw !== 'object') continue;
+                empty.contracts[contract.id] = {
+                    runs: safeSaveInteger(raw.runs, 0, 1000000),
+                    bestWave: safeSaveInteger(raw.bestWave, 0, 100000),
+                    bestScore: safeSaveInteger(raw.bestScore, 0, 1000000000),
+                    bestDurationSeconds: Number.isFinite(raw.bestDurationSeconds) &&
+                        raw.bestDurationSeconds >= 0 ? Math.min(86400, raw.bestDurationSeconds) : 0
+                };
+            }
+            return empty;
+        }
+        let contractMastery = createEmptyContractMastery();
+        let contractMasteryRecordedThisRun = false;
+        function loadContractMastery() {
+            try {
+                const stored = localStorage.getItem(CONTRACT_MASTERY_SAVE_KEY);
+                if (stored) contractMastery = sanitizeContractMastery(JSON.parse(stored));
+            } catch (error) {
+                contractMastery = createEmptyContractMastery();
+                console.warn('Sözleşme ustalığı okunamadı.', error);
+            }
+        }
+        function saveContractMastery() {
+            try {
+                localStorage.setItem(CONTRACT_MASTERY_SAVE_KEY, JSON.stringify(contractMastery));
+                return true;
+            } catch (error) {
+                console.warn('Sözleşme ustalığı kaydedilemedi; koşu devam ediyor.', error);
+                return false;
+            }
+        }
+        function getContractMasterySnapshot() {
+            return JSON.parse(JSON.stringify(contractMastery.contracts));
+        }
+        function getContractMasteryTier(entry) {
+            const bestWave = entry?.bestWave || 0;
+            return bestWave >= 24 ? 3 : bestWave >= 16 ? 2 : bestWave >= 8 ? 1 : 0;
+        }
+        function recordContractMastery(report) {
+            if (contractMasteryRecordedThisRun || !report?.contract ||
+                (report.result?.durationSeconds < 30 || report.result?.wave < 3)) return false;
+            const entry = contractMastery.contracts[report.contract.id];
+            if (!entry) return false;
+            entry.runs++;
+            entry.bestWave = Math.max(entry.bestWave, report.result.wave || 0);
+            entry.bestScore = Math.max(entry.bestScore, report.result.score || 0);
+            entry.bestDurationSeconds = Math.max(entry.bestDurationSeconds,
+                Math.min(86400, report.result.durationSeconds || 0));
+            contractMasteryRecordedThisRun = true;
+            saveContractMastery();
+            updateMenuCounters();
+            return true;
+        }
+        window.getNeonContractMastery = () => getContractMasterySnapshot();
         function getNeonContractList() { return NEON_CONTRACTS.map(contract => ({...contract})); }
         function getActiveNeonContract() {
             return NEON_CONTRACTS.find(contract => contract.id === activeContractId) || NEON_CONTRACTS[0];
@@ -2302,13 +2372,17 @@
 
         let enemyIdCounter = 1;
         class Enemy {
-            constructor(x, y, type, isElite = false) {
+            constructor(x, y, type, isElite = false, tacticalMeta = null) {
                 this.id = enemyIdCounter++;
                 this.x = x;
                 this.y = y;
                 this.type = type;
                 this.isBoss = type.startsWith('BOSS');
                 this.isElite = isElite && !this.isBoss;
+                this.formationId = tacticalMeta?.formationId || null;
+                this.tacticalRole = tacticalMeta?.role || null;
+                this.tacticalSide = Number.isFinite(tacticalMeta?.side) ? tacticalMeta.side : null;
+                this.tacticalSlot = Number.isFinite(tacticalMeta?.slot) ? tacticalMeta.slot : null;
                 this.pushVx = 0;
                 this.pushVy = 0;
                 this.rotation = 0;
@@ -2502,16 +2576,22 @@
                         this.actionTimer = Math.max(this.actionTimer, 0.7);
                     } else if (this.type === 'ASSASSIN') {
                         this.strafePhase += dt * 7;
+                        const flankVector = getTacticalFlankVector(this, dx, dy, dist);
                         const perpX = -dy / dist;
                         const perpY = dx / dist;
                         const waveOffset = Math.sin(this.strafePhase) * 0.65;
-                        this.x += ((dx / dist) + perpX * waveOffset) * this.speed * dt;
-                        this.y += ((dy / dist) + perpY * waveOffset) * this.speed * dt;
+                        const moveX = flankVector.x + perpX * waveOffset;
+                        const moveY = flankVector.y + perpY * waveOffset;
+                        const moveLength = this.tacticalRole === 'flank' ?
+                            Math.hypot(moveX, moveY) || 1 : 1;
+                        this.x += moveX / moveLength * this.speed * dt;
+                        this.y += moveY / moveLength * this.speed * dt;
                     } else if (this.type === 'DASHER') {
                         this.actionTimer -= dt;
                         if (this.state === 'CHASE') {
-                            this.x += (dx / dist) * this.speed * dt;
-                            this.y += (dy / dist) * this.speed * dt;
+                            const flankVector = getTacticalFlankVector(this, dx, dy, dist);
+                            this.x += flankVector.x * this.speed * dt;
+                            this.y += flankVector.y * this.speed * dt;
                             if (this.actionTimer <= 0 && dist < 360) {
                                 this.state = 'CHARGE';
                                 this.actionTimer = Math.max(0.32, 0.55 - wave * 0.015);
@@ -2531,7 +2611,14 @@
                             }
                         }
                     } else if (this.type === 'SHOOTER') {
-                        if (dist > 250) {
+                        const cover = getTacticalCoverPoint(this);
+                        if (cover && Math.hypot(cover.x - this.x, cover.y - this.y) > 18) {
+                            const cdx = cover.x - this.x;
+                            const cdy = cover.y - this.y;
+                            const cdist = Math.hypot(cdx, cdy) || 1;
+                            this.x += cdx / cdist * this.speed * 1.12 * dt;
+                            this.y += cdy / cdist * this.speed * 1.12 * dt;
+                        } else if (dist > 250) {
                             this.x += (dx / dist) * this.speed * dt;
                             this.y += (dy / dist) * this.speed * dt;
                         } else if (dist < 150) {
@@ -2550,7 +2637,14 @@
                             }
                         }
                     } else if (this.type === 'SNIPER') {
-                        if (dist > 390) {
+                        const cover = getTacticalCoverPoint(this);
+                        if (cover && Math.hypot(cover.x - this.x, cover.y - this.y) > 18) {
+                            const cdx = cover.x - this.x;
+                            const cdy = cover.y - this.y;
+                            const cdist = Math.hypot(cdx, cdy) || 1;
+                            this.x += cdx / cdist * this.speed * 1.08 * dt;
+                            this.y += cdy / cdist * this.speed * 1.08 * dt;
+                        } else if (dist > 390) {
                             this.x += (dx / dist) * this.speed * dt;
                             this.y += (dy / dist) * this.speed * dt;
                         }
@@ -4016,6 +4110,77 @@
             SHOOTER: 2, TANK: 3, SHIELD_BEARER: 3, SNIPER: 2.3,
             ASSASSIN: 2.1, GRAV_WELL: 2.6
         };
+
+        // Formation links are deliberately metadata-only. They let existing
+        // enemy roles coordinate their position without adding HP, damage or
+        // another projectile source to the encounter budget.
+        function getFormationMates(enemy) {
+            if (!enemy?.formationId) return [];
+            return enemies.filter(other => other !== enemy &&
+                !other.dead && other.formationId === enemy.formationId);
+        }
+        function getTacticalEscort(enemy) {
+            if (!enemy?.formationId) return null;
+            return getFormationMates(enemy).find(other =>
+                other.type === 'SHIELD_BEARER' && other.tacticalRole === 'guard') || null;
+        }
+        function getTacticalCoverPoint(enemy) {
+            if (!enemy || enemy.tacticalRole !== 'payload' || !player) return null;
+            const escort = getTacticalEscort(enemy);
+            if (!escort) return null;
+            const dx = escort.x - player.x;
+            const dy = escort.y - player.y;
+            const dist = Math.hypot(dx, dy) || 1;
+            const coverDistance = 108;
+            return {
+                x: escort.x + dx / dist * coverDistance,
+                y: escort.y + dy / dist * coverDistance,
+                escort
+            };
+        }
+        function getTacticalFlankVector(enemy, dx, dy, dist) {
+            const safeDist = Math.max(1, dist || Math.hypot(dx, dy));
+            const radialX = dx / safeDist;
+            const radialY = dy / safeDist;
+            if (enemy?.tacticalRole !== 'flank') return { x: radialX, y: radialY };
+            const sign = ((enemy.tacticalSlot || 0) % 2 === 0 ? 1 : -1) *
+                ((enemy.tacticalSide || 0) % 2 === 0 ? 1 : -1);
+            const tangentX = -radialY * sign;
+            const tangentY = radialX * sign;
+            const blendX = radialX * 0.78 + tangentX * 0.62;
+            const blendY = radialY * 0.78 + tangentY * 0.62;
+            const blendLength = Math.hypot(blendX, blendY) || 1;
+            return { x: blendX / blendLength, y: blendY / blendLength };
+        }
+        function getTacticalHintState() {
+            const plan = combatDirector?.pendingEncounter;
+            const pendingUnits = plan?.units || [];
+            const hasGuardPayload = pendingUnits.some(unit => unit.role === 'guard') &&
+                pendingUnits.some(unit => unit.role === 'payload');
+            const pendingFlanks = pendingUnits.filter(unit => unit.role === 'flank').length;
+            if (plan && hasGuardPayload) {
+                return { kind: 'guard', text: 'KORUMA PROTOKOLU · ÖNCE KALKAN', color: plan.color || '#67e8f9' };
+            }
+            if (plan && pendingFlanks >= 2) {
+                return { kind: 'flank', text: 'İKİLİ FLANK · MERKEZİ BOŞALT', color: '#ff9f43' };
+            }
+            const livePayload = enemies.find(enemy => enemy.tacticalRole === 'payload' &&
+                getTacticalEscort(enemy));
+            if (livePayload) {
+                const escort = getTacticalEscort(livePayload);
+                return { kind: 'guard', text: 'KORUMA BAĞI · MENZİLLİ HEDEFİ AÇ', color: escort?.color || '#67e8f9' };
+            }
+            const flankGroups = new Map();
+            for (const enemy of enemies) {
+                if (enemy.dead || enemy.tacticalRole !== 'flank' || !enemy.formationId) continue;
+                const group = flankGroups.get(enemy.formationId) || 0;
+                flankGroups.set(enemy.formationId, group + 1);
+            }
+            if ([...flankGroups.values()].some(count => count >= 2)) {
+                return { kind: 'flank', text: 'İKİLİ FLANK · AÇIYI KIR', color: '#ff9f43' };
+            }
+            return null;
+        }
         const DIRECTOR_THEMES = ['SURGE', 'SIEGE', 'HUNT'];
         const THEME_WEIGHTS = {
             SURGE: { SWARM: 1.6, SPLITTER: 1.3, KAMIKAZE: 1.6, DASHER: 1.5 },
@@ -4054,44 +4219,45 @@
             const kind=available[Math.max(0,index)%available.length];
             const opposite=(side+2)%4;
             const offset=(side+1)%4;
-            const unit=(type,edge,slot,count)=>({type,side:edge,slot,count});
+            const unit=(type,edge,slot,count,role='pressure')=>({type,side:edge,slot,count,role});
             let units;
             if(kind.type==='PINCER'){
-                units=[unit('SWARM',side,0,2),
-                    unit(currentWave>=2?'DASHER':'SWARM',side,1,2),
-                    unit('SWARM',opposite,0,2),
-                    unit(currentWave>=2?'DASHER':'SWARM',opposite,1,2)];
+                units=[unit('SWARM',side,0,2,'screen'),
+                    unit(currentWave>=2?'DASHER':'SWARM',side,1,2,'flank'),
+                    unit('SWARM',opposite,0,2,'screen'),
+                    unit(currentWave>=2?'DASHER':'SWARM',opposite,1,2,'flank')];
             }else if(kind.type==='SPEARHEAD'){
                 const guard=currentWave>=4&&theme==='SIEGE'?'SHIELD_BEARER':'TANK';
-                units=[unit('SWARM',side,0,3),unit(guard,side,1,3),
-                    unit(currentWave>=3?'SHOOTER':'SWARM',side,2,3)];
+                units=[unit('SWARM',side,0,3,'screen'),unit(guard,side,1,3,'guard'),
+                    unit(currentWave>=3?'SHOOTER':'SWARM',side,2,3,'payload')];
             }else if(kind.type==='ESCORT'){
                 // Frontline protects the long-range sniper; no bonus enemy HP.
-                units=[unit('SWARM',side,0,4),unit('SHIELD_BEARER',side,1,4),
-                    unit('SNIPER',side,2,4),unit('SWARM',side,3,4)];
+                units=[unit('SWARM',side,0,4,'screen'),unit('SHIELD_BEARER',side,1,4,'guard'),
+                    unit('SNIPER',side,2,4,'payload'),unit('SWARM',side,3,4,'screen')];
             }else if(kind.type==='INTERCEPT'){
-                units=[unit('DASHER',side,0,2),unit('ASSASSIN',side,1,2),
-                    unit('DASHER',opposite,0,2),unit('SHOOTER',opposite,1,2)];
+                units=[unit('DASHER',side,0,2,'flank'),unit('ASSASSIN',side,1,2,'flank'),
+                    unit('DASHER',opposite,0,2,'flank'),unit('SHOOTER',opposite,1,2,'payload')];
             }else if(kind.type==='BREACH'){
-                units=[unit('TANK',side,0,3),unit('SPLITTER',side,1,3),
-                    unit('GRAV_WELL',side,2,3),unit('SWARM',offset,0,1)];
+                units=[unit('TANK',side,0,3,'anchor'),unit('SPLITTER',side,1,3,'pressure'),
+                    unit('GRAV_WELL',side,2,3,'anchor'),unit('SWARM',offset,0,1,'flank')];
             }else if(kind.type==='CORRIDOR'){
                 // Two offset lines leave the arena centre open as a readable escape lane.
-                units=[unit('SHIELD_BEARER',side,0,3),unit('SWARM',side,2,3),
-                    unit('SHIELD_BEARER',opposite,0,3),unit('SWARM',opposite,2,3)];
+                units=[unit('SHIELD_BEARER',side,0,3,'guard'),unit('SWARM',side,2,3,'lane'),
+                    unit('SHIELD_BEARER',opposite,0,3,'guard'),unit('SWARM',opposite,2,3,'lane')];
             }else if(kind.type==='CROSSLOCK'){
                 // Shooters anchor two perpendicular edges; dashers force the target choice.
-                units=[unit('SHOOTER',side,0,3),unit('DASHER',side,2,3),
-                    unit('SHOOTER',offset,0,3),unit('ASSASSIN',offset,2,3)];
+                units=[unit('SHOOTER',side,0,3,'payload'),unit('DASHER',side,2,3,'flank'),
+                    unit('SHOOTER',offset,0,3,'payload'),unit('ASSASSIN',offset,2,3,'flank')];
             }else{
                 // PINWHEEL gives four clear approach directions and a weaker SWARM exit.
-                units=[unit('SHIELD_BEARER',side,0,1),
-                    unit('SHOOTER',offset,0,1),
-                    unit('DASHER',opposite,0,1),
-                    unit('SWARM',(side+3)%4,0,1)];
+                units=[unit('SHIELD_BEARER',side,0,1,'guard'),
+                    unit('SHOOTER',offset,0,1,'payload'),
+                    unit('DASHER',opposite,0,1,'flank'),
+                    unit('SWARM',(side+3)%4,0,1,'escape')];
             }
             return {
                 type:kind.type,side,label:kind.label,color:kind.color,
+                formationId:`${kind.type}:${currentWave}:${side}:${index}`,
                 warning:SPECIAL_ENCOUNTER_WARNING,units,
                 threatCost:Math.round(units.reduce((n,u)=>n+ENEMY_THREAT_COST[u.type],0)*10)/10
             };
@@ -5245,7 +5411,12 @@
                     if (this.tokens < cost || enemies.length >= Math.min(MAX_ACTIVE_ENEMIES,
                         (this.baseProfile || this.profile).cap)) break;
                     const pos = formationEdgePoint(unit.side, unit.slot, unit.count);
-                    if (spawnEnemy(false, unit.type, false, pos)) {
+                    if (spawnEnemy(false, unit.type, false, pos, {
+                        formationId: plan.formationId,
+                        role: unit.role,
+                        side: unit.side,
+                        slot: unit.slot
+                    })) {
                         this.tokens -= cost;
                         tokensSpent+=cost;
                         this.stats.spawned++;
@@ -5486,7 +5657,8 @@
             }
         }
 
-        function spawnEnemy(forceBoss = false, typeOverride = null, eliteOverride = null, positionOverride = null) {
+        function spawnEnemy(forceBoss = false, typeOverride = null, eliteOverride = null,
+            positionOverride = null, tacticalMeta = null) {
             if (forceBoss) {
                 spawnBossEncounter();
                 return true;
@@ -5498,7 +5670,7 @@
                 ? wave >= 2 && Math.random() < Math.min(0.12, 0.03 + wave * 0.002)
                 : eliteOverride;
             const pos = positionOverride || getRandomEdgePosition(45);
-            enemies.push(new Enemy(pos.x, pos.y, type, isElite));
+            enemies.push(new Enemy(pos.x, pos.y, type, isElite, tacticalMeta));
             return true;
         }
 
@@ -5996,11 +6168,78 @@
                 else if (side === 2) ctx.fillRect(worldWidth/2-20,worldHeight-12-mark,40,mark);
                 else ctx.fillRect(12,worldHeight/2-20,mark,40);
             }
+            if (graphicsQuality !== 'low') {
+                const roleLabels = { guard: 'KALKAN', payload: 'MENZIL', flank: 'FLANK',
+                    screen: 'EKRAN', lane: 'KORIDOR', anchor: 'CAPA', escape: 'KACIS' };
+                const pulse = PREFERS_REDUCED_VFX_MOTION ? 1 :
+                    0.82 + Math.sin(totalTime * 5.5) * 0.18;
+                for (const unit of plan.units.slice(0, 4)) {
+                    const edge = formationEdgePoint(unit.side, unit.slot, unit.count, 14);
+                    const marker = { x: edge.x, y: edge.y };
+                    if (unit.side === 0) marker.y = band + 9;
+                    else if (unit.side === 1) marker.x = worldWidth - band - 9;
+                    else if (unit.side === 2) marker.y = worldHeight - band - 9;
+                    else marker.x = band + 9;
+                    ctx.save();
+                    ctx.globalAlpha = 0.72 * pulse;
+                    ctx.strokeStyle = unit.role === 'guard' ? '#67e8f9' :
+                        unit.role === 'payload' ? '#8af1eb' :
+                        unit.role === 'flank' ? '#ff9f43' : plan.color || '#ffdb75';
+                    ctx.fillStyle = ctx.strokeStyle;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    if (unit.role === 'guard') {
+                        ctx.arc(marker.x, marker.y, 8, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(marker.x - 4, marker.y);
+                        ctx.lineTo(marker.x + 4, marker.y); ctx.stroke();
+                    } else if (unit.role === 'payload') {
+                        ctx.arc(marker.x, marker.y, 7, 0, Math.PI * 2); ctx.stroke();
+                        ctx.moveTo(marker.x - 10, marker.y); ctx.lineTo(marker.x + 10, marker.y);
+                        ctx.moveTo(marker.x, marker.y - 10); ctx.lineTo(marker.x, marker.y + 10); ctx.stroke();
+                    } else if (unit.role === 'flank' || unit.role === 'escape') {
+                        ctx.moveTo(marker.x - 7, marker.y + 5); ctx.lineTo(marker.x + 7, marker.y);
+                        ctx.lineTo(marker.x - 7, marker.y - 5); ctx.stroke();
+                    } else {
+                        ctx.strokeRect(marker.x - 6, marker.y - 6, 12, 12);
+                    }
+                    if (graphicsQuality === 'high') {
+                        ctx.font = "700 8px 'Orbitron', sans-serif";
+                        ctx.textAlign = 'center';
+                        ctx.fillText(roleLabels[unit.role] || 'ROL', marker.x, marker.y - 12);
+                    }
+                    ctx.restore();
+                }
+            }
             ctx.font="bold 13px 'Orbitron',sans-serif";
             ctx.textAlign='center';
             ctx.fillStyle=plan.color||'#ffdb75';
             ctx.fillText(plan.label,worldWidth/2,Math.min(98,worldHeight*.19));
             ctx.restore();
+        }
+
+        function drawTacticalLinks() {
+            if (!player || gameState !== 'PLAYING' || graphicsQuality === 'low') return;
+            for (const payload of enemies) {
+                if (payload.dead || payload.tacticalRole !== 'payload') continue;
+                const escort = getTacticalEscort(payload);
+                if (!escort) continue;
+                ctx.save();
+                ctx.globalAlpha = 0.24 + 0.06 * (0.5 + 0.5 * Math.sin(totalTime * 5));
+                ctx.strokeStyle = escort.color || '#38bdf8';
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([5, 7]);
+                ctx.beginPath();
+                ctx.moveTo(escort.x, escort.y);
+                ctx.lineTo(payload.x, payload.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.globalAlpha *= 1.35;
+                ctx.beginPath();
+                ctx.arc(escort.x, escort.y, escort.radius + 7, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
         }
 
         function drawOffscreenIndicators() {
@@ -6107,6 +6346,7 @@
             drawArenaAtmosphere();
             drawBossArenaPresence(ctx);
             drawSpecialEncounterWarning();
+            drawTacticalLinks();
             drawBossAttackTelegraphs(ctx);
 
             if (gameState === 'MENU') {
@@ -6247,11 +6487,15 @@
         function renderNeonContractOptions() {
             const container = document.getElementById('neonContractOptions');
             if (!container) return;
-            container.innerHTML = getNeonContractList().map(contract =>
-                `<button type="button" class="neon-contract-card rounded-lg p-2.5 text-left${contract.id === selectedContractId ? ' is-selected' : ''}" data-neon-contract="${contract.id}" aria-pressed="${contract.id === selectedContractId ? 'true' : 'false'}" style="--contract-color:${contract.color}">
+            container.innerHTML = getNeonContractList().map(contract => {
+                const mastery = contractMastery.contracts[contract.id];
+                const tier = getContractMasteryTier(mastery);
+                return `<button type="button" class="neon-contract-card mastery-tier-${tier} rounded-lg p-2.5 text-left${contract.id === selectedContractId ? ' is-selected' : ''}" data-neon-contract="${contract.id}" aria-pressed="${contract.id === selectedContractId ? 'true' : 'false'}" style="--contract-color:${contract.color}" title="EN İYİ SKOR ${mastery.bestScore} · EN UZUN ${Math.round(mastery.bestDurationSeconds)}s">
                     <div class="flex items-center justify-between gap-2"><strong class="font-cyber text-[10px]" style="color:${contract.color}">${contract.label}</strong><span class="text-[9px] text-gray-400">${contract.short}</span></div>
                     <p class="text-[10px] text-gray-300 leading-snug mt-1.5">${contract.desc}</p>
-                </button>`).join('');
+                    <div class="contract-mastery-line" style="color:${contract.color}">USTALIK ${tier}/3 · DALGA ${mastery.bestWave} · ${mastery.runs} KOŞU</div>
+                </button>`;
+            }).join('');
             for (const card of container.querySelectorAll?.('[data-neon-contract]') || []) {
                 card.addEventListener('click', () => {
                     selectNeonContract(card.getAttribute('data-neon-contract'));
@@ -6345,6 +6589,23 @@
             }
         }
 
+        function updateTacticalHint() {
+            const badge = document.getElementById('tacticalHintBadge');
+            if (!badge) return;
+            const hint = getTacticalHintState();
+            if (!hint) {
+                badge.textContent = '';
+                badge.classList.add('hidden');
+                return;
+            }
+            badge.textContent = hint.text;
+            badge.style.color = hint.color;
+            badge.style.borderColor = hint.color;
+            badge.title = hint.kind === 'guard' ? 'Önce Shield Bearer düşürülürse menzilli tehdit açığa çıkar.' :
+                'Flank düşmanları aynı çizgide değil, farklı açılardan yaklaşır.';
+            badge.classList.remove('hidden');
+        }
+
         function updateHUD() {
             if (!player) return;
 
@@ -6356,6 +6617,7 @@
                 contractBadge.style.color = contract.color;
                 contractBadge.title = contract.label + ' · ' + contract.desc;
             }
+            updateTacticalHint();
 
             const xpPct = Math.min(100, (player.xp / player.xpToNext) * 100);
             document.getElementById('xpBar').style.width = `${xpPct}%`;
@@ -6535,6 +6797,7 @@
             clearGameplayInput();
             resetPc3Telemetry();
             activeContractId = selectedContractId;
+            contractMasteryRecordedThisRun = false;
             lastBossGradientColor = null;
             lastBossIdentityMarkup = null;
             audio.init();
@@ -7008,6 +7271,7 @@
                 version:RUN_REPORT_VERSION,reason,newRecord:!!isNewRecord,
                 result:{score,wave,durationSeconds:totalTime,kills,goldEarned:sessionGold,
                     totalGoldBalance:totalGold,bossEncounters:bossEncounterCount},
+                contract:{id:getActiveNeonContract().id,label:getActiveNeonContract().label},
                 chassis:player?.chassis||selectedChassis,
                 combat:{...runMetrics,eliteKills:director?.eliteKills||0,
                     bossKills:director?.bossKills||0,
@@ -7037,6 +7301,7 @@
             // A serialization boundary prevents later game mutations and UI references
             // from ever modifying the finished run. Reports remain in this session only.
             finalRunReport=JSON.parse(JSON.stringify(data));
+            recordContractMastery(finalRunReport);
             return finalRunReport;
         }
         window.getNeonFinalReport=()=>finalRunReport?
@@ -7990,6 +8255,7 @@
         } : null;
         window.onload = function () {
             loadMetaProgress();
+            loadContractMastery();
             loadGraphicsQuality();
             resizeCanvas();
             initMenuDemoNodes();

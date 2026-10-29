@@ -175,8 +175,16 @@
         .neon-contract-card { border:1px solid rgba(117,145,173,.38); background:rgba(10,22,39,.9); transition:transform .16s,border-color .16s,box-shadow .16s; }
         .neon-contract-card:hover { transform:translateY(-2px); border-color:rgba(103,232,249,.8); }
         .neon-contract-card.is-selected { border-color:var(--contract-color,#67e8f9); box-shadow:0 0 18px color-mix(in srgb,var(--contract-color,#67e8f9) 28%,transparent); }
+        .neon-contract-card.mastery-tier-3 { box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--contract-color,#67e8f9) 45%,transparent); }
         .neon-contract-card:focus-visible { outline:2px solid #e6fbff; outline-offset:2px; }
+        .contract-mastery-line { margin-top:.55rem; padding-top:.35rem; border-top:1px solid rgba(117,145,173,.24);
+            font:700 8px 'Orbitron',sans-serif; letter-spacing:.06em; opacity:.88; }
         #activeContractBadge { border-color:rgba(103,232,249,.65); color:#bff8ff; }
+        .tactical-hint-badge { background:rgba(5,18,31,.94); border:1px solid rgba(103,232,249,.72);
+            color:#bff8ff; letter-spacing:.06em; box-shadow:0 0 14px rgba(103,232,249,.16);
+            animation:tactical-hint-pulse 1.8s ease-in-out infinite; }
+        @keyframes tactical-hint-pulse { 0%,100% { opacity:.78; transform:translateY(0); }
+            50% { opacity:1; transform:translateY(-1px); } }
         #hudModulesDock { scrollbar-width: thin; }
         @media (max-width: 640px) {
             #bossWarningBanner .warning-pill { font-size: 12px; padding: .5rem .8rem; }
@@ -221,7 +229,7 @@
 
         @media (prefers-reduced-motion: reduce) {
             .animate-boss-warn, .animate-pulse, .animate-ping, .legendary-card-glow,
-            .epic-card-glow, .animate-spin-slow, .animate-spin-reverse {
+            .epic-card-glow, .animate-spin-slow, .animate-spin-reverse, .tactical-hint-badge {
                 animation: none !important;
             }
             .upgrade-card, .cyber-btn, .cyber-action-btn, .chassis-card { transition: none; }

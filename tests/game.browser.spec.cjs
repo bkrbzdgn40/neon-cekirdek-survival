@@ -137,6 +137,35 @@ test('a short real-time combat sample renders frames and advances game time', as
   expect(errors).toEqual([]);
 });
 
+test('special encounter telegraph exposes tactical role hint before spawn', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await page.locator('#startBtn').click();
+  await page.evaluate(() => {
+    wave = 8;
+    totalTime = 40;
+    nextBossTime = 500;
+    enemies = [];
+    combatDirector.encounterIndex = 2;
+    combatDirector.nextEncounterAt = 0;
+    combatDirector.tokens = 14;
+    combatDirector.update(0.02);
+  });
+  await expect.poll(() => page.evaluate(() => combatDirector.pendingEncounter?.type)).toBe('ESCORT');
+  await expect(page.locator('#tacticalHintBadge')).toContainText('KALKAN');
+  await page.evaluate(() => combatDirector.update(1.7));
+  await expect.poll(() => page.evaluate(() => enemies.some(enemy => enemy.tacticalRole === 'payload'))).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('neon contract cards expose persistent mastery counters in the menu', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('[data-neon-contract]')).toHaveCount(4);
+  await expect(page.locator('#neonContractOptions')).toContainText('USTALIK 0/3');
+  await expect.poll(() => page.evaluate(() => Object.keys(window.getNeonContractMastery()).length)).toBe(4);
+});
+
 test('real browser game-over, menu return and restart remain fully navigable', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
