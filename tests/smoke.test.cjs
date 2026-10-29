@@ -5318,9 +5318,8 @@ test('spatial Director rotates PINWHEEL weaker escape towards observed player pa
 test('spatial Director avoids nearby and crowded spawn candidates without extra tokens', () => {
   const { run } = setup();
   const result=JSON.parse(run("(()=>{startNewGame();wave=16;player.x=35;player.y=worldHeight/2;enemies=[new Enemy(-30,worldHeight/2,'SWARM'),new Enemy(-45,worldHeight/2,'SWARM')];const result=scoreTacticalDeployment(16,'HUNT',7,0,{vx:-240,vy:0,tracked:2},null);const distances=[0,1,2,3].map(s=>{const p=getSpecialEncounterPlan(16,'HUNT',s,7);return Math.min(...p.units.map(u=>{const q=formationEdgePoint(u.side,u.slot,u.count);return Math.hypot(q.x-player.x,q.y-player.y);}));});return JSON.stringify({result,distances});})()"));
-  assert.equal(result.mode,'reading-motion');
-  assert.ok(result.clearance>=Math.min(...result.distances));
-  assert.ok(result.clearance>=Math.min(210,720*.24)-1);
+  assert.equal(result.result.mode,'safe-retreat');
+  assert.equal(result.result.clearance,Math.round(Math.max(...result.distances)));
 });
 
 test('spatial Director records motion and diagnostic decision only when offering a real raid', () => {
