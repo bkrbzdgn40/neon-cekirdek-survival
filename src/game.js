@@ -2383,6 +2383,8 @@
                 this.tacticalRole = tacticalMeta?.role || null;
                 this.tacticalSide = Number.isFinite(tacticalMeta?.side) ? tacticalMeta.side : null;
                 this.tacticalSlot = Number.isFinite(tacticalMeta?.slot) ? tacticalMeta.slot : null;
+                this.crowdSteerX = 0;
+                this.crowdSteerY = 0;
                 this.pushVx = 0;
                 this.pushVy = 0;
                 this.rotation = 0;
@@ -2543,6 +2545,7 @@
             }
 
             update(dt) {
+                const steeringStartX = this.x, steeringStartY = this.y;
                 if (this.isBoss) {
                     this.bossEntranceAge = Math.min(.8, this.bossEntranceAge + dt);
                     this.bossHitFlash = Math.max(0, this.bossHitFlash - dt*3.8);
@@ -2791,6 +2794,27 @@
                     }
                 }
 
+                // Re-orient only existing CHASE displacement. No speed buff,
+                // extra movement, changed charge path, or damage collision bypass.
+                if (canCrowdSteer(this) && this.stunTimer <= 0 &&
+                    this.x >= 0 && this.x <= worldWidth &&
+                    this.y >= 0 && this.y <= worldHeight &&
+                    Math.hypot(this.x - player.x, this.y - player.y) >
+                        this.radius + player.radius + 30 &&
+                    (this.crowdSteerX || this.crowdSteerY)) {
+                    const moveX = this.x - steeringStartX;
+                    const moveY = this.y - steeringStartY;
+                    const traveled = Math.hypot(moveX, moveY);
+                    if (traveled > 0.001) {
+                        const roleScale = this.tacticalRole === 'payload' ? 0.5 :
+                            this.formationId ? 0.75 : 1;
+                        const steerX = moveX / traveled + this.crowdSteerX * roleScale;
+                        const steerY = moveY / traveled + this.crowdSteerY * roleScale;
+                        const norm = Math.hypot(steerX, steerY) || 1;
+                        this.x = steeringStartX + steerX / norm * traveled;
+                        this.y = steeringStartY + steerY / norm * traveled;
+                    }
+                }
                 this.x += this.pushVx * dt;
                 this.y += this.pushVy * dt;
                 this.pushVx *= Math.pow(0.04, dt);
@@ -4113,6 +4137,102 @@
             ASSASSIN: 2.1, GRAV_WELL: 2.6
         };
 
+        // M5.13: low-frequency local steering. One indexed snapshot per 0.18s,
+        // never a full enemy-vs-enemy scan per animation frame.
+        const CROWD_CELL = 88;
+        const CROWD_SAMPLE_SECONDS = 0.18;
+        const CROWD_MAX_CHECKS_PER_AGENT = 18;
+        const crowdSteeringStats = { age: 0, samples: 0, agents: 0, checks: 0,
+            steered: 0, peakCell: 0 };
+        function resetEnemyCrowdSteering() {
+            Object.assign(crowdSteeringStats, { age: 0, samples: 0, agents: 0,
+                checks: 0, steered: 0, peakCell: 0 });
+        }
+        function canCrowdSteer(enemy) {
+            return !!enemy && !enemy.dead && !enemy.isBoss &&
+                enemy.type !== 'KAMIKAZE' && enemy.type !== 'GRAV_WELL' &&
+                (enemy.type !== 'DASHER' || enemy.state === 'CHASE');
+        }
+        function sampleEnemyCrowdSteering(dt) {
+            if (!(dt > 0 && dt < 0.25)) return false;
+            crowdSteeringStats.age += dt;
+            if (crowdSteeringStats.age < CROWD_SAMPLE_SECONDS) return false;
+            crowdSteeringStats.age %= CROWD_SAMPLE_SECONDS;
+            crowdSteeringStats.samples++;
+            const grid = new Map();
+            let candidates = 0;
+            for (const enemy of enemies) {
+                enemy.crowdSteerX = 0;
+                enemy.crowdSteerY = 0;
+                if (!canCrowdSteer(enemy)) continue;
+                candidates++;
+                const key = Math.floor(enemy.x / CROWD_CELL) + ':' +
+                    Math.floor(enemy.y / CROWD_CELL);
+                let cell = grid.get(key);
+                if (!cell) { cell = []; grid.set(key, cell); }
+                cell.push(enemy);
+                crowdSteeringStats.peakCell = Math.max(crowdSteeringStats.peakCell, cell.length);
+            }
+            crowdSteeringStats.agents += candidates;
+            if (!player) return true;
+            for (const enemy of enemies) {
+                if (!canCrowdSteer(enemy)) continue;
+                const cellX = Math.floor(enemy.x / CROWD_CELL);
+                const cellY = Math.floor(enemy.y / CROWD_CELL);
+                const headingX = player.x - enemy.x;
+                const headingY = player.y - enemy.y;
+                const headingLength = Math.hypot(headingX, headingY) || 1;
+                const tangentX = -headingY / headingLength;
+                const tangentY = headingX / headingLength;
+                let steerX = 0, steerY = 0, checked = 0;
+                neighborCells: for (let oy = -1; oy <= 1; oy++) {
+                    for (let ox = -1; ox <= 1; ox++) {
+                        const cell = grid.get((cellX + ox) + ':' + (cellY + oy));
+                        if (!cell) continue;
+                        for (const other of cell) {
+                            if (other === enemy || other.dead) continue;
+                            if (checked++ >= CROWD_MAX_CHECKS_PER_AGENT) break neighborCells;
+                            crowdSteeringStats.checks++;
+                            const vx = enemy.x - other.x;
+                            const vy = enemy.y - other.y;
+                            const separation = enemy.radius + other.radius + 18;
+                            const dist2 = vx * vx + vy * vy;
+                            if (dist2 >= separation * separation) continue;
+                            const dist = Math.sqrt(dist2);
+                            const weight = (separation - dist) / separation;
+                            // A head-to-tail queue needs opposite sidesteps;
+                            // pushing only backwards makes the queue remain stacked.
+                            const along = Math.abs(vx * tangentX + vy * tangentY);
+                            if (dist < 0.001 || along < dist * 0.24) {
+                                const side = enemy.id < other.id ? -1 : 1;
+                                steerX += tangentX * side * weight;
+                                steerY += tangentY * side * weight;
+                            } else {
+                                steerX += vx / dist * weight;
+                                steerY += vy / dist * weight;
+                            }
+                        }
+                    }
+                }
+                const strength = Math.hypot(steerX, steerY);
+                if (strength > 0.02) {
+                    // Only a direction bias; final displacement length remains
+                    // the one prescribed by the original enemy state machine.
+                    const scale = Math.min(0.38, strength * 0.36) / strength;
+                    enemy.crowdSteerX = steerX * scale;
+                    enemy.crowdSteerY = steerY * scale;
+                    crowdSteeringStats.steered++;
+                }
+            }
+            return true;
+        }
+        function getEnemyCrowdSteeringSnapshot() {
+            return { samples: crowdSteeringStats.samples,
+                agents: crowdSteeringStats.agents, checks: crowdSteeringStats.checks,
+                steered: crowdSteeringStats.steered,
+                peakCell: crowdSteeringStats.peakCell };
+        }
+
         // Formation links are deliberately metadata-only. They let existing
         // enemy roles coordinate their position without adding HP, damage or
         // another projectile source to the encounter budget.
@@ -4142,9 +4262,25 @@
         }
         function getTacticalFlankVector(enemy, dx, dy, dist) {
             const safeDist = Math.max(1, dist || Math.hypot(dx, dy));
-            const radialX = dx / safeDist;
-            const radialY = dy / safeDist;
+            let radialX = dx / safeDist;
+            let radialY = dy / safeDist;
             if (enemy?.tacticalRole !== 'flank') return { x: radialX, y: radialY };
+            // Formation flankers aim a short distance into a *measured* player
+            // path. Random enemies, dash charge/lunge and all bosses are unchanged.
+            const motion = combatDirector?.tacticalMotion;
+            if (player && !player.isDashing && motion?.tracked >= 0.8 &&
+                Math.hypot(motion.vx, motion.vy) >= 85 && safeDist > 140) {
+                const horizon = Math.min(0.42, safeDist / Math.max(1, enemy.speed * 4));
+                const leadX = Math.max(20, Math.min(worldWidth - 20,
+                    player.x + motion.vx * horizon));
+                const leadY = Math.max(20, Math.min(worldHeight - 20,
+                    player.y + motion.vy * horizon));
+                const leadDx = leadX - enemy.x;
+                const leadDy = leadY - enemy.y;
+                const leadDist = Math.hypot(leadDx, leadDy) || 1;
+                radialX = leadDx / leadDist;
+                radialY = leadDy / leadDist;
+            }
             const sign = ((enemy.tacticalSlot || 0) % 2 === 0 ? 1 : -1) *
                 ((enemy.tacticalSide || 0) % 2 === 0 ? 1 : -1);
             const tangentX = -radialY * sign;
@@ -5668,6 +5804,7 @@
                     threatTokens: Math.round(this.tokens * 10) / 10,
                     pendingEncounter: this.pendingEncounter ? this.pendingEncounter.type : null,
                     tacticalPlacement: { ...this.lastTacticalDecision },
+                    crowdSteering: getEnemyCrowdSteeringSnapshot(),
                     warningRemaining: this.pendingEncounter ? Math.round(this.pendingEncounter.warning * 10) / 10 : 0,
                     arenaEvent: this.activeArenaEvent ? this.activeArenaEvent.kind : null,
                     arenaTimeLeft: this.activeArenaEvent ? Math.round(this.activeArenaEvent.timeLeft) : 0,
@@ -5902,6 +6039,7 @@
             const orbPositions = player.getOrbitalPositions();
             // Spatial broad phase: each enemy checks only projectiles in nearby cells.
             buildBulletCollisionGrid();
+            sampleEnemyCrowdSteering(dt * enemyTimeScale);
 
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const e = enemies[i];
@@ -6899,6 +7037,7 @@
         function startNewGame() {
             clearGameplayInput();
             resetPc3Telemetry();
+            resetEnemyCrowdSteering();
             activeContractId = selectedContractId;
             contractMasteryRecordedThisRun = false;
             lastBossGradientColor = null;
