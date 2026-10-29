@@ -3780,7 +3780,10 @@
                 motionFxStats.culled++;return false;
             }
             const budget=MOTION_FX_LIMITS[graphicsQuality];
-            if(motionFxFrameCount>=budget.frame&&!critical){
+            // Reserve two short-lived issue slots for boss/wave/ability cues,
+            // without EVER exceeding the frame budget in a dense volley.
+            const reserved=Math.min(2,budget.frame-1);
+            if(motionFxFrameCount>=budget.frame-(critical?0:reserved)){
                 motionFxStats.frameDropped++;return false;
             }
             if(motionFx.length>=budget.live){
