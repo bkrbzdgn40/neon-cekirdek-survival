@@ -458,3 +458,46 @@ test('M5.20 three signature operations display unique stage callouts in Chromium
  await expect(page.locator('#arenaShowcaseBanner')).toBeVisible();
  expect(errors).toEqual([]);
 });
+
+
+test('M5.21 Echo Hunter visibly announces stationary, moving and dashing player reads',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ const result=await page.evaluate(()=>{
+   const setupHunter=()=>{
+     startNewGame();
+     wave=7;waveTimer=2;nextBossTime=5000;totalTime=100;
+     enemies=[new Enemy(70,70,'SHOOTER')];
+     updateNemesis(.02);
+   };
+   setupHunter();
+   updateNemesisHud();
+   const initial={label:document.getElementById('nemesisBanner').textContent,
+     hidden:document.getElementById('nemesisBanner').classList.contains('hidden')};
+   totalTime=101.65;updateNemesis(.02);updateNemesisHud();
+   const lock={kind:getNemesisSnapshot().attack?.kind,
+     label:document.getElementById('nemesisBanner').textContent};
+   setupHunter();
+   for(let i=0;i<9;i++){totalTime+=.2;player.x+=30;updateNemesis(.02);}
+   updateNemesisHud();
+   const trail={kind:getNemesisSnapshot().attack?.kind,
+     label:document.getElementById('nemesisBanner').textContent};
+   setupHunter();
+   totalTime=100.6;player.isDashing=true;updateNemesis(.02);
+   player.isDashing=false;totalTime=101.7;updateNemesis(.02);
+   updateNemesisHud();
+   const cross={kind:getNemesisSnapshot().attack?.kind,
+     label:document.getElementById('nemesisBanner').textContent};
+   return {initial,lock,trail,cross,gold:totalGold,modules:UPGRADES_POOL.length};
+ });
+ expect(result.initial.hidden).toBe(false);
+ expect(result.initial.label).toContain('YANKI AVCISI');
+ expect(result.lock).toMatchObject({kind:'LOCK',label:expect.stringContaining('SABİT NOKTA')});
+ expect(result.trail).toMatchObject({kind:'TRAIL',label:expect.stringContaining('HAREKET İZİ')});
+ expect(result.cross).toMatchObject({kind:'CROSS',label:expect.stringContaining('ÇAPRAZ KİLİT')});
+ expect(result.gold).toBe(50);
+ expect(result.modules).toBe(13);
+ await expect(page.locator('#nemesisBanner')).toBeVisible();
+ expect(errors).toEqual([]);
+});
