@@ -5183,12 +5183,14 @@
         let arenaChapter = null;
         let chapterAnnounceUntil = 0;
         let chapterStats = {changes:0,foundryEnemyHits:0,foundryPlayerHits:0,
-            gardenBursts:0,gardenStuns:0,riftWarps:0};
+            gardenBursts:0,gardenStuns:0,riftWarps:0,riftReroutes:0};
         const chapterGardenCharge = [0,0,0];
         const chapterGardenReady = [-Infinity,-Infinity,-Infinity];
         let chapterRiftArmed = true;
         let chapterRiftReadyAt = 0;
         let chapterFoundryLastPulse = -1;
+        // Foundry timing starts in its first eligible frame, never mid-pulse.
+        let chapterFoundryAnchor = null;
 
         function chapterIdForWave(currentWave) {
             if (!Number.isFinite(currentWave) || currentWave < 4) return null;
@@ -5217,12 +5219,13 @@
             arenaChapter = null;
             chapterAnnounceUntil = 0;
             chapterStats={changes:0,foundryEnemyHits:0,foundryPlayerHits:0,
-                gardenBursts:0,gardenStuns:0,riftWarps:0};
+                gardenBursts:0,gardenStuns:0,riftWarps:0,riftReroutes:0};
             chapterGardenCharge.fill(0);
             chapterGardenReady.fill(-Infinity);
             chapterRiftArmed=true;
             chapterRiftReadyAt=0;
             chapterFoundryLastPulse=-1;
+            chapterFoundryAnchor=null;
         }
         function startChapterIfChanged() {
             const next = chapterIdForWave(wave);
@@ -5233,6 +5236,7 @@
             chapterRiftArmed=true;
             chapterRiftReadyAt=0;
             chapterFoundryLastPulse=-1;
+            chapterFoundryAnchor=null;
             if (!next) return false;
             chapterAnnounceUntil=totalTime+5.0;
             chapterStats.changes++;
@@ -5241,14 +5245,14 @@
             return true;
         }
         function chapterFoundryPhase(t=totalTime) {
-            return ((t%CHAPTER_RULES.foundryCycle)+CHAPTER_RULES.foundryCycle)%
-                CHAPTER_RULES.foundryCycle;
+            if(chapterFoundryAnchor===null)return 0;
+            return Math.max(0,t-chapterFoundryAnchor)%CHAPTER_RULES.foundryCycle;
         }
         function updateFoundryChapter() {
             const phase=chapterFoundryPhase();
             if (phase<CHAPTER_RULES.foundryWarn ||
                 phase>=CHAPTER_RULES.foundryActiveEnd) return;
-            const pulse=Math.floor(totalTime/CHAPTER_RULES.foundryCycle);
+            const pulse=Math.floor(Math.max(0,totalTime-chapterFoundryAnchor)/CHAPTER_RULES.foundryCycle);
             if (chapterFoundryLastPulse===pulse) return;
             chapterFoundryLastPulse=pulse;
             const ys=[worldHeight*.32,worldHeight*.68];
@@ -5297,6 +5301,38 @@
                     ARENA_CHAPTERS.GARDEN.color,13);
             }
         }
+        // Keep an empty portal centered. If its exit is crowded, select a nearby
+        // safer landing using a bounded deterministic search, without RNG.
+        function chooseRiftLanding(dest) {
+            const margin=Math.max(26,player.radius+8);
+            const clamp=(value,max)=>Math.max(margin,Math.min(max-margin,value));
+            const candidates=[{x:clamp(dest.x,worldWidth),y:clamp(dest.y,worldHeight)}];
+            for(const radius of [72,120]){
+                for(let i=0;i<8;i++){
+                    const a=i*Math.PI/4;
+                    candidates.push({x:clamp(dest.x+Math.cos(a)*radius,worldWidth),
+                        y:clamp(dest.y+Math.sin(a)*radius,worldHeight)});
+                }
+            }
+            let chosen=candidates[0],lowest=Infinity;
+            for(const point of candidates){
+                let risk=Math.hypot(point.x-dest.x,point.y-dest.y)*.6;
+                for(const enemy of enemies){
+                    if(!enemy||enemy.dead)continue;
+                    const gap=Math.hypot(point.x-enemy.x,point.y-enemy.y)-
+                        (Number.isFinite(enemy.radius)?enemy.radius:18)-player.radius;
+                    if(gap<120)risk+=(120-gap)*(120-gap);
+                }
+                for(const shot of enemyProjectiles){
+                    if(!shot||shot.dead)continue;
+                    const gap=Math.hypot(point.x-shot.x,point.y-shot.y)-
+                        (Number.isFinite(shot.radius)?shot.radius:7)-player.radius;
+                    if(gap<60)risk+=(60-gap)*(60-gap)*1.5;
+                }
+                if(risk<lowest){lowest=risk;chosen=point;}
+            }
+            return chosen;
+        }
         function updateRiftChapter() {
             const nodes=getRiftCenters();
             const within=nodes.map(n=>Math.hypot(player.x-n.x,player.y-n.y)<
@@ -5312,8 +5348,11 @@
             chapterStats.riftWarps++;
             shockwaves.push(new Shockwave(source.x,source.y,95,
                 ARENA_CHAPTERS.RIFT.color,.36));
-            player.x=Math.max(player.radius,Math.min(worldWidth-player.radius,dest.x));
-            player.y=Math.max(player.radius,Math.min(worldHeight-player.radius,dest.y));
+            const landing=chooseRiftLanding(dest);
+            if(Math.hypot(landing.x-dest.x,landing.y-dest.y)>1)
+                chapterStats.riftReroutes++;
+            player.x=landing.x;
+            player.y=landing.y;
             player.lastPos.x=player.x;
             player.lastPos.y=player.y;
             player.vx=0;player.vy=0;
@@ -5331,11 +5370,18 @@
         function updateArenaChapter(dt) {
             startChapterIfChanged();
             if(!arenaChapter || !chapterEffectsAllowed()){
-                // Holding a garden node through boss/mission must not bank a charge.
+                // No banked garden charge or unseen foundry pulse through boss/mission.
                 chapterGardenCharge.fill(0);
+                if(arenaChapter==='FOUNDRY'){
+                    chapterFoundryAnchor=null;
+                    chapterFoundryLastPulse=-1;
+                }
                 return;
             }
-            if(arenaChapter==='FOUNDRY')updateFoundryChapter();
+            if(arenaChapter==='FOUNDRY'){
+                if(chapterFoundryAnchor===null)chapterFoundryAnchor=totalTime;
+                updateFoundryChapter();
+            }
             else if(arenaChapter==='GARDEN')updateGardenChapter(dt);
             else if(arenaChapter==='RIFT')updateRiftChapter();
         }
@@ -5345,6 +5391,8 @@
                 enabled:!!arenaChapter&&chapterEffectsAllowed(),
                 wave, foundryPhase:arenaChapter==='FOUNDRY'?
                     Math.round(chapterFoundryPhase()*10)/10:null,
+                foundryReadyIn:arenaChapter==='FOUNDRY'&&chapterFoundryAnchor!==null?
+                    Math.max(0,Math.round((CHAPTER_RULES.foundryWarn-chapterFoundryPhase())*10)/10):null,
                 gardenCharge:[...chapterGardenCharge],
                 gardenReadyIn:chapterGardenReady.map(t=>Math.max(0,
                     Math.round((t-totalTime)*10)/10)),
@@ -5357,6 +5405,7 @@
             const badge=document.getElementById('arenaChapterBadge');
             const status=document.getElementById('arenaChapterStatus');
             const announcement=document.getElementById('arenaChapterAnnouncement');
+            const mobile=document.getElementById('arenaChapterMobile');
             if(!hud||!badge||!status||!announcement)return;
             hud.setAttribute('data-arena-chapter',arenaChapter||'NONE');
             const d=arenaChapter?ARENA_CHAPTERS[arenaChapter]:null;
@@ -5367,13 +5416,20 @@
                 if(!chapterEffectsAllowed())message='BOSS / ETKİNLİK KORUMASI';
                 else if(arenaChapter==='FOUNDRY'){
                     const phase=chapterFoundryPhase();
-                    message=phase<CHAPTER_RULES.foundryWarn?'ISI YÜKLENİYOR':
+                    message=phase<CHAPTER_RULES.foundryWarn?
+                        'ISI YÜKLENİYOR · '+(CHAPTER_RULES.foundryWarn-phase).toFixed(1)+' sn':
                         phase<CHAPTER_RULES.foundryActiveEnd?'RAYLARDAN KAÇ':
                         'RAYLAR SOĞUYOR';
                 }else if(arenaChapter==='GARDEN')message='HALKALARDA DUR · İYON DOLDUR';
-                else message=totalTime<chapterRiftReadyAt?'GEÇİT ŞARJDA':'İKİ GEÇİT AKTİF';
+                else message=totalTime<chapterRiftReadyAt?
+                    'GEÇİT ŞARJDA · '+Math.ceil(chapterRiftReadyAt-totalTime)+' sn':
+                    'İKİ GEÇİT AKTİF';
             }
             status.textContent=message;
+            if(mobile){
+                mobile.classList.toggle('hidden',!d);
+                mobile.textContent=d?d.glyph+' '+d.short+' · '+message:'';
+            }
             const show=!!d && gameState==='PLAYING'&&totalTime<chapterAnnounceUntil;
             announcement.classList.toggle('hidden',!show);
             if(show){
@@ -5431,7 +5487,8 @@
                     ctx.save();
                     ctx.translate(node.x,node.y);
                     ctx.strokeStyle=d.color;
-                    ctx.globalAlpha=active ? .85 : .25;
+                    const readyIn=Math.max(0,chapterGardenReady[index]-totalTime);
+                    ctx.globalAlpha=active ? (readyIn>0?.28:.85) : .25;
                     ctx.lineWidth=2;
                     for(let petal=0;petal<6;petal++){
                         ctx.beginPath();
@@ -5447,8 +5504,12 @@
                         ctx.beginPath();ctx.arc(0,0,r+6,-Math.PI/2,
                             -Math.PI/2+Math.PI*2*progress);ctx.stroke();
                     }
-                    if(totalTime<chapterGardenReady[index]){
-                        ctx.globalAlpha=.20;
+                    if(readyIn>0){
+                        ctx.globalAlpha=active?.8:.2;
+                        ctx.lineWidth=4;ctx.strokeStyle=d.accent;
+                        ctx.beginPath();ctx.arc(0,0,r+6,-Math.PI/2,
+                            -Math.PI/2+Math.PI*2*(1-readyIn/CHAPTER_RULES.gardenCooldown));
+                        ctx.stroke();
                     }
                     ctx.restore();
                 }
@@ -5475,6 +5536,14 @@
                     }
                     ctx.beginPath();ctx.moveTo(-15,0);ctx.lineTo(0,-18);
                     ctx.lineTo(15,0);ctx.lineTo(0,18);ctx.closePath();ctx.stroke();
+                    if(totalTime<chapterRiftReadyAt){
+                        ctx.globalAlpha=active?.7:.2;
+                        ctx.lineWidth=4;ctx.strokeStyle=d.accent;
+                        const remaining=chapterRiftReadyAt-totalTime;
+                        ctx.beginPath();ctx.arc(0,0,r+7,-Math.PI/2,
+                            -Math.PI/2+Math.PI*2*(1-remaining/CHAPTER_RULES.riftCooldown));
+                        ctx.stroke();
+                    }
                     ctx.restore();
                 }
                 ctx.restore();
