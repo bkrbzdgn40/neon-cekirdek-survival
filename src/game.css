@@ -1104,6 +1104,7 @@
     #hud .ability-command-row > button {
         flex:0 1 auto;
         min-width:0;
+        min-height:44px;
         padding:7px 4px;
         gap:3px;
         white-space:nowrap;
