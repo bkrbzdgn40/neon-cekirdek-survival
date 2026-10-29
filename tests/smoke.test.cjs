@@ -6341,3 +6341,54 @@ test('M5.26 hard device cap, boss cancellation, timeout and new-run reset',()=>{
  assert.equal(x.expired.devices.length,0);assert.equal(x.reset.devices.length,0);
  assert.equal(x.reset.stats.spawned,0);
 });
+
+
+test('M5.27 public showcase is a standalone static presentation with actual game route and no auto-running iframe',()=>{
+  const showcase=fs.readFileSync(path.join(__dirname,'..','showcase.html'),'utf8');
+  const js=fs.readFileSync(path.join(__dirname,'..','src','showcase.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'..','src','showcase.css'),'utf8');
+  assert.match(showcase,/href="\.\/index\.html"/);
+  assert.match(showcase,/id="loadPreviewBtn"/);
+  assert.match(showcase,/id="stopPreviewBtn"/);
+  assert.match(showcase,/id="langSwitch"/);
+  assert.match(showcase,/NOT A GAMEPLAY SCREENSHOT/);
+  assert.doesNotMatch(showcase,/<iframe\b/i);
+  assert.match(js,/document\.createElement\('iframe'\)/);
+  assert.match(js,/gameFrame\.remove\(\)/);
+  assert.match(js,/gameFrame\.src = '\.\/index\.html'/);
+  assert.doesNotMatch(js,/fetch\(|setInterval\(|localStorage/);
+  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
+  assert.match(css,/\.skip-link:focus/);
+});
+
+test('M5.27 public-facing links, media and factual documentation are present on disk',()=>{
+  const root=path.join(__dirname,'..');
+  const showcase=fs.readFileSync(path.join(root,'showcase.html'),'utf8');
+  const readme=fs.readFileSync(path.join(root,'README.md'),'utf8');
+  const press=fs.readFileSync(path.join(root,'docs','PRESSKIT.md'),'utf8');
+  const publishing=fs.readFileSync(path.join(root,'docs','PUBLISHING.md'),'utf8');
+  const cover=fs.readFileSync(path.join(root,'media','neon-core-cover.svg'),'utf8');
+  for(const filename of ['src/showcase.css','src/showcase.js','docs/PRESSKIT.md',
+    'docs/PUBLISHING.md','media/neon-core-cover.svg','.nojekyll']){
+    assert.ok(fs.existsSync(path.join(root,filename)),filename+' missing');
+  }
+  assert.match(showcase,/id="press"/);
+  assert.match(readme,/No public hosted demo is confirmed yet/);
+  assert.match(readme,/Geliştirici/);
+  assert.match(press,/not a screenshot of gameplay/);
+  assert.match(press,/No verified public GitHub Pages deployment yet/);
+  assert.match(publishing,/has_pages = false/);
+  assert.match(cover,/<svg[\s>]/);
+  assert.match(cover,/NOT A GAMEPLAY SCREENSHOT/);
+  assert.match(pageHtml,/id="showcaseLink"[^>]*href="\.\/showcase\.html"/);
+});
+
+test('M5.27 a new game still loads exactly the same playable mechanics without showcase dependencies',()=>{
+  const {run}=setup();
+  const state=JSON.parse(run("(()=>{startNewGame();return JSON.stringify({gameState,player:!!player,wave,enemies:enemies.length,graphics:graphicsQuality,level:player.level});})()"));
+  assert.equal(state.gameState,'PLAYING');
+  assert.equal(state.player,true);
+  assert.equal(state.wave,1);
+  assert.equal(state.level,1);
+  assert.equal(state.enemies,0);
+});
