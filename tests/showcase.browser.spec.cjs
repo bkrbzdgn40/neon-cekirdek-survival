@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { gotoGame } = require('./browser.helpers.cjs');
 
 // M5.27: The public first-impression surface must be functional, not mock art.
 test('M5.27 showcase presents a real game route, accurate public evidence and bilingual navigation',async({page})=>{
@@ -72,7 +73,7 @@ test('M5.27 landing is readable and has no horizontal overflow from 320px to des
 });
 
 test('M5.27 real game menu offers a non-disruptive showcase link',async({page})=>{
-  await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+  await gotoGame(page,'/index.html');
   const link=page.locator('#showcaseLink');
   await expect(link).toBeVisible();
   await expect(link).toHaveAttribute('href','./showcase.html');

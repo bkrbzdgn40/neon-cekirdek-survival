@@ -1,10 +1,11 @@
 const { test, expect } = require('@playwright/test');
+const { gotoGame } = require('./browser.helpers.cjs');
 
 test('extended stationary desktop combat stays alive and within budgets @soak', async ({ page }) => {
   test.setTimeout(180_000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/index.html?perf=1', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html?perf=1');
   await page.locator('#startBtn').click();
   await page.evaluate(() => {
     // Benchmark fixture: ignore only player damage while using the real Director.

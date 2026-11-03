@@ -63,6 +63,8 @@ function setup(stored = {}, options = {}) {
     Math: Object.create(Math), Set, Date, performance: { now: () => 0 },
     requestAnimationFrame: noop, setTimeout: noop,
   };
+  // Odak 1.2: existing tests exercise every system; locked tests pass unlockAll:false.
+  if (options.unlockAll !== false) sandbox.window.NEON_UNLOCK_ALL = true;
   vm.createContext(sandbox);
   vm.runInContext(gameCode, sandbox, { timeout: 4000 });
   sandbox.window.onload();
@@ -6400,7 +6402,6 @@ test('M5.28 capture suite uses the real game and labels all staged evidence befo
   const config=fs.readFileSync(path.join(root,'playwright.capture.config.cjs'),'utf8');
   const pipeline=fs.readFileSync(path.join(root,'.github','workflows','neon-smoke.yml'),'utf8');
   const guide=fs.readFileSync(path.join(root,'docs','M5.28-gameplay-evidence.md'),'utf8');
-  assert.match(capture,/page\.goto\('\/index\.html'/);
   assert.match(capture,/renderGame\(\)/);
   assert.match(capture,/spawnEnemy\(false,type,false/);
   assert.match(capture,/spawnFieldDevice\('CAPACITOR'/);
@@ -6451,8 +6452,8 @@ test('Odak 0.2 ?wave and ?unlock parsing rejects malformed values', () => {
 });
 
 test('Odak 0.2 ?unlock=all raises NEON_UNLOCK_ALL only when requested', () => {
-  assert.equal(setup().run('window.NEON_UNLOCK_ALL === true'), false);
-  assert.equal(setup({}, { locationSearch: '?unlock=all' }).run('window.NEON_UNLOCK_ALL'), true);
+  assert.equal(setup({}, { unlockAll: false }).run('window.NEON_UNLOCK_ALL === true'), false);
+  assert.equal(setup({}, { unlockAll: false, locationSearch: '?unlock=all' }).run('window.NEON_UNLOCK_ALL'), true);
 });
 
 test('Odak 1.1 SYSTEM_UNLOCKS is a frozen single source covering levels 0..6', () => {
@@ -6467,7 +6468,7 @@ test('Odak 1.1 SYSTEM_UNLOCKS is a frozen single source covering levels 0..6', (
 });
 
 test('Odak 1.1 isSystemUnlocked follows unlockLevel and NEON_UNLOCK_ALL', () => {
-  const { run } = setup();
+  const { run } = setup({}, { unlockAll: false });
   const open = ids => JSON.parse(run(`JSON.stringify(${JSON.stringify(ids)}.map(isSystemUnlocked))`));
   assert.equal(run('unlockLevel'), 0);
   assert.deepEqual(open(['dash', 'emp', 'contracts', 'unknown']), [true, false, false, false]);
@@ -6525,4 +6526,22 @@ test('Odak 1.1 portable backup carries unlockLevel and migrates v1 backups', () 
   })()`));
   assert.deepEqual(result, { exported: 3, restored: true, afterRoundTrip: 3, legacyRestored: true,
     afterLegacy: 6, rejected: false, finalLevel: 6 });
+});
+
+test('Odak 1.2 smoke harness opens every system unless a test opts out', () => {
+  assert.equal(setup().run('window.NEON_UNLOCK_ALL'), true);
+  assert.equal(setup().run('unlockLevel'), 0);
+  assert.equal(setup().run("isSystemUnlocked('contracts')"), true);
+  assert.equal(setup({}, { unlockAll: false }).run("isSystemUnlocked('contracts')"), false);
+});
+
+test('Odak 1.2 browser helper loads the real game with ?unlock=all by default', () => {
+  const { gameUrl } = require('./browser.helpers.cjs');
+  assert.equal(gameUrl(), '/index.html?unlock=all');
+  assert.equal(gameUrl('/index.html?perf=1'), '/index.html?perf=1&unlock=all');
+  assert.equal(gameUrl('/index.html?unlock=none&wave=3'), '/index.html?unlock=all&wave=3');
+  assert.equal(gameUrl('/index.html', { unlockAll: false }), '/index.html');
+  const { run } = setup({}, { unlockAll: false, locationSearch: gameUrl('/index.html?wave=4').split('/index.html')[1] });
+  assert.equal(run('window.NEON_UNLOCK_ALL'), true);
+  assert.equal(run('startNewGame(); wave'), 4);
 });

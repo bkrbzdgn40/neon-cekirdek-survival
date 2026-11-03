@@ -4,6 +4,7 @@
 // up, plus overlapping HUD items, overflowing text and too-small touch targets.
 // Results go to the console and test-results/hud-metrics.json.
 const { test, expect } = require('@playwright/test');
+const { gotoGame } = require('./browser.helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -133,7 +134,7 @@ async function measureViewport(browser, baseURL, vp) {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   try {
-    await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+    await gotoGame(page,'/index.html');
     await expect(page.locator('#startBtn')).toBeVisible();
     await page.locator('#startBtn').click();
     await expect(page.locator('#hud')).toBeVisible();

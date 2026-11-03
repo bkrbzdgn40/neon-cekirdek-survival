@@ -1,9 +1,10 @@
 const { test, expect } = require('@playwright/test');
+const { gotoGame } = require('./browser.helpers.cjs');
 
 test('menu starts playable canvas and pause/resume flow is interactive', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html');
   await expect(page.locator('#startBtn')).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.graphicsQuality)).toBe('high');
   await expect.poll(() => page.evaluate(() => typeof window.getNeonRunDiagnostics)).toBe('function');
@@ -23,7 +24,7 @@ test('menu starts playable canvas and pause/resume flow is interactive', async (
 test('upgrade cards and keyboard selection work in a real browser', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html');
   await expect(page.locator('#startBtn')).toBeVisible();
   await page.locator('#startBtn').click();
   await page.evaluate(() => triggerLevelUp());
@@ -37,7 +38,7 @@ test('upgrade cards and keyboard selection work in a real browser', async ({ pag
 
 test('mobile touchscreen controls and menu viewport stay usable', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'touch interaction is checked in mobile Chromium');
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html');
   await expect(page.locator('#startBtn')).toBeVisible();
   const position = await page.locator('#startBtn').boundingBox();
   expect(position).not.toBeNull();
@@ -58,7 +59,7 @@ test('portable JSON backup can be downloaded and restored through the menu', asy
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('dialog', dialog => dialog.accept());
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html');
   await expect(page.locator('#backupExportBtn')).toBeVisible();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
@@ -84,7 +85,7 @@ test('game start and pause remain operable if every external CDN is unavailable'
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route(/^https:\/\/(?!127\.0\.0\.1)/, route => route.abort());
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html');
   await expect(page.locator('#startBtn')).toBeVisible();
   await page.locator('#startBtn').click();
   await expect(page.locator('#startModal')).toBeHidden();
@@ -97,7 +98,7 @@ test('game start and pause remain operable if every external CDN is unavailable'
 });
 
 test('small, tablet and wide viewports keep the launch action horizontally reachable', async ({ page }) => {
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html');
   for (const [width, height] of [[360, 740], [768, 1024], [1920, 1080]]) {
     await page.setViewportSize({ width, height });
     const start = page.locator('#startBtn');
@@ -118,7 +119,7 @@ test('small, tablet and wide viewports keep the launch action horizontally reach
 test('a short real-time combat sample renders frames and advances game time', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/index.html?perf=1', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html?perf=1');
   await expect(page.locator('#startBtn')).toBeVisible();
   await page.locator('#startBtn').click();
   await page.waitForTimeout(4000);
@@ -140,7 +141,7 @@ test('a short real-time combat sample renders frames and advances game time', as
 test('special encounter telegraph exposes tactical role hint before spawn', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html');
   await page.locator('#startBtn').click();
   await page.evaluate(() => {
     wave = 8;
@@ -160,7 +161,7 @@ test('special encounter telegraph exposes tactical role hint before spawn', asyn
 });
 
 test('neon contract cards expose persistent mastery counters in the menu', async ({ page }) => {
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html');
   await expect(page.locator('[data-neon-contract]')).toHaveCount(4);
   await expect(page.locator('#neonContractOptions')).toContainText('USTALIK 0/3');
   await expect.poll(() => page.evaluate(() => Object.keys(window.getNeonContractMastery()).length)).toBe(4);
@@ -169,7 +170,7 @@ test('neon contract cards expose persistent mastery counters in the menu', async
 test('real browser game-over, menu return and restart remain fully navigable', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html');
   await page.locator('#startBtn').click();
   await page.evaluate(() => triggerGameOver());
   await expect(page.locator('#gameOverModal')).toBeVisible();
@@ -183,7 +184,7 @@ test('real browser game-over, menu return and restart remain fully navigable', a
 });
 
 test('Canvas produces nonblank pixels in menu and active combat', async ({ page }) => {
-  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html');
   await expect.poll(() => page.evaluate(() => {
     const node = document.querySelector('#gameCanvas');
     if (!node || !node.width || !node.height) return 0;
@@ -212,7 +213,7 @@ test('extended browser game loop avoids runtime errors and stays within entity b
   test.setTimeout(45_000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/index.html?perf=1', { waitUntil: 'domcontentloaded' });
+  await gotoGame(page,'/index.html?perf=1');
   await page.locator('#startBtn').click();
   await page.evaluate(() => {
     // This isolated browser fixture ignores damage, not the production game rules.
@@ -247,7 +248,7 @@ test('self-hosted assets preserve responsive layout and fonts without any extern
         !request.url().startsWith('http://127.0.0.1:8765/')) external.push(request.url());
   });
   await page.route(/^https:\/\//, route => route.abort());
-  await page.goto('/index.html', { waitUntil: 'networkidle' });
+  await gotoGame(page,'/index.html',{waitUntil:'networkidle'});
   await page.evaluate(() => document.fonts.ready);
   await expect(page.locator('#startBtn')).toBeVisible();
   const info = await page.evaluate(() => ({
@@ -267,7 +268,7 @@ test('self-hosted assets preserve responsive layout and fonts without any extern
 test('gold-only bastion can be deployed via the combat HUD without opening upgrade cards', async ({ page }) => {
  const errors=[];
  page.on('pageerror', err=>errors.push(err.message));
- await page.goto('/index.html', {waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  await page.evaluate(()=>{
    player.takeDamage=()=>{};
@@ -297,7 +298,7 @@ test('gold-only bastion can be deployed via the combat HUD without opening upgra
 test('Phase Echo upgrade produces a visible tactical decoy after dash without spending gold', async ({page})=>{
  const errors=[];
  page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const before=await page.evaluate(()=>{
    player.upgradeCounts.phase_echo=1;
@@ -323,7 +324,7 @@ test('Phase Echo upgrade produces a visible tactical decoy after dash without sp
 test('Circuit Weaver closes a drawn loop in Chromium, hits enclosed enemy and leaves gold unchanged', async ({page})=>{
  const errors=[];
  page.on('pageerror',err=>errors.push(err.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const result=await page.evaluate(()=>{
    player.upgradeCounts.circuit_weaver=3;
@@ -356,7 +357,7 @@ test('Circuit Weaver closes a drawn loop in Chromium, hits enclosed enemy and le
 
 test('arena chapters change visual HUD identity and rift teleports without spending gold',async({page})=>{
  const errors=[];page.on('pageerror',err=>errors.push(err.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const steps=await page.evaluate(()=>{
    player.takeDamage=()=>{};
@@ -392,7 +393,7 @@ test('arena chapters change visual HUD identity and rift teleports without spend
 test('M5.18 mobile displays chapter status through warning, garden and rift',async({page,isMobile})=>{
  test.skip(!isMobile,'mobile-only terrain HUD visibility');
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  await page.evaluate(()=>{nextBossTime=500;wave=4;totalTime=23.7;updateArenaChapter(.02);updateArenaChapterHud();});
  const mobile=page.locator('#arenaChapterMobile');
@@ -411,7 +412,7 @@ test('M5.18 mobile displays chapter status through warning, garden and rift',asy
 
 test('M5.19 contested garden and warned rift pursuit have readable HUD in Chromium',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const result=await page.evaluate(()=>{
    wave=7;nextBossTime=500;updateArenaChapter(.02);
@@ -439,7 +440,7 @@ test('M5.19 contested garden and warned rift pursuit have readable HUD in Chromi
 
 test('M5.20 three signature operations display unique stage callouts in Chromium',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const stages=await page.evaluate(()=>{
    nextBossTime=1000;
@@ -465,7 +466,7 @@ test('M5.20 three signature operations display unique stage callouts in Chromium
 
 test('M5.21 Echo Hunter visibly announces stationary, moving and dashing player reads',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const result=await page.evaluate(()=>{
    const setupHunter=()=>{
@@ -508,7 +509,7 @@ test('M5.21 Echo Hunter visibly announces stationary, moving and dashing player 
 
 test('M5.22 keyboard C and touch Prism Riposte deflect a real projectile in Chromium',async({page})=>{
  const errors=[];page.on('pageerror',err=>errors.push(err.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  await page.evaluate(()=>{
    totalTime=10;nextBossTime=500;
@@ -542,7 +543,7 @@ test('M5.22 keyboard C and touch Prism Riposte deflect a real projectile in Chro
 
 test('M5.22 all four touch combat controls fit the phone viewport without overlap',async({page,isMobile})=>{
  test.skip(!isMobile,'phone-only combat command geometry');
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const ids=['bastionBtn','novaBtn','prismBtn','dashBtn'];
  const positions=await page.evaluate(ids=>({
@@ -566,7 +567,7 @@ test('M5.22 all four touch combat controls fit the phone viewport without overla
 
 test('M5.23 upgrade cards prioritize readable type and responsive one/two/three-column layout',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  await page.evaluate(()=>triggerLevelUp());
  await expect(page.locator('#upgradeCardsContainer .upgrade-card')).toHaveCount(3);
@@ -621,7 +622,7 @@ test('M5.23 upgrade cards prioritize readable type and responsive one/two/three-
 });
 
 test('M5.23 longest evolution and synergy text stays inside natural-height cards on phones',async({page})=>{
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  await page.evaluate(()=>{
    triggerLevelUp();
@@ -671,7 +672,7 @@ test('M5.23 longest evolution and synergy text stays inside natural-height cards
 
 test('M5.24 Neon Motion reacts to live dash, Nova and Overdrive with distinct canvas motifs',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const x=await page.evaluate(()=>{
    nextBossTime=5000;graphicsQuality='high';totalTime=10;
@@ -696,7 +697,7 @@ test('M5.24 Neon Motion reacts to live dash, Nova and Overdrive with distinct ca
 
 test('M5.24 all three graphics profiles cap motion drawing under sustained effect storms',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const values=await page.evaluate(()=>{
    nextBossTime=5000;
@@ -730,7 +731,7 @@ test('M5.24 all three graphics profiles cap motion drawing under sustained effec
 test('M5.24 reduced motion keeps boss/wave readability but avoids repeated dash and ambient animation',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.emulateMedia({reducedMotion:'reduce'});
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const result=await page.evaluate(()=>{
    nextBossTime=5000;
@@ -754,7 +755,7 @@ test('M5.24 reduced motion keeps boss/wave readability but avoids repeated dash 
 
 test('M5.25 cockpit fits 320–1440px without covering command controls or losing readable gauges',async({page})=>{
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  await page.evaluate(()=>{nextBossTime=5000;updateHUD();});
  for(const [width,height] of [[320,568],[360,740],[390,844],[768,800],[1024,768],[1440,900]]){
@@ -799,7 +800,7 @@ test('M5.25 cockpit fits 320–1440px without covering command controls or losin
 
 test('M5.25 damage and boss state change cockpit hierarchy, progress bars remain accessible',async({page})=>{
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const r=await page.evaluate(()=>{
    nextBossTime=5000;
@@ -829,7 +830,7 @@ test('M5.25 damage and boss state change cockpit hierarchy, progress bars remain
 
 test('M5.25 reduced-motion and low graphics keep HUD legible without decorative animation cost',async({page})=>{
  await page.emulateMedia({reducedMotion:'reduce'});
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const r=await page.evaluate(()=>{
    player.hp=player.maxHp*.15;updateHUD();
@@ -847,7 +848,7 @@ test('M5.25 reduced-motion and low graphics keep HUD legible without decorative 
 
 test('M5.26 capacitor has a real on-screen warning, delayed detonation and visual feedback',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const r=await page.evaluate(()=>{
    nextBossTime=5000;totalTime=20;player.invulnTimer=0;player.hasShield=false;
@@ -874,7 +875,7 @@ test('M5.26 capacitor has a real on-screen warning, delayed detonation and visua
 
 test('M5.26 graviton field changes true enemy simulation speed and renders at all quality tiers',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const r=await page.evaluate(()=>{
    nextBossTime=5000;
@@ -903,7 +904,7 @@ test('M5.26 graviton field changes true enemy simulation speed and renders at al
 
 test('M5.26 engineering warnings fit small mobile HUD without blocking touch abilities',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  await page.evaluate(()=>{
    nextBossTime=5000;
@@ -933,13 +934,13 @@ test('M5.26 engineering warnings fit small mobile HUD without blocking touch abi
 
 test('Odak 0.2 ?wave=10 starts the real game directly at wave 10',async({page})=>{
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
- await page.goto('/index.html?wave=10',{waitUntil:'domcontentloaded'});
+ await gotoGame(page,'/index.html?wave=10');
  await page.locator('#startBtn').click();
  await expect(page.locator('#waveText')).toHaveText('10');
  const state=await page.evaluate(()=>({wave,totalTime,nextBossTime,unlockAll:window.NEON_UNLOCK_ALL===true}));
  expect(state.wave).toBe(10);
  expect(state.totalTime).toBeGreaterThanOrEqual(144);
  expect(state.nextBossTime).toBe(199);
- expect(state.unlockAll).toBe(false);
+ expect(state.unlockAll).toBe(true); // gotoGame adds ?unlock=all next to ?wave=10
  expect(errors).toEqual([]);
 });
