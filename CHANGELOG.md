@@ -1,5 +1,11 @@
 # Değişiklik Günlüğü
 
+## Odak 2.4 · Mobil dikey HUD
+- Telefon dikeyde (`max-width:639px` + `hover:none`) üstte 44 px tek satır: can, XP'yi halka olarak gösteren seviye, DALGA üst yazılı süre, duraklat. Bağlamsal çipler yalnızca görünürken ince ikinci satıra iner; görev ödülü mobilde gizlenir.
+- Yetenekler sağ altta başparmak yayında: 64 px Atılım, 56 px EMP/Prizma/Siper; yalnızca ikon ve radyal bekleme. Kısa ekranda yay yassılaşır, sol alt joystick için boş kalır.
+- Momentum mobilde kalktı; Cinnet bar yerine ≥ %80 ya da aktifken parlayan çip. Dokunmatikte HUD'da hiçbir klavye/fare ipucu görünmez.
+- Oynanacak alan (görev çipi açıkken): 320×568 %71.1, 390×664 %73.8; çakışma, taşma ve küçük hedef 0.
+
 ## Odak 2.3 · Dokunmatik kontrol: göreli joystick
 - Ekranın sol %60'ında parmağın değdiği yer joystick merkezi olur: 8 px ölü bölge, 56 px'te tam hız; kanvas üzerinde iki yarı saydam halka çizilir.
 - Hareket parmağı `Touch.identifier` ile izlenir; ikinci parmak joystick'i çalmaz. Yetenek butonları dokunmatikte `pointerdown` ile tetiklenir (çoklu dokunmada `click` gelmediği için), ardından gelen `click` yutulur.

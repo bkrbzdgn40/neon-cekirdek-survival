@@ -1184,3 +1184,81 @@ test('Odak 2.2 desktop HUD at '+width+'x'+height+' keeps one thin top row and 48
  expect(errors).toEqual([]);
 });
 }
+
+// Odak 2.4 · phone portrait HUD acceptance (real touch contexts).
+for(const [width,height] of [[320,568],[390,664]]){
+test('Odak 2.4 phone portrait HUD at '+width+'x'+height+' keeps one top row and a thumb arc',async({browser,isMobile},testInfo)=>{
+ test.skip(!isMobile,'runs once, in the mobile project');
+ const context=await browser.newContext({baseURL:testInfo.project.use.baseURL,
+   viewport:{width,height},deviceScaleFactor:2,isMobile:true,hasTouch:true});
+ const page=await context.newPage();
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ try{
+ await gotoGame(page,'/index.html');
+ await page.locator('#startBtn').click();
+ await expect(page.locator('#hud')).toBeVisible();
+ await page.evaluate(()=>{
+   updateGame=()=>{};
+   combo=1;comboTimer=0;resetContextualHud();
+   player.xp=player.xpToNext/2;player.momentum=100;player.overdrive=90;updateHUD();
+   showContextual(document.getElementById('questHudBox'),9000);
+ });
+ // Contextual chips fade in for 0.22 s.
+ await page.waitForTimeout(350);
+ const r=await page.evaluate(()=>{
+   const box=el=>el.getBoundingClientRect();
+   const vis=el=>el.checkVisibility({opacityProperty:true,visibilityProperty:true});
+   const row=['.hud-vitals','#xpMeter','.hud-clock','#pauseBtn'].map(s=>box(document.querySelector(s)));
+   const skills=['bastionBtn','novaBtn','prismBtn','dashBtn'].map(id=>{
+     const el=document.getElementById(id);const b=box(el);
+     return {left:b.left,right:b.right,top:b.top,bottom:b.bottom,w:b.width,h:b.height,
+       round:getComputedStyle(el).borderRadius==='50%'};
+   });
+   const hints=[...document.querySelectorAll('#hud *')].filter(el=>vis(el)&&
+     [...el.childNodes].some(n=>n.nodeType===3&&/\[|TIK|BOŞLUK|␣/.test(n.textContent)));
+   const chips=[...document.querySelectorAll('#hud .hud-chip')].filter(vis).map(box);
+   return {row,skills,hints:hints.length,
+     // Status text stays for screen readers only (1 px clipped box).
+     keysShown:[...document.querySelectorAll('#hud .skill-key,#hud .skill-text')].some(vis)||
+       [...document.querySelectorAll('#hud .skill-status')].some(el=>box(el).width>1),
+     momentum:vis(document.getElementById('momentumMeter')),
+     cinnet:vis(document.getElementById('overdriveMeter')),
+     cinnetBar:vis(document.getElementById('overdriveBar')),
+     cinnetGlow:getComputedStyle(document.getElementById('overdriveMeter')).animationName,
+     xpRing:document.getElementById('xpMeter').style.getPropertyValue('--xp'),
+     xpBar:vis(document.getElementById('xpBar')),
+     chipsBottom:Math.max(...chips.map(c=>c.bottom)),
+     settingsInHud:['#ctrlToggleBtn','#musicToggleBtn','#soundToggleBtn','#buildGuidePanel']
+       .some(sel=>!!document.querySelector('#hud '+sel))};
+ });
+ // One top row of at most 48 px: vitals, level ring, clock, pause.
+ const rowTop=Math.min(...r.row.map(b=>b.top)),rowBottom=Math.max(...r.row.map(b=>b.bottom));
+ expect(rowBottom-rowTop).toBeLessThanOrEqual(48);
+ for(let i=1;i<r.row.length;i++) expect(r.row[i].left).toBeGreaterThanOrEqual(r.row[i-1].right-1);
+ expect(r.row[3].width).toBeGreaterThanOrEqual(44);
+ expect(r.xpBar).toBe(false);
+ expect(Number(r.xpRing)).toBeCloseTo(50,0);
+ // Momentum is gone; Cinnet is a glowing chip without a bar.
+ expect(r.momentum).toBe(false);
+ expect([r.cinnet,r.cinnetBar]).toEqual([true,false]);
+ expect(['cinnet-ready','none']).toContain(r.cinnetGlow);
+ // Round 56-64 px abilities on an arc that rises toward the right edge.
+ for(const s of r.skills){
+   expect(s.round).toBe(true);
+   expect(s.w).toBeGreaterThanOrEqual(56);expect(s.w).toBeLessThanOrEqual(64);
+   expect(s.left).toBeGreaterThanOrEqual(width*.2);
+ }
+ for(let i=1;i<r.skills.length;i++){
+   expect(r.skills[i].left).toBeGreaterThanOrEqual(r.skills[i-1].right-1);
+   expect(r.skills[i].top).toBeLessThan(r.skills[i-1].top);
+ }
+ expect(r.skills[3].right).toBeGreaterThan(width-16);
+ // No keyboard or mouse hints, no settings in the combat HUD.
+ expect([r.hints,r.keysShown,r.settingsInHud]).toEqual([0,false,false]);
+ // Even with the quest chip line on, 70 % of the height stays free.
+ const arcTop=Math.min(...r.skills.map(s=>s.top));
+ expect((arcTop-Math.max(rowBottom,r.chipsBottom))/height).toBeGreaterThanOrEqual(.70);
+ expect(errors).toEqual([]);
+ }finally{await context.close();}
+});
+}

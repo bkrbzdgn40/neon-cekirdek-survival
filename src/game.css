@@ -1750,5 +1750,109 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
 #pauseModal .pause-keys kbd{font:800 10px/1 'Orbitron',sans-serif;border:1px solid #3f5b77;border-radius:4px;
     padding:2px 5px;color:#e6fbff;background:#0b192c;}
 @media(hover:none){#pauseModal .pause-keys{display:none;}}
+/* Odak 2.4 · phone portrait. One top row of at most 48 px (vitals | level
+   ring | clock | pause); contextual chips drop to a second line only while
+   shown. Round abilities sit on a thumb arc bottom right; bottom left stays
+   free for the joystick. Momentum is gone, Cinnet is a glowing chip. */
+@media (max-width:639px) and (hover:none){
+    #hud.combat-cockpit{padding:calc(2px + env(safe-area-inset-top,0px)) 8px calc(6px + env(safe-area-inset-bottom,0px));}
+    #hud .hud-top-deck{gap:4px;}
+    /* Wrappers dissolve so every chip is a flex item of the row; the
+       zero-height ::after breaks the line, so chips form a second line
+       (right aligned) that has no height while nothing is shown. */
+    #hud .hud-status-row{
+        display:flex;flex-wrap:wrap;
+        align-items:center;justify-content:flex-end;
+        column-gap:6px;row-gap:0;
+    }
+    #hud .hud-status-row::after{content:"";order:5;flex-basis:100%;height:0;}
+    #hud .hud-status-left,
+    #hud .hud-status-right,
+    #hud .hud-context-strip{display:contents;}
+    #hud .hud-vitals{order:1;flex:1 1 0;height:36px;padding:0 6px;gap:4px;min-width:0;}
+    #hud .hud-health-track{flex:1 1 auto;width:auto;min-width:44px;height:20px;}
+    #hud #shieldIndicator[data-state="active"] #shieldText{display:none;}
+    #hud .hud-meter-xp{
+        order:2;flex:none;
+        width:40px;height:40px;padding:0;
+        border:0;border-radius:50%;
+        background:
+            radial-gradient(circle,rgba(4,14,27,.98) 0 14px,transparent 15px),
+            conic-gradient(#6be7ff calc(var(--xp,0) * 3.6deg),rgba(var(--cockpit-rgb),.2) 0);
+        box-shadow:0 2px 10px rgba(0,0,0,.35);
+    }
+    #hud .hud-meter-xp #xpBar{display:none;}
+    #hud .hud-meter-xp .hud-meter-level{justify-content:center;padding:0;font:900 13px/1 'Orbitron','Segoe UI',sans-serif;}
+    #hud .hud-level-prefix{display:none;}
+    #hud .hud-clock{order:3;flex:none;height:40px;min-width:58px;padding:0 6px;}
+    #hud .hud-pause-button{order:4;}
+    #hud .hud-chip{order:6;height:22px;margin-top:2px;padding:0 7px;font-size:10px;}
+    #hud #momentumMeter{display:none!important;}
+    #hud #overdriveMeter{width:auto;height:22px;padding:0 9px;border-color:#ff7ac4;}
+    #hud #overdriveMeter #overdriveBar{display:none;}
+    #hud #overdriveMeter .hud-meter-label{position:static;padding:0;color:#ffd0ea;font-size:10px;letter-spacing:0;}
+    #hud .hud-quest-reward{display:none;}
+    #hud .hud-combo-timer{width:18px;}
+    #hud #overdriveMeter[data-context="on"]{animation:cinnet-ready 1.2s ease-in-out infinite;}
+    #hud .hud-boss-console{padding:3px 8px;}
+    #hud .hud-boss-track{height:10px;}
+
+    #hud .hud-command-deck{
+        justify-content:flex-end;padding:0;
+        border:0;border-radius:0;background:none;box-shadow:none;
+    }
+    #hud .hud-action-bay{
+        display:block;flex:none;
+        width:247px;height:98px;
+        pointer-events:none;
+    }
+    #hud .hud-action-bay > button{
+        --arc-size:56px;
+        position:absolute;
+        right:var(--arc-r);bottom:var(--arc-b);
+        width:var(--arc-size);height:var(--arc-size);min-height:0;min-width:0;
+        padding:0;gap:0;
+        display:flex;align-items:center;justify-content:center;
+        border-radius:50%;
+        overflow:hidden;
+        pointer-events:auto;
+    }
+    #hud .hud-action-bay > button[data-skill="dash"]{--arc-size:64px;--arc-r:0px;--arc-b:34px;}
+    #hud .hud-action-bay > button[data-skill="prism"]{--arc-r:69px;--arc-b:16px;}
+    #hud .hud-action-bay > button[data-skill="nova"]{--arc-r:130px;--arc-b:4px;}
+    #hud .hud-action-bay > button[data-skill="bastion"]{--arc-r:191px;--arc-b:0px;}
+    /* Shorter phones (iPhone SE) get a flatter arc. */
+    @media (max-height:600px){
+        #hud .hud-action-bay{height:88px;}
+        #hud .hud-action-bay > button[data-skill="dash"]{--arc-b:24px;}
+        #hud .hud-action-bay > button[data-skill="prism"]{--arc-b:10px;}
+        #hud .hud-action-bay > button[data-skill="nova"]{--arc-b:2px;}
+    }
+    #hud .hud-action-bay > button > i{font-size:22px;}
+    #hud .hud-action-bay > button[data-skill="dash"] > i{font-size:25px;}
+    #hud .hud-action-bay > button:disabled{opacity:.55;}
+    #hud .hud-action-bay .skill-status{
+        position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;
+        overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+    }
+    #hud .skill-cooldown{
+        height:100%!important;
+        border-radius:inherit;
+        background:conic-gradient(rgba(3,8,20,.8) calc(var(--cd,0) * 3.6deg),transparent 0);
+        transition:none;
+        pointer-events:none;
+    }
+}
+@keyframes cinnet-ready{
+    0%,100%{box-shadow:0 0 0 0 rgba(255,122,196,0);}
+    50%{box-shadow:0 0 14px 3px rgba(255,122,196,.55);}
+}
+/* Odak 2.4 · touch screens never show keyboard or mouse hints in the HUD. */
+@media(hover:none){
+    #hud .skill-text,#hud .skill-key{display:none!important;}
+}
+@media(prefers-reduced-motion:reduce){
+    #hud #overdriveMeter[data-context="on"]{animation:none;box-shadow:0 0 0 2px #ff7ac4;}
+}
 /* Odak 2.3 · touch movement choice only matters on touch screens. */
 @media(hover:hover) and (pointer:fine){#pauseModal .touch-setting{display:none;}}

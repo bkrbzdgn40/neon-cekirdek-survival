@@ -1128,11 +1128,21 @@
             if(!activeQuest) return;
             const q=activeQuest;
             const shown=Math.floor(q.progress);
-            const content=QUEST_LABELS[q.type]+' · '+shown+'/'+q.target+' · +'+q.rewardGold;
+            const progress=QUEST_LABELS[q.type]+' · '+shown+'/'+q.target;
+            const reward=' · +'+q.rewardGold;
+            const content=progress+reward;
             if(content===questHudPrevious) return;
             questHudPrevious=content;
             const el=document.getElementById('questHudText');
-            if(el){el.textContent=content;el.title=q.desc;
+            if(el){
+                // Odak 2.4 · the reward sits in its own span so phones can drop it.
+                if(typeof el.replaceChildren==='function'){
+                    const rewardEl=document.createElement('span');
+                    rewardEl.className='hud-quest-reward';
+                    rewardEl.textContent=reward;
+                    el.replaceChildren(progress,rewardEl);
+                } else el.textContent=content;
+                el.title=q.desc;
                 el.style.color=QUEST_COLORS[q.type];}
             showContextual(document.getElementById('questHudBox'),HUD_CONTEXT_RULES.questMs);
         }
@@ -9501,7 +9511,7 @@
 
         // Odak 2.2 · HUD nodes are looked up once; updateHUD runs 10 times a second.
         const hudEls = Object.freeze(Object.fromEntries([
-            'hud', 'xpBar', 'levelText', 'xpText', 'momentumMeter', 'momentumBar', 'momentumText',
+            'hud', 'xpMeter', 'xpBar', 'levelText', 'xpText', 'momentumMeter', 'momentumBar', 'momentumText',
             'overdriveMeter', 'overdriveBar', 'overdriveText', 'hpBar', 'hpText', 'lowHpOverlay',
             'reviveIndicator', 'reviveCountText', 'goldHudChip', 'goldHudText',
             'bastionBtn', 'novaBtn', 'prismBtn', 'dashBtn', 'shieldIndicator', 'shieldText',
@@ -9540,6 +9550,8 @@
 
             const xpPct = Math.min(100, (player.xp / player.xpToNext) * 100);
             h.xpBar.style.width = `${xpPct}%`;
+            // Odak 2.4 · the phone portrait HUD draws XP as a ring around the level.
+            h.xpMeter?.style.setProperty?.('--xp', xpPct.toFixed(1));
             h.levelText.textContent = player.level;
             h.xpText.textContent = `${Math.floor(player.xp)} / ${player.xpToNext}`;
 
