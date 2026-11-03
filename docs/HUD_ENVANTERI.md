@@ -1,11 +1,11 @@
 # HUD envanteri ve karar tablosu (Odak 2.1)
 
 `#hud` içindeki her öğe, ne gösterdiği, ne sıklıkla değiştiği ve Faz 2'de ne olacağı.
-Kod bu adımda değişmedi. Kararlar onaylanınca 2.2–2.5 bu tabloya göre uygulanır.
+Kod bu adımda değişmedi. Kararlar onaylandı; 2.2–2.5 bu tabloya göre uygulanır.
 
 - **Kaynak:** `index.html` (satır 30–244) ve `src/game.js` (`updateHUD` saniyede 10 kez çalışır, `HUD_REFRESH_INTERVAL = 0.10`).
 - **Karar türleri:** HER ZAMAN · BAĞLAMSAL (yalnızca ilgiliyken görünür, sonra solar) · DURAKLATMA MENÜSÜ · KALDIR.
-- **★** işaretli satırlar: plandaki kural bu öğeden söz etmiyor, kararı ben önerdim. Onayını bekleyen asıl kısım bunlar.
+- **★** işaretli satırlar: plandaki kural bu öğeden söz etmiyor; karar önerildi ve onaylandı.
 
 ## Karar tablosu
 
@@ -131,9 +131,11 @@ Hepsi bugün de yalnızca olay sırasında görünüyor.
 - **1.4 vurgusuyla çakışma:** 1.4'ün 20 sn'lik vurgusu Cinnet, Momentum, görev ve bölüm öğelerinin üzerinde yanıyor. Bu öğeler BAĞLAMSAL olunca vurgu süresince görünür tutulmaları gerekiyor; yoksa vurgu gizli bir öğeye düşer. 2.2'de `showContextual` bu durumu da kapsamalı.
 - **Kaldırılan ya da taşınan öğeleri okuyan testler:** Smoke ve tarayıcı testleri `#arenaChapterBadge`, `#arenaChapterStatus`, `#arenaChapterMobile`, `#scoreText` ve `#momentumText` öğelerine bakıyor; tarayıcı testleri ayrıca `#activeContractBadge` öğesine. 2.2'de bunlar kural 5'e göre davranış testine çevrilecek.
 
-## Onayını beklediğim sorular
+## Onaylanan kararlar (3 Kasım 2026)
 
-1. **Momentum:** Masaüstünde ≥ %80 iken bağlamsal mı görünsün, yoksa HUD'dan tamamen mi kalksın?
-2. **Skor:** Savaş sırasında görünmesin, yalnızca duraklatma menüsünde ve raporda mı olsun?
-3. **Diriliş hakkı:** Can barının yanında metinsiz ikon olarak kalsın mı?
-4. **Bölüm durum metni:** "ISI YÜKLENİYOR · 2.1 sn" gibi yazılar yalnızca tehlike anında mı görünsün, yoksa bölüm ikonuyla hep yan yana mı dursun?
+Tablo, ★ işaretli öneriler dahil olduğu gibi onaylandı. Açık kalan dört soru şöyle karara bağlandı:
+
+1. **Momentum:** Masaüstünde yalnızca ≥ %80 iken bağlamsal görünür. Mobilde kalkar.
+2. **Skor:** Savaş sırasında gizlenir. Yalnızca duraklatma menüsünde ve oyun sonu raporunda görünür.
+3. **Diriliş hakkı:** Can barının yanında metinsiz ikon olarak kalır.
+4. **Bölüm durum metni:** Yalnızca tehlike anında görünür; geri kalan zamanda yalnızca bölüm ikonu kalır.
