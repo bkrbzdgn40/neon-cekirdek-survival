@@ -930,3 +930,16 @@ test('M5.26 engineering warnings fit small mobile HUD without blocking touch abi
  }
  expect(errors).toEqual([]);
 });
+
+test('Odak 0.2 ?wave=10 starts the real game directly at wave 10',async({page})=>{
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.goto('/index.html?wave=10',{waitUntil:'domcontentloaded'});
+ await page.locator('#startBtn').click();
+ await expect(page.locator('#waveText')).toHaveText('10');
+ const state=await page.evaluate(()=>({wave,totalTime,nextBossTime,unlockAll:window.NEON_UNLOCK_ALL===true}));
+ expect(state.wave).toBe(10);
+ expect(state.totalTime).toBeGreaterThanOrEqual(144);
+ expect(state.nextBossTime).toBe(199);
+ expect(state.unlockAll).toBe(false);
+ expect(errors).toEqual([]);
+});

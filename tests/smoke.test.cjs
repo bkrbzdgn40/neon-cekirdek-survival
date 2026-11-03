@@ -6426,3 +6426,31 @@ test('M5.28 generated screenshots are ignored in git, not falsely advertised as 
   assert.doesNotMatch(showcase,/src="\.\/press-capture\//);
   assert.match(showcase,/M5\.28-gameplay-evidence\.md/);
 });
+
+test('Odak 0.2 ?wave=N starts the run at wave N with shifted clock and boss timer', () => {
+  const plain = setup();
+  assert.deepEqual(JSON.parse(plain.run('startNewGame(); JSON.stringify([wave,totalTime,nextBossTime])')), [1, 0, 55]);
+  const { run } = setup({}, { locationSearch: '?wave=10' });
+  assert.deepEqual(JSON.parse(run('startNewGame(); JSON.stringify([wave,totalTime,nextBossTime])')), [10, 144, 199]);
+  // A restart keeps the requested start wave instead of drifting.
+  assert.deepEqual(JSON.parse(run('startNewGame(); JSON.stringify([wave,totalTime,nextBossTime])')), [10, 144, 199]);
+});
+
+test('Odak 0.2 ?wave and ?unlock parsing rejects malformed values', () => {
+  const { run } = setup();
+  const read = search => JSON.parse(run(`JSON.stringify(readPlaytestParams(${JSON.stringify(search)}))`));
+  assert.deepEqual(read(''), { wave: 1, unlockAll: false });
+  assert.deepEqual(read('?x=1&wave=7&unlock=all'), { wave: 7, unlockAll: true });
+  assert.equal(read('?wave=0').wave, 1);
+  assert.equal(read('?wave=abc').wave, 1);
+  assert.equal(read('?wave=-4').wave, 1);
+  assert.equal(read('?wave=500').wave, 99);
+  assert.equal(read('?wave=1234').wave, 1);
+  assert.equal(read('?unlock=allx').unlockAll, false);
+  assert.equal(read('?unlock=ALL').unlockAll, false);
+});
+
+test('Odak 0.2 ?unlock=all raises NEON_UNLOCK_ALL only when requested', () => {
+  assert.equal(setup().run('window.NEON_UNLOCK_ALL === true'), false);
+  assert.equal(setup({}, { locationSearch: '?unlock=all' }).run('window.NEON_UNLOCK_ALL'), true);
+});

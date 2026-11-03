@@ -90,7 +90,7 @@ playwright.config.cjs içindeki mevcut projeleri bozma.
 
 **Kabul:** `hud-metrics.json` üretiliyor ve değerler bu dosyadaki tabloya yakın çıkıyor (%47 / %39 / %5).
 
-### - [ ] 0.2 Test kısayolu: dalga ve kilit parametreleri
+### - [x] 0.2 Test kısayolu: dalga ve kilit parametreleri
 
 ```
 src/game.js içine yalnızca test ve playtest amaçlı iki URL parametresi ekle:
