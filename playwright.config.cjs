@@ -17,7 +17,7 @@ module.exports = defineConfig({
     { name: 'mobile-chromium', use: { ...devices['Pixel 7'], browserName: 'chromium' } }
   ],
   webServer: {
-    command: 'python3 -m http.server 8765 --bind 127.0.0.1',
+    command: 'node scripts/serve.cjs',
     url: 'http://127.0.0.1:8765/index.html',
     reuseExistingServer: !process.env.CI,
     timeout: 30_000
