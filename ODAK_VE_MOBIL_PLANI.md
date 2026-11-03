@@ -278,7 +278,7 @@ Playwright mobil testi: joystick ile 1 sn sağa sürükleyince player.x artmalı
 sürükleme sırasında bir yetenek butonuna dokununca hareket durmamalı.
 ```
 
-### - [ ] 2.4 Mobil dikey HUD
+### - [x] 2.4 Mobil dikey HUD
 
 ```
 max-width:639px ve (hover:none) için:
