@@ -3929,13 +3929,43 @@
         const MAX_PLAYER_PROJECTILES = 260;
         let pendingMetaSave = false;
         let spawnTimer = 0;
-        let conduitSpawnTimer = 4.0;
+        // Odak 1.5 · in-run first appearances are spaced out.
+        const CONDUIT_RULES = Object.freeze({ firstSpawn: 40, interval: 15, maxZones: 2 });
+        let conduitSpawnTimer = CONDUIT_RULES.firstSpawn;
+        // At most one system makes its first appearance per 60 s; a later
+        // one retries after 20 s until the window is clear.
+        const SYSTEM_INTRO_RULES = Object.freeze({ spacing: 60, retryDelay: 20 });
+        let systemIntroSeen = new Set();
+        let systemIntroRetryAt = {};
+        let lastSystemIntroAt = -Infinity;
+        function resetSystemIntros() {
+            systemIntroSeen = new Set();
+            systemIntroRetryAt = {};
+            lastSystemIntroAt = -Infinity;
+        }
+        // Call only when the system is about to appear. False means "not yet".
+        function claimSystemIntro(id) {
+            if (systemIntroSeen.has(id)) return true;
+            if (totalTime < (systemIntroRetryAt[id] ?? -Infinity)) return false;
+            if (totalTime - lastSystemIntroAt < SYSTEM_INTRO_RULES.spacing) {
+                systemIntroRetryAt[id] = totalTime + SYSTEM_INTRO_RULES.retryDelay;
+                return false;
+            }
+            systemIntroSeen.add(id);
+            lastSystemIntroAt = totalTime;
+            return true;
+        }
+        // A deferred first appearance may land on a wave its own cadence skips.
+        function systemIntroRetryDue(id) {
+            return !systemIntroSeen.has(id) && Object.hasOwn(systemIntroRetryAt, id) &&
+                totalTime >= systemIntroRetryAt[id];
+        }
 
         // M5.26: Tactical field engineering. Devices are physical, temporary
         // targets, completely separate from the gold, XP and upgrade economy.
         // A capacitor is an optional risky blast; a graviton pylon is control.
         const FIELD_RULES=Object.freeze({
-            maxDevices:2,firstWave:2,waveInterval:3,
+            maxDevices:2,firstWave:5,waveInterval:3,
             life:13.5,triggerRadius:24,blastRadius:166,
             blastDamage:54,blastTargets:12,blastFuse:.52,
             friendlyBlastDamage:13,chainRadius:190,chainFuse:.22,
@@ -3981,11 +4011,13 @@
         }
         function maybeSpawnFieldDevice(){
             if(!isSystemUnlocked('fieldDevices'))return false;
-            if(wave<FIELD_RULES.firstWave ||
+            const introRetry=systemIntroRetryDue('fieldDevices');
+            if((!introRetry&&(wave<FIELD_RULES.firstWave ||
                 (wave-FIELD_RULES.firstWave)%FIELD_RULES.waveInterval!==0||
-                fieldDeviceLastWave===wave||fieldDevices.length>=FIELD_RULES.maxDevices||
+                fieldDeviceLastWave===wave))||fieldDevices.length>=FIELD_RULES.maxDevices||
                 activeBosses.some(b=>!b.dead)||nextBossTime-totalTime<7||
                 combatDirector?.activeArenaEvent||!player)return false;
+            if(!claimSystemIntro('fieldDevices'))return false;
             // One attempt per eligible wave. No catch-up spawning on subsequent frames.
             fieldDeviceLastWave=wave;
             const kind=(Math.floor((wave-FIELD_RULES.firstWave)/
@@ -5925,7 +5957,8 @@
             gardenCharge:1.6, gardenCooldown:10, gardenRadius:58,
             gardenStunRadius:175, gardenHitCap:8,
             riftRadius:49, riftCooldown:11, riftInvuln:.55,
-            riftPursuitTell:1.05, riftPursuitCooldown:16
+            riftPursuitTell:1.05, riftPursuitCooldown:16,
+            firstWave:6, chapterWaves:3
         });
         let arenaChapter = null;
         let chapterAnnounceUntil = 0;
@@ -5962,8 +5995,9 @@
 
         function chapterIdForWave(currentWave) {
             if (!isSystemUnlocked('chapters')) return null;
-            if (!Number.isFinite(currentWave) || currentWave < 4) return null;
-            return ARENA_CHAPTER_ORDER[Math.floor((currentWave-4)/3)%3];
+            if (!Number.isFinite(currentWave) || currentWave < CHAPTER_RULES.firstWave) return null;
+            return ARENA_CHAPTER_ORDER[Math.floor((currentWave-CHAPTER_RULES.firstWave)/
+                CHAPTER_RULES.chapterWaves)%ARENA_CHAPTER_ORDER.length];
         }
         function getGardenCenters() {
             return [
@@ -6011,6 +6045,7 @@
         function startChapterIfChanged() {
             const next = chapterIdForWave(wave);
             if (arenaChapter===next) return false;
+            if (!arenaChapter && next && !claimSystemIntro('chapters')) return false;
             arenaChapter=next;
             chapterShowcase=null;
             chapterGardenCharge.fill(0);
@@ -6265,7 +6300,9 @@
                 targets:op.targets?.map(t=>({enemyId:t.enemyId,x:t.x,y:t.y}))||[]};
         }
         function beginChapterShowcase() {
-            if(!arenaChapter||wave<5||(wave-5)%3!==0||
+            const showcaseWave=CHAPTER_RULES.firstWave+1;
+            if(!arenaChapter||wave<showcaseWave||
+                (wave-showcaseWave)%CHAPTER_RULES.chapterWaves!==0||
                 chapterShowcaseAttemptedWave===wave||waveTimer<1.2||
                 !chapterEffectsAllowed())return false;
             let targets=[];
@@ -6723,7 +6760,7 @@
         // M5.21 Echo Hunter: a short, readable adaptation of ONE existing foe.
         // No enemy spawning, stat inflation, bonus reward or persistent learning.
         const NEMESIS_RULES=Object.freeze({
-            firstWave:7,step:6,minAge:2,life:13,
+            firstWave:10,step:6,minAge:2,life:13,
             warning:1.45,interval:3.55,maxAttacks:3,
             lockRadius:72,trailRadius:55,crossHalfWidth:24,
             hit:8,historySeconds:2.6,historyCap:18
@@ -6788,14 +6825,16 @@
                 fireAt:totalTime+NEMESIS_RULES.warning};
         }
         function startNemesis(){
-            if(nemesis||!nemesisAllowed()||wave<NEMESIS_RULES.firstWave||
+            const introRetry=systemIntroRetryDue('nemesis');
+            if(nemesis||!nemesisAllowed()||(!introRetry&&(wave<NEMESIS_RULES.firstWave||
                 (wave-NEMESIS_RULES.firstWave)%NEMESIS_RULES.step!==0||
-                nemesisAttemptWave===wave||waveTimer<NEMESIS_RULES.minAge)
+                nemesisAttemptWave===wave||waveTimer<NEMESIS_RULES.minAge)))
                 return false;
             const candidates=enemies.filter(e=>!e.dead&&!e.isBoss&&e.stunTimer<=0&&
                 ['SHOOTER','SNIPER','DASHER','ASSASSIN','SHIELD_BEARER','TANK']
                     .includes(e.type)&&Math.hypot(e.x-player.x,e.y-player.y)>115);
             if(!candidates.length)return false;
+            if(!claimSystemIntro('nemesis'))return false;
             candidates.sort((a,b)=>
                 Math.hypot(a.x-player.x,a.y-player.y)-
                 Math.hypot(b.x-player.x,b.y-player.y)||a.id-b.id);
@@ -7148,6 +7187,7 @@
             CORRIDOR:Object.freeze({minWave:9,label:'GÜVENLİ KORİDOR · SIĞIN / CİNNET',color:'#6ee7b7',duration:4.0,cost:0}),
             ANOMALY:Object.freeze({minWave:11,label:'AKI ANOMALİSİ · HALKADA KAL',color:'#e879f9',duration:4.0,cost:0})
         });
+        const ARENA_EVENT_RULES=Object.freeze({firstWave:7});
         const ARENA_EVENT_SEQUENCE=Object.freeze([
             'RELAY','VAULT','STORM','REACTOR','CORRIDOR','ANOMALY'
         ]);
@@ -7976,8 +8016,9 @@
                 if (totalTime < this.nextArenaAt || bossApproaching ||
                     this.pendingEncounter || !['BUILDUP', 'PRESSURE'].includes(
                         (this.baseProfile || this.profile).phase) ||
-                    wave < 4) return;
+                    wave < ARENA_EVENT_RULES.firstWave) return;
                 if (!isSystemUnlocked('arenaEvents')) return;
+                if (!claimSystemIntro('arenaEvents')) return;
                 const kind=chooseArenaEventKind(this.arenaEventIndex,wave);
                 const safeMargin = 115;
                 const minX = Math.min(safeMargin, worldWidth / 3);
@@ -8458,9 +8499,11 @@
             }
 
             if (isSystemUnlocked('conduits')) conduitSpawnTimer -= dt;
-            if (conduitSpawnTimer <= 0) {
-                conduitSpawnTimer = 15.0;
-                if (conduitZones.length < 2) {
+            if (conduitSpawnTimer <= 0 && !claimSystemIntro('conduits')) {
+                conduitSpawnTimer = SYSTEM_INTRO_RULES.retryDelay;
+            } else if (conduitSpawnTimer <= 0) {
+                conduitSpawnTimer = CONDUIT_RULES.interval;
+                if (conduitZones.length < CONDUIT_RULES.maxZones) {
                     const cx = 110 + Math.random() * Math.max(100, worldWidth - 220);
                     const cy = 110 + Math.random() * Math.max(100, worldHeight - 220);
                     conduitZones.push(new ConduitZone(cx, cy));
@@ -9642,7 +9685,8 @@
             bossWarningTimer = 0;
             kills = 0;
             spawnTimer = 0.5;
-            conduitSpawnTimer = 3.0;
+            conduitSpawnTimer = CONDUIT_RULES.firstSpawn;
+            resetSystemIntros();
             hudRefreshAccumulator = 0;
             bulletCollisionGrid.clear();
             hitStopTimer = 0;

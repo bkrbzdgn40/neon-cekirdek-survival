@@ -205,7 +205,7 @@ yanıp sönsün (prefers-reduced-motion'da yalnızca kenarlık).
 
 **Kabul:** Temiz bir kayıtla dalga 3'e ulaşınca EMP ve Görevler açılıyor, rapor bunu gösteriyor ve sonraki koşuda EMP butonu vurgulanıyor.
 
-### - [ ] 1.5 Koşu içi aralık kuralı
+### - [x] 1.5 Koşu içi aralık kuralı
 
 ```
 Tüm kilitler açıkken bile ilk 2 dakikada çok fazla şey oluyor. Koşu içi ilk görünme
