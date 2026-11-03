@@ -362,13 +362,13 @@ test('arena chapters change visual HUD identity and rift teleports without spend
  const steps=await page.evaluate(()=>{
    player.takeDamage=()=>{};
    nextBossTime=500;
-   wave=4;updateArenaChapter(.02);updateArenaChapterHud();
+   wave=6;updateArenaChapter(.02);updateArenaChapterHud();
    const first={badge:document.getElementById('arenaChapterBadge').textContent,
      mode:document.getElementById('hud').getAttribute('data-arena-chapter')};
-   wave=7;updateArenaChapter(.02);updateArenaChapterHud();
+   wave=9;updateArenaChapter(.02);updateArenaChapterHud();
    const second={badge:document.getElementById('arenaChapterBadge').textContent,
      mode:document.getElementById('hud').getAttribute('data-arena-chapter')};
-   wave=10;updateArenaChapter(.02);updateArenaChapterHud();
+   wave=12;updateArenaChapter(.02);updateArenaChapterHud();
    const third={badge:document.getElementById('arenaChapterBadge').textContent,
      mode:document.getElementById('hud').getAttribute('data-arena-chapter')};
    const nodes=getRiftCenters();
@@ -395,16 +395,16 @@ test('M5.18 mobile displays chapter status through warning, garden and rift',asy
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
- await page.evaluate(()=>{nextBossTime=500;wave=4;totalTime=23.7;updateArenaChapter(.02);updateArenaChapterHud();});
+ await page.evaluate(()=>{nextBossTime=500;wave=6;totalTime=23.7;updateArenaChapter(.02);updateArenaChapterHud();});
  const mobile=page.locator('#arenaChapterMobile');
  await expect(mobile).toBeVisible();
  await expect(mobile).toContainText('DÖKÜMHANE');
  await expect(mobile).toContainText('ISI YÜKLENİYOR');
  await page.evaluate(()=>{totalTime+=1.55;updateArenaChapter(.02);updateArenaChapterHud();});
  await expect(mobile).toContainText('RAYLARDAN KAÇ');
- await page.evaluate(()=>{wave=7;updateArenaChapter(.02);updateArenaChapterHud();});
+ await page.evaluate(()=>{wave=9;updateArenaChapter(.02);updateArenaChapterHud();});
  await expect(mobile).toContainText('İYON DOLDUR');
- await page.evaluate(()=>{wave=10;updateArenaChapter(.02);updateArenaChapterHud();});
+ await page.evaluate(()=>{wave=12;updateArenaChapter(.02);updateArenaChapterHud();});
  await expect(mobile).toContainText('İKİ GEÇİT AKTİF');
  expect(errors).toEqual([]);
 });
@@ -415,13 +415,13 @@ test('M5.19 contested garden and warned rift pursuit have readable HUD in Chromi
  await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const result=await page.evaluate(()=>{
-   wave=7;nextBossTime=500;updateArenaChapter(.02);
+   wave=9;nextBossTime=500;updateArenaChapter(.02);
    const n=getGardenCenters()[0];
    player.x=n.x;player.y=n.y;
    enemies=[new Enemy(n.x+12,n.y+12,'SHOOTER')];
    updateArenaChapter(.2);updateArenaChapterHud();
    const garden=document.getElementById('arenaChapterStatus').textContent;
-   wave=10;updateArenaChapter(.02);
+   wave=12;updateArenaChapter(.02);
    const nodes=getRiftCenters();
    player.x=nodes[0].x;player.y=nodes[0].y;
    enemies=[new Enemy(nodes[0].x+10,nodes[0].y+8,'ASSASSIN')];
@@ -445,7 +445,7 @@ test('M5.20 three signature operations display unique stage callouts in Chromium
  const stages=await page.evaluate(()=>{
    nextBossTime=1000;
    const result={};
-   for(const [w,id] of [[5,'FOUNDRY'],[8,'GARDEN'],[11,'RIFT']]){
+   for(const [w,id] of [[7,'FOUNDRY'],[10,'GARDEN'],[13,'RIFT']]){
      wave=w;waveTimer=2;enemies=[new Enemy(360,300,'SHOOTER')];
      updateArenaChapter(.02);updateArenaChapterHud();
      const banner=document.getElementById('arenaShowcaseBanner');
@@ -471,7 +471,7 @@ test('M5.21 Echo Hunter visibly announces stationary, moving and dashing player 
  const result=await page.evaluate(()=>{
    const setupHunter=()=>{
      startNewGame();
-     wave=7;waveTimer=2;nextBossTime=5000;totalTime=100;
+     wave=10;waveTimer=2;nextBossTime=5000;totalTime=100;
      enemies=[new Enemy(70,70,'SHOOTER')];
      updateNemesis(.02);
    };
@@ -1019,5 +1019,36 @@ test('Odak 1.4 reaching wave 3 on a clean save opens EMP and Quests and spotligh
  await page.reload({waitUntil:'domcontentloaded'});
  await expect(page.locator('[data-system="emp"]')).toBeVisible();
  await expect(page.locator('#menuUnlockHint')).toHaveText("Yeni protokol: Dalga 5'e ulaşınca açılır.");
+ expect(errors).toEqual([]);
+});
+
+test('Odak 1.5 with ?unlock=all the first 60 s add at most two systems besides dash and fire',async({page,isMobile})=>{
+ test.skip(!!isMobile,'one simulated run is enough');
+ test.setTimeout(120_000);
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await gotoGame(page,'/index.html');
+ await page.locator('#startBtn').click();
+ const seen=await page.evaluate(()=>{
+   // Fixture: invulnerable pilot, auto-picks the first card. Rules stay real.
+   player.takeDamage=()=>{};
+   const firstAt={};
+   const mark=(id,on)=>{if(on&&!(id in firstAt))firstAt[id]=Math.round(totalTime*10)/10;};
+   for(let step=0;step<240*60;step++){
+     if(gameState==='LEVEL_UP')selectUpgradeOption(0);
+     updateGame(1/60);
+     if(step%20===0)renderGame();
+     mark('conduits',conduitZones.length>0);
+     mark('fieldDevices',fieldDevices.length>0);
+     mark('chapters',!!arenaChapter);
+     mark('arenaEvents',!!combatDirector.activeArenaEvent);
+     mark('nemesis',!!nemesis);
+   }
+   return firstAt;
+ });
+ const early=Object.entries(seen).filter(([,t])=>t<=60);
+ expect(early.length,JSON.stringify(seen)).toBeLessThanOrEqual(2);
+ const times=Object.values(seen).sort((a,b)=>a-b);
+ for(let i=1;i<times.length;i++)
+   expect(times[i]-times[i-1],JSON.stringify(seen)).toBeGreaterThanOrEqual(59.9);
  expect(errors).toEqual([]);
 });

@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 1.5 · Koşu içi aralık kuralı
+- İlk görünmeler ertelendi: ikmal 3→40 sn (`CONDUIT_RULES`), saha cihazları dalga 2→5, arena bölümleri 4→6 (gösteri dalgası 5→7), arena olayları 4→7 (`ARENA_EVENT_RULES`), Nemesis 7→10.
+- 60 sn'de en fazla bir sistem ilk kez görünür; sırası gelmeyen 20 sn sonra yeniden dener ve kendi dalga takviminin dışına da düşebilir (`SYSTEM_INTRO_RULES`).
+- Eski bölüm, Nemesis, saha cihazı ve arena testlerindeki dalgalar kaydırıldı; `?unlock=all` ile ilk 60 sn tarayıcı testi eklendi.
+
 ## Odak 1.4 · Kilit açma kuralı ve açılış anı
 - Koşu sonunda ulaşılan dalga `UNLOCK_WAVE_GATES = [3, 5, 6, 8, 9, 11]` kapısını geçerse bir seviye açılır; 3 koşu üst üste geçilemezse yine açılır (sayaç meta kayıtta ve yedekte).
 - Oyun sonu raporunun en üstünde "YENİ PROTOKOL AÇILDI" bloğu: her yeni sistem için bir cümle ve tuşu (dokunmatikte buton).
