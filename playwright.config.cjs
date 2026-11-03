@@ -14,7 +14,9 @@ module.exports = defineConfig({
   },
   projects: [
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } } },
-    { name: 'mobile-chromium', use: { ...devices['Pixel 7'], browserName: 'chromium' } }
+    { name: 'mobile-chromium', use: { ...devices['Pixel 7'], browserName: 'chromium' } },
+    // Odak 0.1: HUD geometry runs once; the spec opens its own viewports.
+    { name: 'hud-geometry', testMatch: '**/hud.geometry.spec.cjs', use: { ...devices['Desktop Chrome'] } }
   ],
   webServer: {
     command: 'node scripts/serve.cjs',

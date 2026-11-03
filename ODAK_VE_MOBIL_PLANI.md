@@ -65,7 +65,7 @@ Bitince test komutlarını çalıştır, sonuçları ve değiştirdiğin dosyala
 
 Önce mevcut durumu otomatik ölçen testler kurulur. Böylece Faz 1 ve 2'nin işe yarayıp yaramadığı sayılarla görülür.
 
-### - [ ] 0.1 HUD geometri testi
+### - [x] 0.1 HUD geometri testi
 
 ```
 tests/hud.geometry.spec.cjs adında yeni bir Playwright testi yaz.
