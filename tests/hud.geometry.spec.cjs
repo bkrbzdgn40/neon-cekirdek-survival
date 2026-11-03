@@ -62,7 +62,18 @@ function collectHudGeometry(minTarget) {
   // Vertical band between the top block and the bottom block. The deck
   // wrappers are flex boxes stretched by #hud, so only their content counts.
   const topItems = visible.filter(el => el !== topDeck && topDeck.contains(el));
-  const bottomItems = visible.filter(el => el !== commandDeck && commandDeck.contains(el));
+  let bottomItems = visible.filter(el => el !== commandDeck && commandDeck.contains(el));
+  // Odak 2.5 · a command deck laid out as a tall, narrow column (phone
+  // landscape) is a side column, not a bottom block: it narrows the band
+  // below instead of capping its height.
+  let deckIsColumn = false;
+  if (bottomItems.length) {
+    const rects = bottomItems.map(el => el.getBoundingClientRect());
+    const w = Math.max(...rects.map(r => r.right)) - Math.min(...rects.map(r => r.left));
+    const h = Math.max(...rects.map(r => r.bottom)) - Math.min(...rects.map(r => r.top));
+    deckIsColumn = h > w && w < vw / 2;
+    if (deckIsColumn) bottomItems = [];
+  }
   const topEdge = topItems.length ? Math.max(...topItems.map(el => el.getBoundingClientRect().bottom)) : 0;
   const bottomEdge = bottomItems.length ? Math.min(...bottomItems.map(el => el.getBoundingClientRect().top)) : vh;
   const bandHeight = Math.max(0, bottomEdge - topEdge);
@@ -115,6 +126,7 @@ function collectHudGeometry(minTarget) {
     bottomEdge: round(bottomEdge),
     leftEdge: round(leftEdge),
     rightEdge: round(rightEdge),
+    deckIsColumn,
     verticalGapPct: round((bandHeight / vh) * 100),
     freePlayPct: round(((bandWidth * bandHeight) / (vw * vh)) * 100),
     sideItems,

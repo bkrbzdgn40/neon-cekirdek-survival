@@ -6944,3 +6944,18 @@ test('Odak 2.2 updateHUD reuses cached HUD nodes instead of looking them up', ()
   // Only the per-system helpers still look up their own nodes.
   assert.equal(lookups, before);
 });
+
+test('Odak 2.5 the turn-sideways tip shows once, only on a touch phone held upright', () => {
+  const a = setup();
+  a.run('startNewGame()');
+  assert.equal(a.stored['neonCekirdek.rotateHint.v1'], undefined, 'no matchMedia: desktop sandbox');
+  a.run('window.matchMedia = q => ({ matches: q.includes("coarse") })');
+  assert.equal(a.run('maybeShowRotateHint()'), false, 'landscape touch phone');
+  a.run('window.matchMedia = () => ({ matches: true })');
+  a.run('startNewGame()');
+  assert.equal(a.stored['neonCekirdek.rotateHint.v1'], '1');
+  assert.equal(a.run('maybeShowRotateHint()'), false, 'only once');
+  const b = setup(a.stored);
+  b.run('window.matchMedia = () => ({ matches: true })');
+  assert.equal(b.run('maybeShowRotateHint()'), false, 'once per device, across reloads');
+});
