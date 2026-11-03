@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 2.1 · HUD envanteri ve karar tablosu
+- `docs/HUD_ENVANTERI.md`: `#hud` içindeki her öğe için (42 satır) ne gösterdiği, ne sıklıkla değiştiği ve kararı (HER ZAMAN / BAĞLAMSAL / DURAKLATMA MENÜSÜ / KALDIR).
+- 5 görünümde sakin ve yoğun durum ölçümü; plan kuralının söz etmediği öğeler ★ ile işaretli, 4 açık soru onaya sunuldu.
+- Kod değişmedi.
+
 ## Odak 1.5 · Koşu içi aralık kuralı
 - İlk görünmeler ertelendi: ikmal 3→40 sn (`CONDUIT_RULES`), saha cihazları dalga 2→5, arena bölümleri 4→6 (gösteri dalgası 5→7), arena olayları 4→7 (`ARENA_EVENT_RULES`), Nemesis 7→10.
 - 60 sn'de en fazla bir sistem ilk kez görünür; sırası gelmeyen 20 sn sonra yeniden dener ve kendi dalga takviminin dışına da düşebilir (`SYSTEM_INTRO_RULES`).
