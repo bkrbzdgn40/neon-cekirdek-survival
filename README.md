@@ -26,10 +26,10 @@
 From a clone/download of this repository:
 
 ```sh
-python -m http.server 8000
+node scripts/serve.cjs
 ```
 
-Open **http://localhost:8000/showcase.html** for the presentation or **http://localhost:8000/index.html** to play directly. The game can also open via `index.html` as a static file; a local HTTP server is generally more reliable.
+Open **http://127.0.0.1:8765/showcase.html** for the presentation or **http://127.0.0.1:8765/index.html** to play directly. `scripts/serve.cjs` is a dependency-free Node static server (the same one the Playwright tests use). If you prefer Python, `python -m http.server 8000` also works (then use `http://localhost:8000`). The game can also open via `index.html` as a static file; a local HTTP server is generally more reliable.
 
 **Controls:** Mouse/touch movement, **Space** for dash, **E** for EMP Nova, **C** for Prism Riposte, **Q** for Bastion (when available), **P/Escape** to pause. Exact bindings and on-screen cues are visible in-game.
 
@@ -84,7 +84,7 @@ For technical discussion or editorial enquiries, use the repository's [GitHub Is
 
 **Öne çıkanlar:** Üç şasi; nadirlik/kademe, evrim ve sinerji sistemleri; Combat Director karşılaşmaları; Dökümhane, Bahçe ve Yarık; Prizma Karşılığı, EMP Nova, Atılım ve Bastion; zincir patlayan reaktörler ile düşman yavaşlatan Graviton direkleri.
 
-**Oyunu çalıştırma:** Depoyu indir, kök dizinde `python -m http.server 8000` komutunu çalıştır ve `http://localhost:8000/index.html` adresine git. Yeni tanıtım sayfası `http://localhost:8000/showcase.html` adresindedir. Kurulum, API, veritabanı veya hesap gerekmez. Şimdilik doğrulanmış açık bir canlı demo adresi yoktur; yayın adımları [burada](docs/PUBLISHING.md).
+**Oyunu çalıştırma:** Depoyu indir, kök dizinde `node scripts/serve.cjs` komutunu çalıştır ve `http://127.0.0.1:8765/index.html` adresine git. Yeni tanıtım sayfası `http://127.0.0.1:8765/showcase.html` adresindedir. Python tercih edersen `python -m http.server 8000` da çalışır (`http://localhost:8000`). Kurulum, API, veritabanı veya hesap gerekmez. Şimdilik doğrulanmış açık bir canlı demo adresi yoktur; yayın adımları [burada](docs/PUBLISHING.md).
 
 **Geliştirici/incelemeci için:** [Oyun testleri](tests/) · [CI](.github/workflows/neon-smoke.yml) · [Gerçek cihaz QA sınırları](docs/DEVICE_QA.md) · [Basın kiti](docs/PRESSKIT.md) · [Geliştirme belgeleri](docs/).
 
