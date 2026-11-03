@@ -9852,6 +9852,24 @@
             resetContextualHud();
             updateModulesDock();
             updateHUD();
+            maybeShowRotateHint();
+        }
+
+        // Odak 2.5 · a phone held upright gets one tip to turn sideways, once
+        // per device. Nothing is forced; the tip fades by itself.
+        const ROTATE_HINT_SAVE_KEY = 'neonCekirdek.rotateHint.v1';
+        const ROTATE_HINT_MS = 4000;
+        function maybeShowRotateHint() {
+            const hint = document.getElementById('rotateHint');
+            if (!hint || !prefersTouchControls()) return false;
+            if (!window.matchMedia?.('(orientation: portrait)').matches) return false;
+            try {
+                if (localStorage.getItem(ROTATE_HINT_SAVE_KEY)) return false;
+                localStorage.setItem(ROTATE_HINT_SAVE_KEY, '1');
+            } catch (e) { return false; }
+            hint.classList.remove('hidden');
+            setTimeout(() => hint.classList.add('hidden'), ROTATE_HINT_MS);
+            return true;
         }
 
         function selectUpgradeOption(index) {

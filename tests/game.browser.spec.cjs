@@ -564,7 +564,8 @@ test('M5.22 keyboard C and touch Prism Riposte deflect a real projectile in Chro
  const errors=[];page.on('pageerror',err=>errors.push(err.message));
  await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
- // Freeze the live loop so the shot cannot land between evaluate steps.
+ // Freeze the live loop for the whole test: under parallel load real frames
+ // could otherwise land the shot or change state between evaluate steps.
  await page.evaluate(()=>{
    window.__m522Update=updateGame;updateGame=()=>{};
    totalTime=10;nextBossTime=500;
@@ -576,7 +577,6 @@ test('M5.22 keyboard C and touch Prism Riposte deflect a real projectile in Chro
    const wasActive=getNeonPrismGuard().active;
    const hp=player.hp;
    window.__m522Update(.016);
-   updateGame=window.__m522Update;
    updatePrismGuardHud();
    const state=getNeonPrismGuard();
    return {wasActive,hp,afterHp:player.hp,state,
@@ -595,6 +595,7 @@ test('M5.22 keyboard C and touch Prism Riposte deflect a real projectile in Chro
  if(isMobile) await page.locator('#prismBtn').tap();
  else await page.locator('#prismBtn').click();
  expect(await page.evaluate(()=>getNeonPrismGuard().stats.activations)).toBe(2);
+ await page.evaluate(()=>{updateGame=window.__m522Update;});
  expect(errors).toEqual([]);
 });
 
@@ -1024,8 +1025,9 @@ test('Odak 1.3 a locked first run plays 3 minutes without errors or locked syste
  const result=await page.evaluate(()=>{
    // Fixture: invulnerable pilot, auto-picks the first card. Rules stay real.
    player.takeDamage=()=>{};
+   // Steps spent in a modal add no game time, so run until 180 s of play.
    const dt=1/60;let levelUps=0;
-   for(let step=0;step<180*60;step++){
+   for(let step=0;totalTime<180&&step<200*60;step++){
      if(gameState==='LEVEL_UP'){selectUpgradeOption(0);levelUps++;}
      updateGame(dt);
      if(step%20===0)renderGame();
@@ -1262,3 +1264,87 @@ test('Odak 2.4 phone portrait HUD at '+width+'x'+height+' keeps one top row and 
  }finally{await context.close();}
 });
 }
+
+// Odak 2.5 · phone landscape HUD acceptance.
+for(const [width,height] of [[750,342],[568,320]]){
+test('Odak 2.5 phone landscape HUD at '+width+'x'+height+' keeps the bottom clear and abilities on the right edge',async({browser,isMobile},testInfo)=>{
+ test.skip(!isMobile,'runs once, in the mobile project');
+ const context=await browser.newContext({baseURL:testInfo.project.use.baseURL,
+   viewport:{width,height},deviceScaleFactor:2,isMobile:true,hasTouch:true});
+ const page=await context.newPage();
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ try{
+ await gotoGame(page,'/index.html');
+ await page.locator('#startBtn').click();
+ await expect(page.locator('#hud')).toBeVisible();
+ // Landscape never shows the turn-sideways tip.
+ await expect(page.locator('#rotateHint')).toBeHidden();
+ await page.evaluate(()=>{
+   updateGame=()=>{};combo=8;comboTimer=COMBO_MAX_TIME;player.overdrive=90;
+   activeBosses=[new Enemy(player.x+300,player.y,'BOSS_DESTROYER')];
+   document.getElementById('bossHudContainer').classList.remove('hidden');updateHUD();
+   showContextual(document.getElementById('questHudBox'),9000);
+ });
+ await page.waitForTimeout(350);
+ const r=await page.evaluate(()=>{
+   const box=el=>el.getBoundingClientRect();
+   const vis=el=>el.checkVisibility({opacityProperty:true,visibilityProperty:true})&&box(el).width>1;
+   const left=['.hud-vitals','#xpMeter'].map(s=>box(document.querySelector(s)));
+   const right=['.hud-clock','#pauseBtn'].map(s=>box(document.querySelector(s)));
+   const skills=['bastionBtn','novaBtn','prismBtn','dashBtn'].map(id=>box(document.getElementById(id)));
+   const wave=document.querySelector('.hud-clock-wave');
+   const all=[...document.querySelectorAll('#hud *')].filter(vis);
+   const low=all.filter(el=>box(el).bottom>innerHeight*.8&&!el.closest('.hud-command-deck'));
+   return {left,right,skills,lowItems:low.length,
+     wave:{box:box(wave),clock:box(document.querySelector('.hud-clock')),scroll:wave.scrollWidth,client:wave.clientWidth},
+     overflows:all.filter(el=>el.clientWidth>0&&el.scrollWidth>el.clientWidth+1).length,
+     pageOverflow:document.documentElement.scrollWidth-innerWidth};
+ });
+ // Top left: compact vitals and level ring on one line of at most 36 px.
+ const leftTop=Math.min(...r.left.map(b=>b.top)),leftBottom=Math.max(...r.left.map(b=>b.bottom));
+ expect(leftBottom-leftTop).toBeLessThanOrEqual(36);
+ expect(r.left[0].left).toBeLessThan(20);
+ expect(r.left[1].left).toBeGreaterThanOrEqual(r.left[0].right-1);
+ // Top right: clock and pause.
+ expect(r.right[1].right).toBeGreaterThan(width-20);
+ expect(r.right[0].right).toBeLessThanOrEqual(r.right[1].left+1);
+ expect(r.right[1].width).toBeGreaterThanOrEqual(44);
+ // DALGA is not clipped.
+ expect(r.wave.scroll).toBeLessThanOrEqual(r.wave.client);
+ expect(r.wave.box.left).toBeGreaterThanOrEqual(r.wave.clock.left);
+ expect(r.wave.box.right).toBeLessThanOrEqual(r.wave.clock.right);
+ expect(r.wave.box.top).toBeGreaterThanOrEqual(r.wave.clock.top);
+ // A 52 px column of round abilities on the right edge, below the clock.
+ for(const s of r.skills){
+   expect(Math.round(s.width)).toBe(52);
+   expect(s.right).toBeGreaterThan(width-20);
+   expect(s.top).toBeGreaterThan(r.right[1].bottom);
+ }
+ for(let i=1;i<r.skills.length;i++){
+   expect(Math.abs(r.skills[i].left-r.skills[0].left)).toBeLessThan(1);
+   expect(r.skills[i].top).toBeGreaterThanOrEqual(r.skills[i-1].bottom-1);
+ }
+ // Nothing else sits along the bottom; no text overflows, even with boss + chips.
+ expect([r.lowItems,r.overflows]).toEqual([0,0]);
+ expect(r.pageOverflow).toBeLessThanOrEqual(1);
+ expect(errors).toEqual([]);
+ }finally{await context.close();}
+});
+}
+
+test('Odak 2.5 a phone held upright gets the turn-sideways tip once',async({browser,isMobile},testInfo)=>{
+ test.skip(!isMobile,'touch phone only');
+ const context=await browser.newContext({baseURL:testInfo.project.use.baseURL,
+   viewport:{width:390,height:664},isMobile:true,hasTouch:true});
+ const page=await context.newPage();
+ try{
+ await gotoGame(page,'/index.html');
+ await page.locator('#startBtn').click();
+ await expect(page.locator('#rotateHint')).toBeVisible();
+ await expect(page.locator('#rotateHint')).toContainText('yatay çevir');
+ await expect(page.locator('#rotateHint')).toBeHidden({timeout:6000});
+ await page.evaluate(()=>startNewGame());
+ await page.waitForTimeout(200);
+ await expect(page.locator('#rotateHint')).toBeHidden();
+ }finally{await context.close();}
+});

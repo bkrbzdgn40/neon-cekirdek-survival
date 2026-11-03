@@ -6659,7 +6659,10 @@ test('Odak 1.3 arena chapters stay off until level 3', () => {
 
 test('Odak 1.3 conduit zones never spawn until level 3', () => {
   // Odak 1.5: the first spawn waits 40 s; skip ahead to just before it.
+  // This test is about the lock gate, so another system's intro must not
+  // defer the spawn through the one-intro-per-60-s rule (tested on its own).
   const zones = level => JSON.parse(gatedGame(level).run(`player.takeDamage = () => {};
+    systemIntroSeen.add('conduits');
     conduitSpawnTimer = 1;
     for (let i = 0; i < 12; i++) updateGame(0.5);
     JSON.stringify([conduitZones.length, conduitSpawnTimer])`));
@@ -6943,4 +6946,19 @@ test('Odak 2.2 updateHUD reuses cached HUD nodes instead of looking them up', ()
     updateTacticalHint();updateBastionHud();document.getElementById=original;return n;})()`);
   // Only the per-system helpers still look up their own nodes.
   assert.equal(lookups, before);
+});
+
+test('Odak 2.5 the turn-sideways tip shows once, only on a touch phone held upright', () => {
+  const a = setup();
+  a.run('startNewGame()');
+  assert.equal(a.stored['neonCekirdek.rotateHint.v1'], undefined, 'no matchMedia: desktop sandbox');
+  a.run('window.matchMedia = q => ({ matches: q.includes("coarse") })');
+  assert.equal(a.run('maybeShowRotateHint()'), false, 'landscape touch phone');
+  a.run('window.matchMedia = () => ({ matches: true })');
+  a.run('startNewGame()');
+  assert.equal(a.stored['neonCekirdek.rotateHint.v1'], '1');
+  assert.equal(a.run('maybeShowRotateHint()'), false, 'only once');
+  const b = setup(a.stored);
+  b.run('window.matchMedia = () => ({ matches: true })');
+  assert.equal(b.run('maybeShowRotateHint()'), false, 'once per device, across reloads');
 });

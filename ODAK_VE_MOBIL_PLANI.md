@@ -293,7 +293,7 @@ max-width:639px ve (hover:none) için:
 
 **Kabul:** 390×664'te `>= %70`, 320×568'de `>= %70`, çakışma 0, 44 px'ten küçük hedef 0.
 
-### - [ ] 2.5 Mobil yatay HUD
+### - [x] 2.5 Mobil yatay HUD
 
 ```
 (orientation:landscape) and (max-height:500px) için ayrı yerleşim:
