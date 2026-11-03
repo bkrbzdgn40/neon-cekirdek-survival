@@ -3,6 +3,7 @@
 // canvas/DOM. Scenarios are deterministic REVIEW FIXTURES, not a natural run.
 // Never publish unreviewed captures as player-session footage.
 const { test, expect } = require('@playwright/test');
+const { gotoGame } = require('./browser.helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -37,7 +38,7 @@ test.afterAll(() => {
 async function boot(page) {
   const errors=[];
   page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/index.html', {waitUntil: 'domcontentloaded'});
+  await gotoGame(page,'/index.html');
   await expect(page.locator('#startBtn')).toBeVisible();
   await page.locator('#startBtn').click();
   await expect(page.locator('#startModal')).toBeHidden();

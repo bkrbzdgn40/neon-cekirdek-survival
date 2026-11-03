@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 1.2 · Testlerde varsayılan olarak tüm kilitler açık
+- Smoke `setup()` artık `NEON_UNLOCK_ALL=true` ile başlar; kilitli davranış testleri `{ unlockAll: false }` geçer.
+- Tarayıcı testleri oyunu `tests/browser.helpers.cjs` içindeki `gotoGame()` ile `?unlock=all` ekleyerek açar.
+- Kural 5: capture testindeki `page.goto('/index.html'` regex kontrolü silindi; yerine yardımcının davranış testi yazıldı.
+
 ## Odak 1.1 · Tek kaynaklı kilit tablosu
 - `SYSTEM_UNLOCKS` (13 sistem, seviye 0–6) ve `isSystemUnlocked(id)` eklendi; henüz hiçbir sistem kapatılmadı.
 - Meta kayıt v2: kalıcı `unlockLevel`. v1 kayıtlar okunurken `maxWave >= 12` ise 6, değilse 0; bozuk değerler 0..6'ya sıkıştırılır.

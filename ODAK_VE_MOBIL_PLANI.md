@@ -143,7 +143,7 @@ YEDEK AL / YEDEK YÜKLE (createProgressBackup/parseProgressBackup) unlockLevel'�
 Smoke testleri: v1→v2 göçü, bozuk değer, yedekten geri yükleme.
 ```
 
-### - [ ] 1.2 Smoke test düzeneğini varsayılan olarak tüm kilitler açık hâle getir
+### - [x] 1.2 Smoke test düzeneğini varsayılan olarak tüm kilitler açık hâle getir
 
 ```
 tests/smoke.test.cjs içindeki setup() fonksiyonuna options.unlockAll ekle; varsayılan true.
