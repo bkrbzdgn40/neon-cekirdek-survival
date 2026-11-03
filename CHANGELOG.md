@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 1.1 · Tek kaynaklı kilit tablosu
+- `SYSTEM_UNLOCKS` (13 sistem, seviye 0–6) ve `isSystemUnlocked(id)` eklendi; henüz hiçbir sistem kapatılmadı.
+- Meta kayıt v2: kalıcı `unlockLevel`. v1 kayıtlar okunurken `maxWave >= 12` ise 6, değilse 0; bozuk değerler 0..6'ya sıkıştırılır.
+- Yedek al/yükle `unlockLevel`'ı taşır; eski (v1) yedekler aynı kuralla göç eder.
+
 ## Odak 0.2 · Test kısayolu: dalga ve kilit parametreleri
 - `?wave=N` (1–99) koşuyu N. dalgadan başlatır; süre `(N-1)*16` sn ileri alınır, ilk boss yine 55 sn sonra gelir.
 - `?unlock=all` yalnızca `window.NEON_UNLOCK_ALL = true` bayrağını kaldırır; kilit sistemi Faz 1'de bu bayrağı okuyacak.

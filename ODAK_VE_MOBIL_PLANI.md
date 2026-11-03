@@ -109,7 +109,7 @@ Smoke testine her iki parametrenin okunduğunu doğrulayan davranış testi ekle
 
 **Hedef:** İlk koşu yalnızca çekirdek döngüyü göstersin: hareket, otomatik ateş, Atılım, seviye atlama, boss. Diğer sistemler **koşular arası ilerlemeyle** açılsın ve her açılış bir ödül anı olsun. Bu, meta ilerlemeye de yeni bir anlam kazandırır.
 
-### - [ ] 1.1 Tek kaynaklı kilit tablosu
+### - [x] 1.1 Tek kaynaklı kilit tablosu
 
 ```
 src/game.js içinde, META_SAVE_KEY tanımlarının yakınına şu yapıyı ekle:

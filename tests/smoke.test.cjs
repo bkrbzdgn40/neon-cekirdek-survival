@@ -6454,3 +6454,75 @@ test('Odak 0.2 ?unlock=all raises NEON_UNLOCK_ALL only when requested', () => {
   assert.equal(setup().run('window.NEON_UNLOCK_ALL === true'), false);
   assert.equal(setup({}, { locationSearch: '?unlock=all' }).run('window.NEON_UNLOCK_ALL'), true);
 });
+
+test('Odak 1.1 SYSTEM_UNLOCKS is a frozen single source covering levels 0..6', () => {
+  const { run } = setup();
+  const table = JSON.parse(run('JSON.stringify(SYSTEM_UNLOCKS)'));
+  assert.equal(run('Object.isFrozen(SYSTEM_UNLOCKS)'), true);
+  assert.equal(table.length, 13);
+  assert.equal(new Set(table.map(s => s.id)).size, table.length);
+  assert.deepEqual([...new Set(table.map(s => s.level))].sort(), [0, 1, 2, 3, 4, 5, 6]);
+  assert.equal(table.find(s => s.id === 'dash').level, 0);
+  assert.equal(run('MAX_UNLOCK_LEVEL'), 6);
+});
+
+test('Odak 1.1 isSystemUnlocked follows unlockLevel and NEON_UNLOCK_ALL', () => {
+  const { run } = setup();
+  const open = ids => JSON.parse(run(`JSON.stringify(${JSON.stringify(ids)}.map(isSystemUnlocked))`));
+  assert.equal(run('unlockLevel'), 0);
+  assert.deepEqual(open(['dash', 'emp', 'contracts', 'unknown']), [true, false, false, false]);
+  run('unlockLevel = 2');
+  assert.deepEqual(open(['emp', 'quests', 'overdrive', 'prism', 'chapters']), [true, true, true, true, false]);
+  run('unlockLevel = 0; window.NEON_UNLOCK_ALL = true');
+  assert.deepEqual(open(['emp', 'nemesis', 'contracts']), [true, true, true]);
+});
+
+test('Odak 1.1 v1 saves migrate to v2 with veteran unlocks from max wave', () => {
+  const key = 'neonCekirdek.meta.v1';
+  const v1 = maxWave => ({ [key]: JSON.stringify({ version: 1, gold: 120, highScore: 900, maxWave,
+    upgrades: { baseDamage: 2, maxHp: 0, speedDash: 0, greed: 0, defibrillator: 0 } }) });
+  const veteran = setup(v1(12));
+  assert.equal(veteran.run('unlockLevel'), 6);
+  assert.equal(veteran.run('totalGold'), 120);
+  assert.equal(setup(v1(11)).run('unlockLevel'), 0);
+  veteran.run('saveMetaProgress()');
+  const saved = JSON.parse(veteran.stored[key]);
+  assert.equal(saved.version, 2);
+  assert.equal(saved.unlockLevel, 6);
+  assert.equal(setup(veteran.stored).run('unlockLevel'), 6);
+});
+
+test('Odak 1.1 corrupt or out-of-range unlockLevel clamps into 0..6', () => {
+  const key = 'neonCekirdek.meta.v1';
+  const load = unlock => setup({ [key]: JSON.stringify({ version: 2, gold: 10, highScore: 0, maxWave: 30,
+    unlockLevel: unlock, upgrades: {} }) }).run('unlockLevel');
+  assert.equal(load(4), 4);
+  assert.equal(load(99), 6);
+  assert.equal(load(-1), 0);
+  assert.equal(load('3'), 0);
+  assert.equal(load(2.5), 0);
+  assert.equal(load(null), 0);
+  assert.equal(load(undefined), 0);
+});
+
+test('Odak 1.1 portable backup carries unlockLevel and migrates v1 backups', () => {
+  const { run } = setup();
+  const result = JSON.parse(run(`(() => {
+    unlockLevel = 3; savedMaxWave = 4;
+    const backup = JSON.stringify(createProgressBackup());
+    const exported = JSON.parse(backup).progress.unlockLevel;
+    unlockLevel = 0;
+    const restored = restoreProgressBackup(backup);
+    const afterRoundTrip = unlockLevel;
+    const legacy = JSON.parse(backup);
+    legacy.progress.version = 1; delete legacy.progress.unlockLevel; legacy.progress.maxWave = 15;
+    const legacyRestored = restoreProgressBackup(JSON.stringify(legacy));
+    const afterLegacy = unlockLevel;
+    const tooHigh = JSON.parse(backup); tooHigh.progress.unlockLevel = 9;
+    const rejected = restoreProgressBackup(JSON.stringify(tooHigh));
+    return JSON.stringify({ exported, restored, afterRoundTrip, legacyRestored, afterLegacy,
+      rejected, finalLevel: unlockLevel });
+  })()`));
+  assert.deepEqual(result, { exported: 3, restored: true, afterRoundTrip: 3, legacyRestored: true,
+    afterLegacy: 6, rejected: false, finalLevel: 6 });
+});

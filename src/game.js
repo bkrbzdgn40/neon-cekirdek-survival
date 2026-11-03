@@ -366,6 +366,7 @@
         let savedHighScore = 0;
         let savedMaxWave = 1;
         let totalGold = 50;
+        let unlockLevel = 0; // Odak 1.1: persistent system unlock tier (0..6)
 
         let metaUpgrades = {
             baseDamage: 0,
@@ -418,7 +419,36 @@
         }
 
         const META_SAVE_KEY = 'neonCekirdek.meta.v1';
-        const META_SAVE_VERSION = 1;
+        const META_SAVE_VERSION = 2;
+        // Odak 1.1 · single source for which systems a run may use.
+        // A system is open when its level <= the persistent unlockLevel.
+        const SYSTEM_UNLOCKS = Object.freeze([
+            {id:'dash',        level:0, name:'Siber Atılım'},
+            {id:'emp',         level:1, name:'EMP Nova'},
+            {id:'quests',      level:1, name:'Görevler'},
+            {id:'overdrive',   level:2, name:'Siber Cinnet'},
+            {id:'prism',       level:2, name:'Prizma Karşılığı'},
+            {id:'chapters',    level:3, name:'Arena Bölümleri'},
+            {id:'conduits',    level:3, name:'İkmal Bölgeleri'},
+            {id:'momentum',    level:4, name:'Momentum'},
+            {id:'fieldDevices',level:4, name:'Saha Cihazları'},
+            {id:'arenaEvents', level:4, name:'Arena Olayları'},
+            {id:'bastion',     level:5, name:'Saha Siperi'},
+            {id:'nemesis',     level:5, name:'Nemesis'},
+            {id:'contracts',   level:6, name:'Neon Sözleşmeleri'}
+        ]);
+        const MAX_UNLOCK_LEVEL = 6;
+        // v1 saves predate unlocks: veterans who reached wave 12 keep everything.
+        const V1_VETERAN_MAX_WAVE = 12;
+
+        function isSystemUnlocked(id) {
+            if (window.NEON_UNLOCK_ALL === true) return true;
+            const entry = SYSTEM_UNLOCKS.find(system => system.id === id);
+            return !!entry && entry.level <= unlockLevel;
+        }
+        function unlockLevelFromV1MaxWave(maxWave) {
+            return maxWave >= V1_VETERAN_MAX_WAVE ? MAX_UNLOCK_LEVEL : 0;
+        }
         const META_UPGRADE_LIMITS = { baseDamage: 10, maxHp: 10, speedDash: 8, greed: 8, defibrillator: 3 };
 
         function safeSaveInteger(value, fallback, max = 1000000000) {
@@ -430,10 +460,13 @@
                 const stored = localStorage.getItem(META_SAVE_KEY);
                 if (!stored) return;
                 const data = JSON.parse(stored);
-                if (!data || typeof data !== 'object' || data.version !== META_SAVE_VERSION) return;
+                if (!data || typeof data !== 'object' ||
+                    (data.version !== 1 && data.version !== META_SAVE_VERSION)) return;
                 savedHighScore = safeSaveInteger(data.highScore, savedHighScore);
                 savedMaxWave = Math.max(1, safeSaveInteger(data.maxWave, savedMaxWave, 100000));
                 totalGold = safeSaveInteger(data.gold, totalGold);
+                unlockLevel = data.version === 1 ? unlockLevelFromV1MaxWave(savedMaxWave) :
+                    safeSaveInteger(data.unlockLevel, 0, MAX_UNLOCK_LEVEL);
                 if (data.upgrades && typeof data.upgrades === 'object') {
                     for (const [key, max] of Object.entries(META_UPGRADE_LIMITS)) {
                         metaUpgrades[key] = safeSaveInteger(data.upgrades[key], metaUpgrades[key], max);
@@ -452,6 +485,7 @@
                     highScore: savedHighScore,
                     maxWave: savedMaxWave,
                     gold: totalGold,
+                    unlockLevel,
                     upgrades: { ...metaUpgrades }
                 }));
             } catch (error) {
@@ -477,6 +511,7 @@
                     highScore: savedHighScore,
                     maxWave: savedMaxWave,
                     gold: totalGold,
+                    unlockLevel,
                     upgrades: { ...metaUpgrades }
                 },
                 graphics: graphicsQuality
@@ -491,8 +526,8 @@
                     backup.version !== PROGRESS_BACKUP_VERSION ||
                     !isValidGraphicsQuality(backup.graphics)) return null;
                 const data = backup.progress;
-                if (!data || data.version !== META_SAVE_VERSION || !data.upgrades ||
-                    typeof data.upgrades !== 'object') return null;
+                if (!data || (data.version !== 1 && data.version !== META_SAVE_VERSION) ||
+                    !data.upgrades || typeof data.upgrades !== 'object') return null;
                 const limits = { highScore: 1000000000, maxWave: 100000, gold: 1000000000 };
                 for (const [key, maximum] of Object.entries(limits)) {
                     if (!Number.isSafeInteger(data[key]) || data[key] < (key === 'maxWave' ? 1 : 0) ||
@@ -504,12 +539,18 @@
                     if (!Number.isSafeInteger(level) || level < 0 || level > maximum) return null;
                     upgrades[key] = level;
                 }
+                // Backups exported before v2 carry no unlock tier; migrate like a v1 save.
+                const restoredUnlockLevel = data.version === 1 ?
+                    unlockLevelFromV1MaxWave(data.maxWave) : data.unlockLevel;
+                if (!Number.isSafeInteger(restoredUnlockLevel) || restoredUnlockLevel < 0 ||
+                    restoredUnlockLevel > MAX_UNLOCK_LEVEL) return null;
                 return {
                     progress: {
                         version: META_SAVE_VERSION,
                         highScore: data.highScore,
                         maxWave: data.maxWave,
                         gold: data.gold,
+                        unlockLevel: restoredUnlockLevel,
                         upgrades
                     },
                     graphics: backup.graphics
@@ -550,6 +591,7 @@
             savedHighScore = backup.progress.highScore;
             savedMaxWave = backup.progress.maxWave;
             totalGold = backup.progress.gold;
+            unlockLevel = backup.progress.unlockLevel;
             metaUpgrades = { ...backup.progress.upgrades };
             applyGraphicsQuality(backup.graphics, false);
             updateMenuCounters();
