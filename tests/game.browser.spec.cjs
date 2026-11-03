@@ -944,3 +944,50 @@ test('Odak 0.2 ?wave=10 starts the real game directly at wave 10',async({page})=
  expect(state.unlockAll).toBe(true); // gotoGame adds ?unlock=all next to ?wave=10
  expect(errors).toEqual([]);
 });
+
+test('Odak 1.3 first run without unlocks shows only the core HUD',async({page})=>{
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await gotoGame(page,'/index.html',{unlockAll:false});
+ await expect(page.locator('#startBtn')).toBeVisible();
+ await expect(page.locator('#neonContractPanel')).toBeHidden();
+ await page.locator('#startBtn').click();
+ await expect(page.locator('#hud')).toBeVisible();
+ for(const id of ['dashBtn','pauseBtn','waveText','timeText','scoreText','hpBar'])
+   await expect(page.locator('#'+id),id+' should stay visible').toBeVisible();
+ await expect(page.locator('#xpBar').locator('xpath=..')).toBeVisible();
+ for(const id of ['novaBtn','prismBtn','bastionBtn','questHudBox','arenaChapterChip','activeContractBadge'])
+   await expect(page.locator('#'+id),id+' should be hidden').toBeHidden();
+ await expect(page.locator('#questMobileText')).toBeHidden();
+ await expect(page.locator('#momentumBar').locator('xpath=..')).toBeHidden();
+ await expect(page.locator('#overdriveBar').locator('xpath=..')).toBeHidden();
+ expect(await page.evaluate(()=>unlockLevel)).toBe(0);
+ expect(errors).toEqual([]);
+});
+
+test('Odak 1.3 a locked first run plays 3 minutes without errors or locked systems',async({page,isMobile})=>{
+ test.skip(!!isMobile,'one simulated 180 s run is enough');
+ test.setTimeout(120_000);
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await gotoGame(page,'/index.html',{unlockAll:false});
+ await page.locator('#startBtn').click();
+ const result=await page.evaluate(()=>{
+   // Fixture: invulnerable pilot, auto-picks the first card. Rules stay real.
+   player.takeDamage=()=>{};
+   const dt=1/60;let levelUps=0;
+   for(let step=0;step<180*60;step++){
+     if(gameState==='LEVEL_UP'){selectUpgradeOption(0);levelUps++;}
+     updateGame(dt);
+     if(step%20===0)renderGame();
+   }
+   return {gameState,totalTime,wave,levelUps,conduits:conduitZones.length,
+     fieldDevices:fieldDevices.length,arenaOffered:combatDirector.stats.arenaOffered,
+     nemesis:!!nemesis,quest:window.getNeonQuestSnapshot(),overdrive:player.overdrive,
+     momentum:player.momentum,contract:activeContractId,chapter:chapterIdForWave(wave)};
+ });
+ expect(result.totalTime).toBeGreaterThanOrEqual(179);
+ expect(result.wave).toBeGreaterThanOrEqual(11);
+ expect(['PLAYING','LEVEL_UP']).toContain(result.gameState);
+ expect(result).toMatchObject({conduits:0,fieldDevices:0,arenaOffered:0,nemesis:false,
+   quest:null,overdrive:0,momentum:0,contract:'STANDARD',chapter:null});
+ expect(errors).toEqual([]);
+});

@@ -156,7 +156,7 @@ Kilitli davranışı test eden yeni testler unlockAll:false ile yazılacak.
 
 **Kabul:** Tüm testler hiçbir kod değişmeden geçiyor.
 
-### - [ ] 1.3 Sistemleri kilide bağla
+### - [x] 1.3 Sistemleri kilide bağla
 
 ```
 isSystemUnlocked kullanarak şu kapıları ekle (her biri tek satırlık erken dönüş olsun):

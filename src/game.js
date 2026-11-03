@@ -449,6 +449,25 @@
         function unlockLevelFromV1MaxWave(maxWave) {
             return maxWave >= V1_VETERAN_MAX_WAVE ? MAX_UNLOCK_LEVEL : 0;
         }
+        // Odak 1.3 · locked systems vanish from the DOM; nothing says "locked".
+        const SYSTEM_LOCK_ELEMENTS = Object.freeze({
+            emp: () => [document.getElementById('novaBtn')],
+            prism: () => [document.getElementById('prismBtn')],
+            bastion: () => [document.getElementById('bastionBtn')],
+            quests: () => [document.getElementById('questHudBox'),
+                document.getElementById('questMobileText')?.parentElement],
+            overdrive: () => [document.getElementById('overdriveBar')?.closest?.('.hud-meter')],
+            momentum: () => [document.getElementById('momentumBar')?.closest?.('.hud-meter')],
+            chapters: () => [document.getElementById('arenaChapterChip')],
+            contracts: () => [document.getElementById('neonContractPanel'),
+                document.getElementById('activeContractBadge')]
+        });
+        function applySystemLockVisibility() {
+            for (const [id, elements] of Object.entries(SYSTEM_LOCK_ELEMENTS)) {
+                const locked = !isSystemUnlocked(id);
+                for (const el of elements()) el?.classList?.toggle('system-locked', locked);
+            }
+        }
         const META_UPGRADE_LIMITS = { baseDamage: 10, maxHp: 10, speedDash: 8, greed: 8, defibrillator: 3 };
 
         function safeSaveInteger(value, fallback, max = 1000000000) {
@@ -881,6 +900,7 @@
             return quest;
         }
         function generateNextQuest(forcedType=null){
+            if(!isSystemUnlocked('quests')){activeQuest=null;return null;}
             const candidates=getQuestCandidates();
             const type=forcedType&&candidates.includes(forcedType)?forcedType:
                 chooseQuestType(candidates);
@@ -924,6 +944,7 @@
             updateQuestHud();
         }
         function updateQuest(dt){
+            if(!isSystemUnlocked('quests')) return;
             if(!activeQuest||!player||gameState!=='PLAYING'||dt<=0) return;
             const current=activeQuest;
             if(current.type==='NO_HIT') advanceQuest('NO_HIT',dt);
@@ -1129,6 +1150,7 @@
             }
 
             addOverdrive(amount) {
+                if (!isSystemUnlocked('overdrive')) return;
                 if (this.overdriveActive) return;
                 this.overdrive = Math.min(100, this.overdrive + amount * this.overdriveGainMult);
                 if (this.overdrive >= 100) {
@@ -1285,7 +1307,8 @@
                 this.lastPos.y = this.y;
                 recordCircuitWeaverMotion(this, movedDist, circuitWasDashing);
 
-                if (moveRatio > 0.25 || this.isDashing) {
+                if (!isSystemUnlocked('momentum')) this.momentum = 0;
+                else if (moveRatio > 0.25 || this.isDashing) {
                     this.momentum = Math.min(100, this.momentum + dt * (this.isDashing ? 95 : 28));
                 } else {
                     this.momentum = Math.max(0, this.momentum - dt * 16);
@@ -1464,6 +1487,7 @@
             }
 
             triggerNova() {
+                if (!isSystemUnlocked('emp')) return;
                 if (this.novaCooldown > 0) return;
                 this.novaCooldown = this.novaMaxCooldown;
                 audio.playExplosion(true);
@@ -3627,6 +3651,7 @@
             },
             {
                 id: 'phase_echo',
+                requires: 'dash',
                 name: 'Faz Yankısı',
                 icon: 'fa-solid fa-clone',
                 color: '#6df7ff',
@@ -3700,6 +3725,7 @@
             },
             {
                 id: 'overdrive_boost',
+                requires: 'overdrive',
                 name: 'Siber Cinnet Çip Ekstresi',
                 icon: 'fa-solid fa-fire-flame-curved',
                 color: '#ff0055',
@@ -3751,7 +3777,9 @@
                 name: 'Kinetik Türbin & Vakum',
                 icon: 'fa-solid fa-magnet',
                 color: '#38bdf8',
-                getDesc: (r) => `Hareket hızını +%${Math.round(10 * r.mult)}, çekim alanını +%35 artırır ve EMP Nova süresini kısaltır.`,
+                getDesc: (r) => isSystemUnlocked('emp') ?
+                    `Hareket hızını +%${Math.round(10 * r.mult)}, çekim alanını +%35 artırır ve EMP Nova süresini kısaltır.` :
+                    `Hareket hızını +%${Math.round(10 * r.mult)} ve çekim alanını +%35 artırır.`,
                 apply: (p, r) => {
                     p.speed *= (1 + 0.10 * r.mult);
                     p.magnetRadius *= 1.35;
@@ -3833,6 +3861,7 @@
             return d;
         }
         function maybeSpawnFieldDevice(){
+            if(!isSystemUnlocked('fieldDevices'))return false;
             if(wave<FIELD_RULES.firstWave ||
                 (wave-FIELD_RULES.firstWave)%FIELD_RULES.waveInterval!==0||
                 fieldDeviceLastWave===wave||fieldDevices.length>=FIELD_RULES.maxDevices||
@@ -5118,6 +5147,7 @@
             };
         }
         function deployBastion() {
+            if (!isSystemUnlocked('bastion')) return false;
             if (!getBastionStatus().available) return false;
             const cost = getBastionCost();
             // This is a single atomic purchase for an eight-second position.
@@ -5812,6 +5842,7 @@
             pincerFlanks:0,pincerEvades:0};
 
         function chapterIdForWave(currentWave) {
+            if (!isSystemUnlocked('chapters')) return null;
             if (!Number.isFinite(currentWave) || currentWave < 4) return null;
             return ARENA_CHAPTER_ORDER[Math.floor((currentWave-4)/3)%3];
         }
@@ -6594,7 +6625,7 @@
                 lock:0,trail:0,cross:0};
         }
         function nemesisAllowed(){
-            return chapterEffectsAllowed()&&!chapterShowcase;
+            return isSystemUnlocked('nemesis')&&chapterEffectsAllowed()&&!chapterShowcase;
         }
         function sampleNemesisMovement(){
             if(!player)return;
@@ -6860,6 +6891,7 @@
             return {x:Math.cos(a),y:Math.sin(a)};
         }
         function activatePrismGuard(){
+            if(!isSystemUnlocked('prism'))return false;
             if(gameState!=='PLAYING'||!player||
                 totalTime<prismGuardReadyAt||player.isDashing||
                 prismActive())return false;
@@ -7826,6 +7858,7 @@
                     this.pendingEncounter || !['BUILDUP', 'PRESSURE'].includes(
                         (this.baseProfile || this.profile).phase) ||
                     wave < 4) return;
+                if (!isSystemUnlocked('arenaEvents')) return;
                 const kind=chooseArenaEventKind(this.arenaEventIndex,wave);
                 const safeMargin = 115;
                 const minX = Math.min(safeMargin, worldWidth / 3);
@@ -8305,7 +8338,7 @@
                 spawnEnemy(true);
             }
 
-            conduitSpawnTimer -= dt;
+            if (isSystemUnlocked('conduits')) conduitSpawnTimer -= dt;
             if (conduitSpawnTimer <= 0) {
                 conduitSpawnTimer = 15.0;
                 if (conduitZones.length < 2) {
@@ -9100,6 +9133,7 @@
         }
 
         function updateMenuCounters() {
+            applySystemLockVisibility();
             document.getElementById('menuHighScore').textContent = savedHighScore.toLocaleString('tr-TR');
             document.getElementById('menuMaxWave').textContent = savedMaxWave;
             document.getElementById('menuGoldText').textContent = totalGold.toLocaleString('tr-TR');
@@ -9448,7 +9482,7 @@
             bastionUses = 0;
             bastionGoldSpent = 0;
             bastionShotsBlocked = 0;
-            activeContractId = selectedContractId;
+            activeContractId = isSystemUnlocked('contracts') ? selectedContractId : 'STANDARD';
             contractMasteryRecordedThisRun = false;
             lastBossGradientColor = null;
             lastBossIdentityMarkup = null;
@@ -9525,6 +9559,7 @@
             document.getElementById('shopModal').classList.remove('flex');
 
             document.getElementById('hud').classList.remove('hidden');
+            applySystemLockVisibility();
             gameState = 'PLAYING';
             updateModulesDock();
             updateHUD();
@@ -9641,8 +9676,12 @@
             return items;
         }
 
+        function isUpgradeAvailable(upgrade) {
+            return !upgrade.requires || isSystemUnlocked(upgrade.requires);
+        }
+
         function populateUpgradeCards() {
-            const shuffled = shuffleInPlace(UPGRADES_POOL.filter(u =>
+            const shuffled = shuffleInPlace(UPGRADES_POOL.filter(u => isUpgradeAvailable(u) &&
                 (player.upgradeCounts[u.id] || 0) < MAX_MODULE_TIER));
             // Keep one near-evolution module visible when possible without removing choice.
             const ready = shuffled.filter(u => (player.upgradeCounts[u.id] || 0) === 2 &&
@@ -9694,7 +9733,8 @@
         }
 
         function triggerLevelUp() {
-            if (UPGRADES_POOL.every(u => (player.upgradeCounts[u.id] || 0) >= MAX_MODULE_TIER)) {
+            if (UPGRADES_POOL.every(u => !isUpgradeAvailable(u) ||
+                (player.upgradeCounts[u.id] || 0) >= MAX_MODULE_TIER)) {
                 // Endless play stays playable after all module tiers; no empty choice modal.
                 player.hp = Math.min(player.maxHp, player.hp + 20);
                 player.addOverdrive(20);

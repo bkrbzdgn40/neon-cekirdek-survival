@@ -1639,3 +1639,6 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
 }
 #startMenuShell .showcase-menu-link:hover{color:#fff;border-color:#c5fdff;}
 #startMenuShell .showcase-menu-link:focus-visible{outline:2px solid #c5fdff;outline-offset:3px;}
+
+/* Odak 1.3 · a locked system is removed from view, never shown as "locked". */
+.system-locked { display: none !important; }
