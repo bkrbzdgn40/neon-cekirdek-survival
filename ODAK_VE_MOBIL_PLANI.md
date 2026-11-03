@@ -228,7 +228,7 @@ Etkilenen eski testlerdeki dalga sayılarını güncelle; regex testlerini davra
 
 **Hedef:** Faz 0'daki geometri testinin bütün eşikleri geçmesi ve testin `fixme` işaretinin kaldırılması.
 
-### - [ ] 2.1 HUD envanteri ve karar tablosu
+### - [x] 2.1 HUD envanteri ve karar tablosu
 
 ```
 #hud içindeki her öğe için docs/HUD_ENVANTERI.md tablosu üret:
