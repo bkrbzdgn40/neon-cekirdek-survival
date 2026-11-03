@@ -14,7 +14,10 @@ const HUD_THRESHOLDS = {
   overlaps: 0,
   overflows: 0,
   smallTargets: 0,
-  minTouchTarget: 44
+  minTouchTarget: 44,
+  // Odak 2.6 · with boss bar, combo and Cinnet on screen the free area may be
+  // this many points lower; overlaps, overflow and touch targets stay at 0.
+  contextualFreePlayDrop: 5
 };
 
 const VIEWPORTS = [
@@ -29,6 +32,9 @@ const SETTLE_MS = 4000;
 // Contextual HUD items fade for 0.22 s (Odak 2.2); wait past it before measuring.
 const CONTEXT_FADE_MS = 350;
 const METRICS_FILE = path.resolve(__dirname, '..', 'test-results', 'hud-metrics.json');
+const CONTEXT_METRICS_FILE = path.resolve(__dirname, '..', 'test-results', 'hud-metrics-contextual.json');
+// One-shot announcements, not standing HUD items: the contextual reading clears them.
+const ANNOUNCEMENT_BANNERS = ['#killstreakBanner', '#bossWarningBanner', '#arenaChapterAnnouncement'];
 
 // Runs inside the page. Kept self-contained because it is serialized.
 function collectHudGeometry(minTarget) {
@@ -176,15 +182,73 @@ async function measureViewport(browser, baseURL, vp) {
   }
 }
 
-async function measureAll(browser, baseURL) {
+// Odak 2.6 · contextual variant: wave 8, a live boss, Cinnet active and a
+// combo, so the boss bar and the Cinnet and combo chips are up together.
+async function measureContextualViewport(browser, baseURL, vp) {
+  const context = await browser.newContext({
+    baseURL,
+    viewport: { width: vp.width, height: vp.height },
+    deviceScaleFactor: vp.deviceScaleFactor,
+    isMobile: vp.touch,
+    hasTouch: vp.touch
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  try {
+    await gotoGame(page, '/index.html?wave=8');
+    await page.locator('#startBtn').click();
+    await expect(page.locator('#hud')).toBeVisible();
+    // Fixture: invulnerable pilot; the boss arrives through the real spawn path.
+    await page.evaluate(() => { player.takeDamage = () => {}; nextBossTime = totalTime; });
+    await expect.poll(() => page.evaluate(() => activeBosses.some(b => !b.dead))).toBe(true);
+    // Cinnet on, then freeze at once: under load game time runs slower than
+    // real time, so waiting in real time is not reliable. One-shot
+    // announcements (boss warning, chapter intro, the 2.4 s banner) are not
+    // standing HUD items and are cleared. Of the contextual chips only the
+    // state-driven ones stay (combo, Cinnet, chapter); the 2-3 s gold and
+    // quest blips depend on the run and are dropped.
+    await page.evaluate(banners => {
+      for (let i = 0; i < 10 && !player.overdriveActive; i++) player.addOverdrive(100);
+      window.__hudGeometryUpdate = updateGame;
+      updateGame = () => {};
+      for (const sel of banners) document.querySelector(sel).classList.add('hidden');
+      chapterAnnounceUntil = 0; // the chapter intro is over; its chip takes over
+      combo = 6; comboTimer = COMBO_MAX_TIME;
+      resetContextualHud(); hudLastGold = totalGold; updateHUD();
+    }, ANNOUNCEMENT_BANNERS);
+    await page.waitForTimeout(CONTEXT_FADE_MS);
+    const state = await page.evaluate(() => ({
+      wave,
+      boss: !document.getElementById('bossHudContainer').classList.contains('hidden'),
+      overdriveActive: player.overdriveActive,
+      combo: document.getElementById('comboContainer').dataset.context
+    }));
+    const geometry = await page.evaluate(collectHudGeometry, HUD_THRESHOLDS.minTouchTarget);
+    await page.evaluate(() => { updateGame = window.__hudGeometryUpdate; });
+    if (!vp.touch) geometry.smallTargets = [];
+    return { name: vp.name, kind: vp.kind, touch: vp.touch, state, ...geometry, pageErrors: errors };
+  } finally {
+    await context.close();
+  }
+}
+
+async function measureAll(browser, baseURL, measure = measureViewport) {
   const results = [];
-  for (const vp of VIEWPORTS) results.push(await measureViewport(browser, baseURL, vp));
+  for (const vp of VIEWPORTS) results.push(await measure(browser, baseURL, vp));
   return results;
 }
 
-function thresholdFailures(m) {
+// The calm reading is shared by the report test and the threshold test.
+let calmResults = null;
+function measureCalm(browser, baseURL) {
+  calmResults ??= measureAll(browser, baseURL);
+  return calmResults;
+}
+
+function thresholdFailures(m, drop = 0) {
   const failures = [];
-  const minFree = HUD_THRESHOLDS.freePlayPct[m.kind];
+  const minFree = HUD_THRESHOLDS.freePlayPct[m.kind] - drop;
   if (m.freePlayPct < minFree) failures.push(`${m.name}: freePlayPct ${m.freePlayPct} < ${minFree}`);
   if (m.overlaps.length > HUD_THRESHOLDS.overlaps) failures.push(`${m.name}: ${m.overlaps.length} overlapping pairs`);
   if (m.overflows.length > HUD_THRESHOLDS.overflows) failures.push(`${m.name}: ${m.overflows.length} overflowing items`);
@@ -196,7 +260,7 @@ test.describe('HUD geometry', () => {
   test.describe.configure({ timeout: 120_000 });
 
   test('measures free play area, overlaps, overflow and touch targets', async ({ browser }, testInfo) => {
-    const results = await measureAll(browser, testInfo.project.use.baseURL);
+    const results = await measureCalm(browser, testInfo.project.use.baseURL);
     const report = {
       schema: 'neon-hud-metrics/v1',
       created_at: new Date().toISOString(),
@@ -219,7 +283,7 @@ test.describe('HUD geometry', () => {
       smallTargets: m.smallTargets.length
     })));
 
-    // Only sanity checks here; the targets live in the fixme test below.
+    // Only sanity checks here; the targets live in the tests below.
     for (const m of results) {
       expect(m.gameState, `${m.name} should be in combat`).toBe('PLAYING');
       expect(m.pageErrors, `${m.name} page errors`).toEqual([]);
@@ -229,9 +293,36 @@ test.describe('HUD geometry', () => {
     }
   });
 
-  // Current HUD misses most targets; remove fixme once Faz 2 lands.
-  test.fixme('HUD meets free-area, overlap, overflow and touch-target thresholds', async ({ browser }, testInfo) => {
-    const results = await measureAll(browser, testInfo.project.use.baseURL);
-    expect(results.flatMap(thresholdFailures)).toEqual([]);
+  // Odak 2.6 · Faz 2 landed: the calm HUD meets every target.
+  test('HUD meets free-area, overlap, overflow and touch-target thresholds', async ({ browser }, testInfo) => {
+    const results = await measureCalm(browser, testInfo.project.use.baseURL);
+    expect(results.flatMap(m => thresholdFailures(m))).toEqual([]);
+  });
+
+  test('with boss bar, combo and Cinnet on screen the HUD stays within 5 points', async ({ browser }, testInfo) => {
+    const results = await measureAll(browser, testInfo.project.use.baseURL, measureContextualViewport);
+    const drop = HUD_THRESHOLDS.contextualFreePlayDrop;
+    fs.mkdirSync(path.dirname(CONTEXT_METRICS_FILE), { recursive: true });
+    fs.writeFileSync(CONTEXT_METRICS_FILE, JSON.stringify({
+      schema: 'neon-hud-metrics/v1',
+      created_at: new Date().toISOString(),
+      variant: 'wave 8 + boss + Cinnet + combo',
+      thresholds: HUD_THRESHOLDS,
+      viewports: results.map(m => ({ ...m, failures: thresholdFailures(m, drop) }))
+    }, null, 2) + '\n');
+    console.log('\nHUD geometry, contextual (' + path.relative(process.cwd(), CONTEXT_METRICS_FILE) + ')');
+    console.table(results.map(m => ({
+      viewport: `${m.name} ${m.viewport.width}x${m.viewport.height}`,
+      freePlayPct: m.freePlayPct,
+      topEdge: m.topEdge,
+      overlaps: m.overlaps.length,
+      overflows: m.overflows.length,
+      smallTargets: m.smallTargets.length
+    })));
+    for (const m of results) {
+      expect(m.pageErrors, `${m.name} page errors`).toEqual([]);
+      expect(m.state, `${m.name} contextual state`).toMatchObject({ boss: true, overdriveActive: true, combo: 'on' });
+    }
+    expect(results.flatMap(m => thresholdFailures(m, drop))).toEqual([]);
   });
 });

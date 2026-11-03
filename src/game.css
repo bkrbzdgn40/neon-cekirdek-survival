@@ -1795,9 +1795,13 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
     #hud #overdriveMeter .hud-meter-label{position:static;padding:0;color:#ffd0ea;font-size:10px;letter-spacing:0;}
     #hud .hud-quest-reward{display:none;}
     #hud .hud-combo-timer{width:18px;}
+    #hud .arena-chapter-chip[data-urgent="false"] .chapter-name{display:none;}
     #hud #overdriveMeter[data-context="on"]{animation:cinnet-ready 1.2s ease-in-out infinite;}
-    #hud .hud-boss-console{padding:3px 8px;}
-    #hud .hud-boss-track{height:10px;}
+    #hud .hud-boss-console{padding:2px 8px;gap:1px;}
+    #hud #bossNameText{font-size:10px;line-height:1.1;}
+    #hud #bossPhaseText{line-height:1.1;}
+    #hud .hud-boss-track{height:9px;}
+    #hud #bossHpText{font-size:8px;}
 
     #hud .hud-command-deck{
         justify-content:flex-end;padding:0;
