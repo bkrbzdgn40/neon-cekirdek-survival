@@ -1,5 +1,11 @@
 # Değişiklik Günlüğü
 
+## Odak 1.4 · Kilit açma kuralı ve açılış anı
+- Koşu sonunda ulaşılan dalga `UNLOCK_WAVE_GATES = [3, 5, 6, 8, 9, 11]` kapısını geçerse bir seviye açılır; 3 koşu üst üste geçilemezse yine açılır (sayaç meta kayıtta ve yedekte).
+- Oyun sonu raporunun en üstünde "YENİ PROTOKOL AÇILDI" bloğu: her yeni sistem için bir cümle ve tuşu (dokunmatikte buton).
+- Menü Kontroller sekmesi yalnızca açık sistemleri gösterir, altında "Dalga X'e ulaşınca açılır" satırı; sonraki koşunun ilk 20 sn'sinde yeni sistemin HUD öğesi nabız gibi yanar (azaltılmış harekette yalnızca kenarlık).
+- `?unlock=all` kalıcı kilit ilerlemesini değiştirmez.
+
 ## Odak 1.3 · Sistemleri kilide bağla
 - 12 sistem `isSystemUnlocked` ile tek satırlık erken dönüşlerle kapandı (EMP, Prizma, Siper, Görevler, Cinnet, Momentum, Bölümler, İkmal, Saha cihazları, Arena olayları, Nemesis, Sözleşmeler).
 - Kilitli sistemin HUD/menü öğesi `system-locked` sınıfıyla gizlenir; kartlar `requires` alanıyla filtrelenir, Kinetik Türbin EMP kilitliyken EMP'siz anlatılır.

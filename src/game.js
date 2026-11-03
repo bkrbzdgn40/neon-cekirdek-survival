@@ -367,6 +367,11 @@
         let savedMaxWave = 1;
         let totalGold = 50;
         let unlockLevel = 0; // Odak 1.1: persistent system unlock tier (0..6)
+        let unlockFailedRuns = 0; // Odak 1.4: consecutive runs that missed the next gate
+        let unlockSpotlightPending = false; // Odak 1.4: highlight the new tier next run
+        let lastRunUnlock = null;
+        let unlockSpotlightIds = [];
+        let unlockSpotlightUntil = 0;
 
         let metaUpgrades = {
             baseDamage: 0,
@@ -440,6 +445,26 @@
         const MAX_UNLOCK_LEVEL = 6;
         // v1 saves predate unlocks: veterans who reached wave 12 keep everything.
         const V1_VETERAN_MAX_WAVE = 12;
+        // Odak 1.4 · a run that reaches UNLOCK_WAVE_GATES[L] opens level L+1.
+        const UNLOCK_WAVE_GATES = Object.freeze([3, 5, 6, 8, 9, 11]);
+        // Missing the gate this many runs in a row opens the next level anyway.
+        const UNLOCK_FALLBACK_RUNS = 3;
+        const UNLOCK_SPOTLIGHT_SECONDS = 20;
+        // One sentence and the input for the end-of-run announcement.
+        const SYSTEM_UNLOCK_INFO = Object.freeze({
+            emp:          {desc:'Yakındaki düşmanları geri iter ve tehlikeli mermileri temizler.', key:'E · SAĞ TIK', touch:'EMP BUTONU'},
+            quests:       {desc:'Koşu sırasında kısa hedefler verir; tamamladıkça ödül kazanırsın.', key:'OTOMATİK'},
+            overdrive:    {desc:'Bar dolunca kısa bir süre atış ve kritik gücün artar.', key:'BAR DOLUNCA'},
+            prism:        {desc:'Sana gelen mermilere karşı kısa süreli bir yansıtıcı kalkan açar.', key:'C', touch:'PRİZMA BUTONU'},
+            chapters:     {desc:'Dalgalar ilerledikçe arena yeni bölümlere geçer ve kuralları değişir.', key:'OTOMATİK'},
+            conduits:     {desc:'Arenada beliren ikmal halkalarının içinde kalarak destek doldurursun.', key:'İÇİNDE DUR'},
+            momentum:     {desc:'Hareket ettikçe dolar ve atış temposunu artırır.', key:'HAREKETLE DOLAR'},
+            fieldDevices: {desc:'Arenaya reaktörler ve çekim direkleri düşer; onları düşmanlara karşı kullan.', key:'ATEŞ ET'},
+            arenaEvents:  {desc:'Arena süreli özel hedefler açar; tamamlarsan ödül verir.', key:'OTOMATİK'},
+            bastion:      {desc:'Altın karşılığında menzilli ateşi engelleyen bir siper kurarsın.', key:'Q', touch:'SİPER BUTONU'},
+            nemesis:      {desc:'Hareketlerini izleyen bir avcı belirli dalgalarda seni hedef alır.', key:'KAÇIN'},
+            contracts:    {desc:'Menüden koşuya zorluk ve ödül kuralı ekleyen bir sözleşme seçersin.', key:'MENÜDEN'}
+        });
 
         function isSystemUnlocked(id) {
             if (window.NEON_UNLOCK_ALL === true) return true;
@@ -467,6 +492,86 @@
                 const locked = !isSystemUnlocked(id);
                 for (const el of elements()) el?.classList?.toggle('system-locked', locked);
             }
+            // Odak 1.4 · the menu's controls tab lists only open systems.
+            for (const el of document.querySelectorAll('[data-system]'))
+                el.classList.toggle('system-locked', !isSystemUnlocked(el.dataset.system));
+            const hint = document.getElementById('menuUnlockHint');
+            if (hint) {
+                const gate = nextUnlockWaveGate();
+                hint.textContent = gate === null ? '' : unlockHintText(gate);
+                hint.classList.toggle('system-locked', gate === null);
+            }
+        }
+
+        // Odak 1.4 · unlock rule, evaluated once per finished run.
+        function nextUnlockWaveGate() {
+            if (window.NEON_UNLOCK_ALL === true || unlockLevel >= MAX_UNLOCK_LEVEL) return null;
+            return UNLOCK_WAVE_GATES[unlockLevel];
+        }
+        function unlockHintText(gate) {
+            // Turkish dative suffix by last digit: 3'e, 6'ya, 9'a, 10'a.
+            const suffix = ['a', 'e', 'ye', 'e', 'e', 'e', 'ya', 'ye', 'e', 'a'][gate % 10];
+            return `Yeni protokol: Dalga ${gate}'${suffix} ulaşınca açılır.`;
+        }
+        function evaluateRunUnlock(reachedWave) {
+            if (nextUnlockWaveGate() === null) return null;
+            const gate = UNLOCK_WAVE_GATES[unlockLevel];
+            const passed = reachedWave >= gate;
+            if (!passed && ++unlockFailedRuns < UNLOCK_FALLBACK_RUNS) return null;
+            unlockLevel++;
+            unlockFailedRuns = 0;
+            unlockSpotlightPending = true;
+            return { level: unlockLevel, gate, byFallback: !passed,
+                systems: SYSTEM_UNLOCKS.filter(s => s.level === unlockLevel).map(s => s.id) };
+        }
+        function prefersTouchControls() {
+            return !!window.matchMedia?.('(pointer: coarse)').matches;
+        }
+        function unlockAnnouncementMarkup(result, touch = prefersTouchControls()) {
+            if (!result || !result.systems.length) return '';
+            const items = result.systems.map(id => {
+                const system = SYSTEM_UNLOCKS.find(s => s.id === id);
+                const info = SYSTEM_UNLOCK_INFO[id];
+                const input = touch && info.touch ? info.touch : info.key;
+                return '<li class="report-unlock-item"><div><strong>' + reportEscape(system.name) +
+                    '</strong><p>' + reportEscape(info.desc) + '</p></div>' +
+                    '<span class="report-unlock-key">' + reportEscape(input) + '</span></li>';
+            }).join('');
+            const note = result.byFallback ? '<p class="report-unlock-note">Dalga ' + result.gate +
+                ' kapısı üç koşu üst üste geçilemedi; protokol yine de açıldı.</p>' : '';
+            return '<p class="report-unlock-title"><i class="fa-solid fa-unlock" aria-hidden="true"></i>' +
+                'YENİ PROTOKOL AÇILDI</p><ul class="report-unlock-list">' + items + '</ul>' + note;
+        }
+        function renderUnlockAnnouncement(result) {
+            const block = document.getElementById('reportUnlockBlock');
+            const markup = unlockAnnouncementMarkup(result);
+            if (block) {
+                block.innerHTML = markup;
+                block.classList.toggle('hidden', !markup);
+            }
+            return markup;
+        }
+        // The next run's first 20 s pulse the newly opened systems' HUD controls.
+        function setUnlockSpotlightClass(on) {
+            for (const id of unlockSpotlightIds)
+                for (const el of SYSTEM_LOCK_ELEMENTS[id]?.() || []) el?.classList?.toggle('system-spotlight', on);
+        }
+        function clearUnlockSpotlight() {
+            setUnlockSpotlightClass(false);
+            unlockSpotlightIds = [];
+        }
+        function startUnlockSpotlight() {
+            clearUnlockSpotlight();
+            if (!unlockSpotlightPending) return [];
+            unlockSpotlightPending = false;
+            unlockSpotlightIds = SYSTEM_UNLOCKS.filter(s => s.level === unlockLevel).map(s => s.id);
+            unlockSpotlightUntil = totalTime + UNLOCK_SPOTLIGHT_SECONDS;
+            setUnlockSpotlightClass(true);
+            saveMetaProgress();
+            return unlockSpotlightIds;
+        }
+        function updateUnlockSpotlight() {
+            if (unlockSpotlightIds.length && totalTime >= unlockSpotlightUntil) clearUnlockSpotlight();
         }
         const META_UPGRADE_LIMITS = { baseDamage: 10, maxHp: 10, speedDash: 8, greed: 8, defibrillator: 3 };
 
@@ -486,6 +591,9 @@
                 totalGold = safeSaveInteger(data.gold, totalGold);
                 unlockLevel = data.version === 1 ? unlockLevelFromV1MaxWave(savedMaxWave) :
                     safeSaveInteger(data.unlockLevel, 0, MAX_UNLOCK_LEVEL);
+                unlockFailedRuns = data.version === 1 ? 0 :
+                    safeSaveInteger(data.unlockFailedRuns, 0, UNLOCK_FALLBACK_RUNS - 1);
+                unlockSpotlightPending = data.unlockSpotlight === true;
                 if (data.upgrades && typeof data.upgrades === 'object') {
                     for (const [key, max] of Object.entries(META_UPGRADE_LIMITS)) {
                         metaUpgrades[key] = safeSaveInteger(data.upgrades[key], metaUpgrades[key], max);
@@ -505,6 +613,8 @@
                     maxWave: savedMaxWave,
                     gold: totalGold,
                     unlockLevel,
+                    unlockFailedRuns,
+                    unlockSpotlight: unlockSpotlightPending,
                     upgrades: { ...metaUpgrades }
                 }));
             } catch (error) {
@@ -531,6 +641,7 @@
                     maxWave: savedMaxWave,
                     gold: totalGold,
                     unlockLevel,
+                    unlockFailedRuns,
                     upgrades: { ...metaUpgrades }
                 },
                 graphics: graphicsQuality
@@ -563,6 +674,11 @@
                     unlockLevelFromV1MaxWave(data.maxWave) : data.unlockLevel;
                 if (!Number.isSafeInteger(restoredUnlockLevel) || restoredUnlockLevel < 0 ||
                     restoredUnlockLevel > MAX_UNLOCK_LEVEL) return null;
+                // Odak 1.4 · backups from before the fallback counter start at 0.
+                const restoredFailedRuns = data.version === 1 || data.unlockFailedRuns === undefined ?
+                    0 : data.unlockFailedRuns;
+                if (!Number.isSafeInteger(restoredFailedRuns) || restoredFailedRuns < 0 ||
+                    restoredFailedRuns >= UNLOCK_FALLBACK_RUNS) return null;
                 return {
                     progress: {
                         version: META_SAVE_VERSION,
@@ -570,6 +686,7 @@
                         maxWave: data.maxWave,
                         gold: data.gold,
                         unlockLevel: restoredUnlockLevel,
+                        unlockFailedRuns: restoredFailedRuns,
                         upgrades
                     },
                     graphics: backup.graphics
@@ -611,6 +728,8 @@
             savedMaxWave = backup.progress.maxWave;
             totalGold = backup.progress.gold;
             unlockLevel = backup.progress.unlockLevel;
+            unlockFailedRuns = backup.progress.unlockFailedRuns;
+            unlockSpotlightPending = false;
             metaUpgrades = { ...backup.progress.upgrades };
             applyGraphicsQuality(backup.graphics, false);
             updateMenuCounters();
@@ -9237,6 +9356,7 @@
 
         function updateHUD() {
             if (!player) return;
+            updateUnlockSpotlight();
 
             const contract = getActiveNeonContract();
             const contractBadge = document.getElementById('activeContractBadge');
@@ -9534,6 +9654,7 @@
             runMetrics={peakCombo:1,damageTaken:0,hitsTaken:0,shieldBlocks:0,
                 freeRevivesUsed:0,paidReviveGoldSpent:0,paidRevivesUsed:0};
             finalRunReport=null;
+            lastRunUnlock=null;
             activeReportTab='summary';
             questHistory=[];
             questStats={offered:0,completed:0,byType:{},hitsReset:0};
@@ -9560,6 +9681,7 @@
 
             document.getElementById('hud').classList.remove('hidden');
             applySystemLockVisibility();
+            startUnlockSpotlight();
             gameState = 'PLAYING';
             updateModulesDock();
             updateHUD();
@@ -10158,6 +10280,7 @@
 
         function renderRunReport(r=finalRunReport){
             if(!r) return false;
+            renderUnlockAnnouncement(lastRunUnlock);
             const el=id=>document.getElementById(id);
             const income=r.economy.goldBySource||{};
             const goldTotal=Object.values(income).reduce((s,n)=>s+(Number(n)||0),0);
@@ -10337,6 +10460,7 @@
             if (wave > savedMaxWave) {
                 savedMaxWave = wave;
             }
+            lastRunUnlock = evaluateRunUnlock(wave);
             saveMetaProgress();
             snapshotEndOfRun(reason,isNewRecord);
             // Once per completed run; no writes during combat or card choices.

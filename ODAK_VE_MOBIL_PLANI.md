@@ -185,7 +185,7 @@ Her kapı için unlockAll:false ile davranış testi yaz.
 
 **Kabul:** `?unlock=all` olmadan ilk koşuda HUD'da yalnızca XP, can, süre/dalga, skor, duraklat ve Atılım görünüyor. Oyun 3 dakika boyunca hatasız oynanıyor.
 
-### - [ ] 1.4 Kilit açma kuralı ve açılış anı
+### - [x] 1.4 Kilit açma kuralı ve açılış anı
 
 ```
 unlockLevel'ın nasıl artacağını uygula. Kural, koşu sonunda (triggerGameOver) değerlendirilir:

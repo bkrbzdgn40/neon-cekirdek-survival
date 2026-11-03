@@ -6652,3 +6652,129 @@ test('Odak 1.3 upgrade cards respect requires and EMP-free descriptions', () => 
   assert.equal(gatedGame(0).run("UPGRADES_POOL.find(u => u.id === 'overdrive_boost').requires"), 'overdrive');
   assert.equal(gatedGame(0).run("UPGRADES_POOL.find(u => u.id === 'phase_echo').requires"), 'dash');
 });
+
+// Odak 1.4 · unlock rule and unlock moment.
+function endLockedRun(run, reachedWave) {
+  return JSON.parse(run(`(()=>{startNewGame();wave=${reachedWave};triggerGameOver();
+    return JSON.stringify({level:unlockLevel,failed:unlockFailedRuns,result:lastRunUnlock,
+      block:document.getElementById('reportUnlockBlock').innerHTML});})()`));
+}
+
+test('Odak 1.4 reaching wave 3 on a clean save opens EMP and Quests and persists', () => {
+  const a = setup({}, { unlockAll: false });
+  const out = endLockedRun(a.run, 3);
+  assert.equal(out.level, 1);
+  assert.deepEqual(out.result, { level: 1, gate: 3, byFallback: false, systems: ['emp', 'quests'] });
+  assert.equal(a.run("isSystemUnlocked('emp') && isSystemUnlocked('quests')"), true);
+  assert.equal(a.run("isSystemUnlocked('overdrive')"), false);
+  const saved = JSON.parse(a.stored['neonCekirdek.meta.v1']);
+  assert.equal(saved.unlockLevel, 1);
+  assert.equal(saved.unlockSpotlight, true);
+  const b = setup(a.stored, { unlockAll: false });
+  assert.equal(b.run('unlockLevel'), 1);
+  assert.equal(b.run('unlockSpotlightPending'), true);
+});
+
+test('Odak 1.4 each gate opens exactly one level, only when reached', () => {
+  const gates = [3, 5, 6, 8, 9, 11];
+  const { run } = setup({}, { unlockAll: false });
+  assert.deepEqual(JSON.parse(run('JSON.stringify(UNLOCK_WAVE_GATES)')), gates);
+  gates.forEach((gate, level) => {
+    run(`unlockLevel=${level};unlockFailedRuns=0`);
+    assert.equal(endLockedRun(run, gate - 1).level, level, 'wave ' + (gate - 1) + ' stays at ' + level);
+    run('unlockFailedRuns=0');
+    const out = endLockedRun(run, 99);
+    assert.equal(out.level, level + 1, 'a long run still opens a single level');
+    assert.equal(out.result.gate, gate);
+  });
+  const maxed = endLockedRun(run, 99);
+  assert.equal(maxed.level, 6);
+  assert.equal(maxed.result, null);
+  assert.equal(maxed.block, '');
+});
+
+test('Odak 1.4 three missed gates in a row open the next level anyway', () => {
+  const a = setup({}, { unlockAll: false });
+  assert.equal(endLockedRun(a.run, 2).failed, 1);
+  assert.equal(JSON.parse(a.stored['neonCekirdek.meta.v1']).unlockFailedRuns, 1);
+  const b = setup(a.stored, { unlockAll: false });
+  assert.equal(endLockedRun(b.run, 1).failed, 2);
+  const third = endLockedRun(b.run, 2);
+  assert.equal(third.level, 1);
+  assert.equal(third.failed, 0);
+  assert.equal(third.result.byFallback, true);
+  assert.match(third.block, /üç koşu üst üste/);
+  // A pass resets the counter as well.
+  b.run('unlockFailedRuns=2');
+  const passed = endLockedRun(b.run, 5);
+  assert.equal(passed.level, 2);
+  assert.equal(passed.failed, 0);
+  assert.equal(passed.result.byFallback, false);
+});
+
+test('Odak 1.4 ?unlock=all never changes saved unlock progress', () => {
+  const a = setup();
+  const out = endLockedRun(a.run, 12);
+  assert.equal(out.level, 0);
+  assert.equal(out.result, null);
+  assert.equal(out.block, '');
+  assert.equal(JSON.parse(a.stored['neonCekirdek.meta.v1']).unlockLevel, 0);
+});
+
+test('Odak 1.4 the report announces each new system with its input', () => {
+  const { run } = setup({}, { unlockAll: false });
+  const block = endLockedRun(run, 3).block;
+  assert.match(block, /YENİ PROTOKOL AÇILDI/);
+  assert.match(block, /EMP Nova/);
+  assert.match(block, /Görevler/);
+  assert.match(block, /E · SAĞ TIK/);
+  const touch = run("unlockAnnouncementMarkup({level:2,gate:5,byFallback:false,systems:['overdrive','prism']},true)");
+  assert.match(touch, /PRİZMA BUTONU/);
+  assert.match(touch, /BAR DOLUNCA/);
+  assert.equal(run('unlockAnnouncementMarkup(null)'), '');
+  for (const s of JSON.parse(run('JSON.stringify(SYSTEM_UNLOCKS.filter(s=>s.level>0).map(s=>s.id))')))
+    assert.ok(run(`!!SYSTEM_UNLOCK_INFO['${s}']?.desc`), s + ' has an announcement');
+  run('startNewGame()');
+  assert.equal(run('lastRunUnlock'), null, 'the next run starts without the old announcement');
+});
+
+test('Odak 1.4 the next run spotlights the new systems for 20 seconds once', () => {
+  const a = setup({}, { unlockAll: false });
+  endLockedRun(a.run, 3);
+  const b = setup(a.stored, { unlockAll: false });
+  const ids = JSON.parse(b.run('startNewGame();JSON.stringify(unlockSpotlightIds)'));
+  assert.deepEqual(ids, ['emp', 'quests']);
+  assert.equal(JSON.parse(b.stored['neonCekirdek.meta.v1']).unlockSpotlight, false);
+  b.run('totalTime += 19.9; updateHUD()');
+  assert.equal(b.run('unlockSpotlightIds.length'), 2);
+  b.run('totalTime += 0.2; updateHUD()');
+  assert.equal(b.run('unlockSpotlightIds.length'), 0);
+  b.run('startNewGame()');
+  assert.equal(b.run('unlockSpotlightIds.length'), 0, 'only the first run after the unlock');
+});
+
+test('Odak 1.4 the controls tab hint names the next gate', () => {
+  const { run } = setup({}, { unlockAll: false });
+  const hint = (level) => run(`unlockLevel=${level};updateMenuCounters();document.getElementById('menuUnlockHint').textContent`);
+  assert.equal(hint(0), "Yeni protokol: Dalga 3'e ulaşınca açılır.");
+  assert.equal(hint(2), "Yeni protokol: Dalga 6'ya ulaşınca açılır.");
+  assert.equal(hint(4), "Yeni protokol: Dalga 9'a ulaşınca açılır.");
+  assert.equal(hint(5), "Yeni protokol: Dalga 11'e ulaşınca açılır.");
+  assert.equal(hint(6), '');
+  assert.equal(setup().run("updateMenuCounters();document.getElementById('menuUnlockHint').textContent"), '');
+});
+
+test('Odak 1.4 backups carry the fallback counter', () => {
+  const { run } = setup({}, { unlockAll: false });
+  const backup = run('unlockFailedRuns=2;JSON.stringify(createProgressBackup())');
+  assert.equal(JSON.parse(backup).progress.unlockFailedRuns, 2);
+  assert.equal(run(`parseProgressBackup(${JSON.stringify(backup)}).progress.unlockFailedRuns`), 2);
+  const older = JSON.parse(backup); delete older.progress.unlockFailedRuns;
+  assert.equal(run(`parseProgressBackup(${JSON.stringify(JSON.stringify(older))}).progress.unlockFailedRuns`), 0);
+  const bad = JSON.parse(backup); bad.progress.unlockFailedRuns = 3;
+  assert.equal(run(`parseProgressBackup(${JSON.stringify(JSON.stringify(bad))})`), null);
+  run('unlockFailedRuns=0;unlockSpotlightPending=true');
+  assert.equal(run(`restoreProgressBackup(${JSON.stringify(backup)})`), true);
+  assert.equal(run('unlockFailedRuns'), 2);
+  assert.equal(run('unlockSpotlightPending'), false);
+});
