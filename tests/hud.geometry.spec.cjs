@@ -26,6 +26,8 @@ const VIEWPORTS = [
 ];
 
 const SETTLE_MS = 4000;
+// Contextual HUD items fade for 0.22 s (Odak 2.2); wait past it before measuring.
+const CONTEXT_FADE_MS = 350;
 const METRICS_FILE = path.resolve(__dirname, '..', 'test-results', 'hud-metrics.json');
 
 // Runs inside the page. Kept self-contained because it is serialized.
@@ -139,8 +141,23 @@ async function measureViewport(browser, baseURL, vp) {
     await page.locator('#startBtn').click();
     await expect(page.locator('#hud')).toBeVisible();
     await page.waitForTimeout(SETTLE_MS);
+    // Odak 0.1 note: the combo chip changes from run to run. Freeze the
+    // simulation, pin the combo off for the main reading and measure the
+    // combo-on state as a separate variant.
+    await page.evaluate(() => {
+      window.__hudGeometryUpdate = updateGame;
+      updateGame = () => {};
+      combo = 1; comboTimer = 0; totalTime += 0.5; updateHUD();
+    });
+    await page.waitForTimeout(CONTEXT_FADE_MS);
     const geometry = await page.evaluate(collectHudGeometry, HUD_THRESHOLDS.minTouchTarget);
-    if (!vp.touch) geometry.smallTargets = [];
+    await page.evaluate(() => { combo = 6; comboTimer = COMBO_MAX_TIME; updateHUD(); });
+    await page.waitForTimeout(CONTEXT_FADE_MS);
+    const comboOn = await page.evaluate(collectHudGeometry, HUD_THRESHOLDS.minTouchTarget);
+    await page.evaluate(() => { updateGame = window.__hudGeometryUpdate; });
+    if (!vp.touch) { geometry.smallTargets = []; comboOn.smallTargets = []; }
+    geometry.comboOn = { freePlayPct: comboOn.freePlayPct, topEdge: comboOn.topEdge,
+      overlaps: comboOn.overlaps, overflows: comboOn.overflows, smallTargets: comboOn.smallTargets };
     return { name: vp.name, kind: vp.kind, touch: vp.touch, ...geometry, pageErrors: errors };
   } finally {
     await context.close();
@@ -184,6 +201,7 @@ test.describe('HUD geometry', () => {
       visibleText: m.visibleTextCount,
       verticalGapPct: m.verticalGapPct,
       freePlayPct: m.freePlayPct,
+      comboOnPct: m.comboOn.freePlayPct,
       overlaps: m.overlaps.length,
       overflows: m.overflows.length,
       smallTargets: m.smallTargets.length

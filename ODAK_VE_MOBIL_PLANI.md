@@ -245,7 +245,7 @@ Karar sütununu şu kurala göre doldur ve bana sun, kod değiştirme:
 
 **Kabul:** Tabloyu sen onaylıyorsun. Gerekirse kararları değiştir, sonra 2.2'ye geç.
 
-### - [ ] 2.2 Masaüstü HUD diyeti
+### - [x] 2.2 Masaüstü HUD diyeti
 
 ```
 HUD_ENVANTERI.md'deki onaylı kararları masaüstünde uygula.

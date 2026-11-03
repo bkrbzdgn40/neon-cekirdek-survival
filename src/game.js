@@ -479,10 +479,9 @@
             emp: () => [document.getElementById('novaBtn')],
             prism: () => [document.getElementById('prismBtn')],
             bastion: () => [document.getElementById('bastionBtn')],
-            quests: () => [document.getElementById('questHudBox'),
-                document.getElementById('questMobileText')?.parentElement],
-            overdrive: () => [document.getElementById('overdriveBar')?.closest?.('.hud-meter')],
-            momentum: () => [document.getElementById('momentumBar')?.closest?.('.hud-meter')],
+            quests: () => [document.getElementById('questHudBox')],
+            overdrive: () => [document.getElementById('overdriveMeter')],
+            momentum: () => [document.getElementById('momentumMeter')],
             chapters: () => [document.getElementById('arenaChapterChip')],
             contracts: () => [document.getElementById('neonContractPanel'),
                 document.getElementById('activeContractBadge')]
@@ -1094,11 +1093,10 @@
             const content=QUEST_LABELS[q.type]+' · '+shown+'/'+q.target+' · +'+q.rewardGold;
             if(content===questHudPrevious) return;
             questHudPrevious=content;
-            for(const id of ['questHudText','questMobileText']){
-                const el=document.getElementById(id);
-                if(el){el.textContent=content;el.title=q.desc;
-                    el.style.color=QUEST_COLORS[q.type];}
-            }
+            const el=document.getElementById('questHudText');
+            if(el){el.textContent=content;el.title=q.desc;
+                el.style.color=QUEST_COLORS[q.type];}
+            showContextual(document.getElementById('questHudBox'),HUD_CONTEXT_RULES.questMs);
         }
         function drawQuestObjective(ctx){
             const q=activeQuest;
@@ -6566,13 +6564,14 @@
             const badge=document.getElementById('arenaChapterBadge');
             const status=document.getElementById('arenaChapterStatus');
             const announcement=document.getElementById('arenaChapterAnnouncement');
-            const mobile=document.getElementById('arenaChapterMobile');
+            const chip=document.getElementById('arenaChapterChip');
             if(!hud||!badge||!status||!announcement)return;
             hud.setAttribute('data-arena-chapter',arenaChapter||'NONE');
             const d=arenaChapter?ARENA_CHAPTERS[arenaChapter]:null;
             badge.textContent=d?d.glyph+' '+d.short:'NORMAL';
             badge.title=d?d.caption:'Standart savaş alanı';
             let message='STANDARD ARENA';
+            let urgent=false;
             if(d){
                 if(!chapterEffectsAllowed())message='BOSS / ETKİNLİK KORUMASI';
                 else if(arenaChapter==='FOUNDRY'){
@@ -6581,10 +6580,14 @@
                         'ISI YÜKLENİYOR · '+(CHAPTER_RULES.foundryWarn-phase).toFixed(1)+' sn':
                         phase<CHAPTER_RULES.foundryActiveEnd?'RAYLARDAN KAÇ':
                         'RAYLAR SOĞUYOR';
-                }else if(arenaChapter==='GARDEN')message=chapterGardenContested.some(Boolean)?
-                    'İYON BASKISI · MUHAFIZI UZAKLAŞTIR':'HALKALARDA DUR · İYON DOLDUR';
-                else if(chapterRiftPursuit)message='YARIK TAKİPÇİSİ · '+
-                    (chapterRiftPursuit.readyAt-totalTime).toFixed(1)+' sn';
+                    urgent=phase<CHAPTER_RULES.foundryActiveEnd;
+                }else if(arenaChapter==='GARDEN'){
+                    urgent=chapterGardenContested.some(Boolean);
+                    message=urgent?'İYON BASKISI · MUHAFIZI UZAKLAŞTIR':'HALKALARDA DUR · İYON DOLDUR';
+                }else if(chapterRiftPursuit){
+                    urgent=true;
+                    message='YARIK TAKİPÇİSİ · '+(chapterRiftPursuit.readyAt-totalTime).toFixed(1)+' sn';
+                }
                 else message=totalTime<chapterRiftReadyAt?
                     'GEÇİT ŞARJDA · '+Math.ceil(chapterRiftReadyAt-totalTime)+' sn':
                     'İKİ GEÇİT AKTİF';
@@ -6600,11 +6603,12 @@
                     'FAZ KISKACI · İŞARETLERDEN UZAKLAŞ';
             }
             status.textContent=message;
-            if(mobile){
-                mobile.classList.toggle('hidden',!d);
-                mobile.textContent=d?d.glyph+' '+d.short+' · '+message:'';
-            }
             const show=!!d && gameState==='PLAYING'&&totalTime<chapterAnnounceUntil;
+            if(chip){
+                const nextUrgent=String(!!d&&urgent&&chapterEffectsAllowed());
+                if(chip.dataset.urgent!==nextUrgent)chip.dataset.urgent=nextUrgent;
+                if(d&&!show)showContextual(chip,HUD_CONTEXT_RULES.holdMs);
+            }
             announcement.classList.toggle('hidden',!show);
             if(show){
                 const op=chapterShowcase;
@@ -7163,12 +7167,12 @@
             const overlay=document.getElementById('prismCooldownOverlay');
             if(!button||!status||!overlay||!player)return;
             const ready=Math.max(0,prismGuardReadyAt-totalTime);
-            overlay.style.height=(ready/PRISM_RULES.cooldown*100).toFixed(1)+'%';
+            setCooldownOverlay(overlay,ready/PRISM_RULES.cooldown*100);
             const active=prismActive();
             status.textContent=active?
                 'KARŞILA '+(PRISM_RULES.maxDeflections-prismGuardDeflections):
                 ready>0?ready.toFixed(1)+'s':'HAZIR';
-            status.className='font-cyber text-xs font-bold relative z-10 '+
+            status.className='skill-status font-cyber text-xs font-bold relative z-10 '+
                 (active?'text-cyan-200':ready>0?'text-blue-200':'text-green-400');
             button.setAttribute('aria-label',
                 active?'Prizma Karşılığı aktif, kalan yansıma '+(PRISM_RULES.maxDeflections-prismGuardDeflections):
@@ -9351,9 +9355,8 @@
                     '" data-target="'+target+'" aria-current="'+(target?'true':'false')+
                     '" aria-label="'+tag+', Faz '+(b.bossPhase || 1)+', HP '+Math.ceil(hp)+' / '+
                     Math.round(maxHp)+'" style="color:'+color+';border-color:'+color+'">'+
-                    '<span class="boss-id-head"><strong>'+tag+' · F'+(b.bossPhase || 1)+
-                    '</strong><span class="boss-id-hp">'+Math.ceil(hp)+'/'+Math.round(maxHp)+targetText+'</span></span>'+
-                    '<span class="boss-id-meter"><span class="boss-id-fill" style="width:'+pct+'%;background:'+color+'"></span></span></span>';
+                    '<strong>'+tag+' · F'+(b.bossPhase || 1)+'</strong> '+
+                    '<span class="boss-id-hp">'+pct+'%'+targetText+'</span></span>';
             }).join('');
         }
 
@@ -9373,9 +9376,7 @@
                 const maxHp = Math.max(1, Number(b.maxHp) || 1);
                 const pct = Math.max(0, Math.min(100, Math.round(hp / maxHp * 100)));
                 const hpText = row.querySelector('.boss-id-hp');
-                const fill = row.querySelector('.boss-id-fill');
-                if (hpText) hpText.textContent = Math.ceil(hp)+'/'+Math.round(maxHp)+(player?.lockedTarget === b ? ' · TARGET' : '');
-                if (fill) fill.style.width = pct+'%';
+                if (hpText) hpText.textContent = pct+'%'+(player?.lockedTarget === b ? ' · TARGET' : '');
                 row.setAttribute('aria-label', (b.bossVisual?.tag || b.bossName || 'BOSS')+', Faz '+(b.bossPhase || 1)+', HP '+Math.ceil(hp)+' / '+Math.round(maxHp));
             }
         }
@@ -9397,12 +9398,60 @@
             badge.classList.remove('hidden');
         }
 
+        // Odak 2.2 · contextual HUD items are hidden until they matter, then fade
+        // out (CSS opacity) when their hold runs out. One sweep per HUD refresh
+        // replaces per-item timers. Holds use run time, so pauses freeze them.
+        const HUD_CONTEXT_RULES = Object.freeze({
+            goldMs: 2000, questMs: 3000, holdMs: 400, comboMin: 5, gaugeMin: 80
+        });
+        const hudContextUntil = new Map();
+        let hudLastGold = null;
+        function showContextual(el, ms) {
+            if (!el) return;
+            const until = totalTime + ms / 1000;
+            if (!(hudContextUntil.get(el) >= until)) hudContextUntil.set(el, until);
+            if (el.dataset.context !== 'on') el.dataset.context = 'on';
+        }
+        function updateContextualHud() {
+            for (const [el, until] of hudContextUntil) {
+                if (totalTime < until) continue;
+                hudContextUntil.delete(el);
+                el.dataset.context = 'off';
+            }
+        }
+        function resetContextualHud() {
+            for (const el of hudContextUntil.keys()) el.dataset.context = 'off';
+            hudContextUntil.clear();
+            hudLastGold = null;
+        }
+
+        // Odak 2.2 · HUD nodes are looked up once; updateHUD runs 10 times a second.
+        const hudEls = Object.freeze(Object.fromEntries([
+            'hud', 'xpBar', 'levelText', 'xpText', 'momentumMeter', 'momentumBar', 'momentumText',
+            'overdriveMeter', 'overdriveBar', 'overdriveText', 'hpBar', 'hpText', 'lowHpOverlay',
+            'reviveIndicator', 'reviveCountText', 'goldHudChip', 'goldHudText',
+            'bastionBtn', 'novaBtn', 'prismBtn', 'dashBtn', 'shieldIndicator', 'shieldText',
+            'waveText', 'timeText', 'scoreText', 'activeContractBadge',
+            'comboContainer', 'comboText', 'comboRankText', 'comboTimerBar',
+            'bossHudContainer', 'bossHpBar', 'bossHpText', 'bossNameText', 'bossPhaseText',
+            'bossIdentityStrip', 'dashCooldownOverlay', 'dashStatus', 'novaCooldownOverlay', 'novaStatus'
+        ].map(id => [id, document.getElementById(id)])));
+
+        // Cooldown overlays draw a radial sweep from --cd (0..100) on desktop and
+        // keep the vertical fill (height) on the older touch layout.
+        function setCooldownOverlay(el, pct) {
+            const value = Math.max(0, Math.min(100, pct)).toFixed(1);
+            el.style.height = value + '%';
+            el.style.setProperty?.('--cd', value);
+        }
+
         function updateHUD() {
             if (!player) return;
+            const h = hudEls;
             updateUnlockSpotlight();
 
             const contract = getActiveNeonContract();
-            const contractBadge = document.getElementById('activeContractBadge');
+            const contractBadge = h.activeContractBadge;
             if (contractBadge) {
                 contractBadge.textContent = contract.id;
                 contractBadge.style.borderColor = contract.color;
@@ -9416,112 +9465,89 @@
             updateFieldDeviceHud();
 
             const xpPct = Math.min(100, (player.xp / player.xpToNext) * 100);
-            document.getElementById('xpBar').style.width = `${xpPct}%`;
-            document.getElementById('levelText').textContent = player.level;
-            document.getElementById('xpText').textContent = `${Math.floor(player.xp)} / ${player.xpToNext}`;
+            h.xpBar.style.width = `${xpPct}%`;
+            h.levelText.textContent = player.level;
+            h.xpText.textContent = `${Math.floor(player.xp)} / ${player.xpToNext}`;
 
             const momPct = Math.min(100, Math.round(player.momentum));
-            document.getElementById('momentumBar').style.width = `${momPct}%`;
-            const momText = document.getElementById('momentumText');
-            if (momPct >= 80) {
-                momText.textContent = `MOMENTUM · %${momPct}`;
-            } else {
-                momText.textContent = `MOMENTUM · %${momPct}`;
-            }
+            h.momentumBar.style.width = `${momPct}%`;
+            h.momentumText.textContent = `MOMENTUM · %${momPct}`;
+            if (momPct >= HUD_CONTEXT_RULES.gaugeMin) showContextual(h.momentumMeter, HUD_CONTEXT_RULES.holdMs);
 
             const odPct = Math.min(100, player.overdrive);
-            document.getElementById('overdriveBar').style.width = `${odPct}%`;
-            const odText = document.getElementById('overdriveText');
-            if (player.overdriveActive) {
-                odText.textContent = `CİNNET · ${player.overdriveTimer.toFixed(1)}s`;
-            } else {
-                odText.textContent = `CİNNET · %${Math.floor(odPct)}`;
-            }
+            h.overdriveBar.style.width = `${odPct}%`;
+            h.overdriveText.textContent = player.overdriveActive ?
+                `CİNNET · ${player.overdriveTimer.toFixed(1)}s` : `CİNNET · %${Math.floor(odPct)}`;
+            if (player.overdriveActive || odPct >= HUD_CONTEXT_RULES.gaugeMin)
+                showContextual(h.overdriveMeter, HUD_CONTEXT_RULES.holdMs);
 
             const hpPct = Math.max(0, (player.hp / player.maxHp) * 100);
             // M5.25: the cockpit changes priority with actual combat state.
             // Dataset updates only on transitions, not every HUD refresh.
-            const cockpit=document.getElementById('hud');
-            const vital=hpPct<=30&&hpPct>0?'critical':
-                hpPct<=55?'wounded':'steady';
-            const alert=activeBosses.some(b=>!b.dead)?'boss':
-                combatDirector?.profile?.phase==='WARNING'?'warning':
-                player.overdriveActive?'overdrive':'patrol';
-            if(cockpit.dataset.vital!==vital)cockpit.dataset.vital=vital;
-            if(cockpit.dataset.combatAlert!==alert)cockpit.dataset.combatAlert=alert;
-            document.getElementById('hpBar').style.width = `${hpPct}%`;
-            document.getElementById('hpText').textContent = `${Math.ceil(player.hp)}/${player.maxHp}`;
+            const cockpit = h.hud;
+            const vital = hpPct <= 30 && hpPct > 0 ? 'critical' :
+                hpPct <= 55 ? 'wounded' : 'steady';
+            const alert = activeBosses.some(b => !b.dead) ? 'boss' :
+                combatDirector?.profile?.phase === 'WARNING' ? 'warning' :
+                player.overdriveActive ? 'overdrive' : 'patrol';
+            if (cockpit.dataset.vital !== vital) cockpit.dataset.vital = vital;
+            if (cockpit.dataset.combatAlert !== alert) cockpit.dataset.combatAlert = alert;
+            h.hpBar.style.width = `${hpPct}%`;
+            h.hpText.textContent = `${Math.ceil(player.hp)}/${player.maxHp}`;
 
-            const lowHpOverlay = document.getElementById('lowHpOverlay');
-            if (hpPct > 0 && hpPct <= 30) {
-                lowHpOverlay.classList.remove('hidden');
-            } else {
-                lowHpOverlay.classList.add('hidden');
-            }
+            if (hpPct > 0 && hpPct <= 30) h.lowHpOverlay.classList.remove('hidden');
+            else h.lowHpOverlay.classList.add('hidden');
 
-            const reviveCountEl = document.getElementById('reviveCountText');
-            if (reviveCountEl) {
-                reviveCountEl.textContent = `${player.freeRevives}x`;
-            }
+            if (h.reviveCountText) h.reviveCountText.textContent = `${player.freeRevives}x`;
+            const reviveEmpty = String(player.freeRevives <= 0);
+            if (h.reviveIndicator && h.reviveIndicator.dataset.empty !== reviveEmpty)
+                h.reviveIndicator.dataset.empty = reviveEmpty;
 
-            document.getElementById('goldHudText').textContent = totalGold.toLocaleString('tr-TR');
+            h.goldHudText.textContent = totalGold.toLocaleString('tr-TR');
+            if (hudLastGold !== null && totalGold > hudLastGold)
+                showContextual(h.goldHudChip, HUD_CONTEXT_RULES.goldMs);
+            hudLastGold = totalGold;
+
             updateBastionHud();
-            for(const [id,ready] of [
-                ['bastionBtn',!document.getElementById('bastionBtn').disabled],
-                ['novaBtn',player.novaCooldown<=0],
-                ['prismBtn',totalTime>=prismGuardReadyAt&&!prismActive()],
-                ['dashBtn',player.dashCooldown<=0&&!player.isDashing]
-            ]){
-                const button=document.getElementById(id);
-                const next=ready?'true':'false';
-                if(button.dataset.ready!==next)button.dataset.ready=next;
+            for (const [button, ready] of [
+                [h.bastionBtn, !h.bastionBtn.disabled],
+                [h.novaBtn, player.novaCooldown <= 0],
+                [h.prismBtn, totalTime >= prismGuardReadyAt && !prismActive()],
+                [h.dashBtn, player.dashCooldown <= 0 && !player.isDashing]
+            ]) {
+                const next = ready ? 'true' : 'false';
+                if (button.dataset.ready !== next) button.dataset.ready = next;
             }
 
-            const shieldInd = document.getElementById('shieldIndicator');
-            const shieldTxt = document.getElementById('shieldText');
             if (player.hasShield) {
-                shieldInd.classList.remove('hidden');
-                shieldInd.classList.add('flex');
-                if (player.shieldActive) {
-                    shieldTxt.textContent = 'AKTİF';
-                    shieldInd.className = 'flex items-center gap-1 text-cyan-400 border-l border-gray-700 pl-2 text-xs sm:text-sm font-bold';
-                } else {
-                    shieldTxt.textContent = `${Math.ceil(player.shieldCooldown)}s`;
-                    shieldInd.className = 'flex items-center gap-1 text-gray-500 border-l border-gray-700 pl-2 text-xs sm:text-sm font-bold';
-                }
+                h.shieldIndicator.classList.remove('hidden');
+                const state = player.shieldActive ? 'active' : 'cooldown';
+                if (h.shieldIndicator.dataset.state !== state) h.shieldIndicator.dataset.state = state;
+                h.shieldText.textContent = player.shieldActive ? 'AKTİF' : `${Math.ceil(player.shieldCooldown)}s`;
             } else {
-                shieldInd.classList.add('hidden');
+                h.shieldIndicator.classList.add('hidden');
             }
 
-            document.getElementById('waveText').textContent = wave;
-            document.getElementById('timeText').textContent = formatTime(totalTime);
-            const phaseEl = document.getElementById('directorPhaseText');
-            if (phaseEl && combatDirector) phaseEl.textContent = combatDirector.profile.label;
-            document.getElementById('scoreText').textContent = score.toLocaleString('tr-TR');
-            for(const [id,value] of [
-                ['xpBar',xpPct],['momentumBar',momPct],
-                ['overdriveBar',odPct],['hpBar',hpPct]
-            ]){
-                const bar=document.getElementById(id);
-                const next=String(Math.round(value));
-                if(bar.getAttribute('aria-valuenow')!==next)
-                    bar.setAttribute('aria-valuenow',next);
+            h.waveText.textContent = wave;
+            h.timeText.textContent = formatTime(totalTime);
+            h.scoreText.textContent = score.toLocaleString('tr-TR');
+            for (const [bar, value] of [
+                [h.xpBar, xpPct], [h.momentumBar, momPct],
+                [h.overdriveBar, odPct], [h.hpBar, hpPct]
+            ]) {
+                const next = String(Math.round(value));
+                if (bar.getAttribute('aria-valuenow') !== next)
+                    bar.setAttribute('aria-valuenow', next);
             }
 
-            const comboContainer = document.getElementById('comboContainer');
-            if (combo > 1) {
-                comboContainer.classList.remove('hidden');
-                comboContainer.classList.add('flex');
-                document.getElementById('comboText').textContent = `x${combo}`;
+            if (combo >= HUD_CONTEXT_RULES.comboMin) {
+                showContextual(h.comboContainer, HUD_CONTEXT_RULES.holdMs);
+                h.comboText.textContent = `x${combo}`;
                 const rankInfo = getComboRank(combo);
-                const rankEl = document.getElementById('comboRankText');
-                rankEl.textContent = rankInfo.label;
-                rankEl.style.color = rankInfo.col;
+                h.comboRankText.textContent = rankInfo.label;
+                h.comboRankText.style.color = rankInfo.col;
                 const timerPct = Math.max(0, (comboTimer / COMBO_MAX_TIME) * 100);
-                document.getElementById('comboTimerBar').style.width = `${timerPct}%`;
-            } else {
-                comboContainer.classList.add('hidden');
-                comboContainer.classList.remove('flex');
+                h.comboTimerBar.style.width = `${timerPct}%`;
             }
 
             if (activeBosses.length > 0) {
@@ -9536,63 +9562,73 @@
                     }
                 }
                 const bPct = totalMaxHp > 0 ? Math.max(0, (totalHp / totalMaxHp) * 100) : 0;
-                document.getElementById('bossHpBar').style.width = `${bPct}%`;
-                document.getElementById('bossHpText').textContent = `${Math.ceil(totalHp)} / ${Math.round(totalMaxHp)}`;
-                const nameEl = document.getElementById('bossNameText');
+                h.bossHpBar.style.width = `${bPct}%`;
+                h.bossHpText.textContent = `${Math.ceil(totalHp)} / ${Math.round(totalMaxHp)}`;
+                const nameEl = h.bossNameText;
                 if (nameEl) {
-                    nameEl.textContent = activeBosses.length>1
-                        ? '⚠ ÇOKLU BOSS · '+activeBosses.length+' HEDEF'
-                        : '⚠ '+names.join(' + ');
+                    nameEl.textContent = activeBosses.length > 1
+                        ? '⚠ ÇOKLU BOSS · ' + activeBosses.length + ' HEDEF'
+                        : '⚠ ' + names.join(' + ');
                 }
-                const living=activeBosses.filter(b=>!b.dead);
-                const primary=living[0];
-                const color=living.length>1?'#ff738f':(primary?.color||'#ff0055');
-                const hud=document.getElementById('bossHudContainer');
-                hud.style.borderColor=color;
-                const hpBar=document.getElementById('bossHpBar');
+                const living = activeBosses.filter(b => !b.dead);
+                const primary = living[0];
+                const color = living.length > 1 ? '#ff738f' : (primary?.color || '#ff0055');
+                h.bossHudContainer.style.borderColor = color;
                 if (lastBossGradientColor !== color) {
-                    hpBar.style.background = 'linear-gradient(90deg,#630e28,'+color+' 72%,#eaffff)';
+                    h.bossHpBar.style.background = 'linear-gradient(90deg,#630e28,' + color + ' 72%,#eaffff)';
                     lastBossGradientColor = color;
                 }
-                if(nameEl && nameEl.style.color!==color)nameEl.style.color=color;
-                const phaseEl=document.getElementById('bossPhaseText');
-                if(phaseEl)phaseEl.textContent=living.length>1?'FAZLAR AYRI':
-                    'FAZ '+(primary?.bossPhase||1)+' / 3';
-                const strip=document.getElementById('bossIdentityStrip');
+                if (nameEl && nameEl.style.color !== color) nameEl.style.color = color;
+                if (h.bossPhaseText) h.bossPhaseText.textContent = living.length > 1 ? 'FAZLAR AYRI' :
+                    'FAZ ' + (primary?.bossPhase || 1) + ' / 3';
+                // Odak 2.2 · one boss: the main bar says it all. Several: names under the bar.
+                const strip = h.bossIdentityStrip;
                 if (strip) {
-                    const identityKey = getBossIdentityKey(living);
+                    const shown = living.length > 1 ? living : [];
+                    const identityKey = getBossIdentityKey(shown);
                     if (lastBossIdentityMarkup !== identityKey) {
-                        strip.innerHTML = renderBossIdentityRows(living);
+                        strip.innerHTML = renderBossIdentityRows(shown);
                         lastBossIdentityMarkup = identityKey;
-                    } else updateBossIdentityRows(living);
+                    } else updateBossIdentityRows(shown);
                 }
             }
 
             const dashPct = (player.dashCooldown / player.dashMaxCooldown) * 100;
-            document.getElementById('dashCooldownOverlay').style.height = `${dashPct}%`;
-            const dashStatus = document.getElementById('dashStatus');
+            setCooldownOverlay(h.dashCooldownOverlay, dashPct);
+            const dashStatus = h.dashStatus;
             if (player.dashCooldown <= 0) {
                 dashStatus.textContent = 'HAZIR';
-                const nextDashClass = 'font-cyber text-xs font-bold text-green-400 relative z-10';
+                const nextDashClass = 'skill-status font-cyber text-xs font-bold text-green-400 relative z-10';
                 if (dashStatus.className !== nextDashClass) dashStatus.className = nextDashClass;
             } else {
                 dashStatus.textContent = `${player.dashCooldown.toFixed(1)}s`;
-                const nextDashClass = 'font-cyber text-xs font-bold text-cyan-300 relative z-10';
+                const nextDashClass = 'skill-status font-cyber text-xs font-bold text-cyan-300 relative z-10';
                 if (dashStatus.className !== nextDashClass) dashStatus.className = nextDashClass;
             }
 
             const novaPct = (player.novaCooldown / player.novaMaxCooldown) * 100;
-            document.getElementById('novaCooldownOverlay').style.height = `${novaPct}%`;
-            const novaStatus = document.getElementById('novaStatus');
+            setCooldownOverlay(h.novaCooldownOverlay, novaPct);
+            const novaStatus = h.novaStatus;
             if (player.novaCooldown <= 0) {
                 novaStatus.textContent = 'HAZIR';
-                const nextNovaClass = 'font-cyber text-xs font-bold text-green-400 relative z-10';
+                const nextNovaClass = 'skill-status font-cyber text-xs font-bold text-green-400 relative z-10';
                 if (novaStatus.className !== nextNovaClass) novaStatus.className = nextNovaClass;
             } else {
                 novaStatus.textContent = `${player.novaCooldown.toFixed(1)}s`;
-                const nextNovaClass = 'font-cyber text-xs font-bold text-purple-300 relative z-10';
+                const nextNovaClass = 'skill-status font-cyber text-xs font-bold text-purple-300 relative z-10';
                 if (novaStatus.className !== nextNovaClass) novaStatus.className = nextNovaClass;
             }
+
+            // Odak 1.4 spotlight: a newly opened contextual gauge stays in view
+            // while it is highlighted. Chapters have no state to show yet.
+            if (unlockSpotlightIds.length && totalTime < unlockSpotlightUntil) {
+                for (const id of unlockSpotlightIds) {
+                    if (id === 'chapters') continue;
+                    for (const el of SYSTEM_LOCK_ELEMENTS[id]?.() || [])
+                        if (el?.dataset?.context) showContextual(el, HUD_CONTEXT_RULES.holdMs);
+                }
+            }
+            updateContextualHud();
         }
 
         function updateModulesDock() {
@@ -9727,6 +9763,7 @@
             applySystemLockVisibility();
             startUnlockSpotlight();
             gameState = 'PLAYING';
+            resetContextualHud();
             updateModulesDock();
             updateHUD();
         }

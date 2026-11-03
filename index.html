@@ -27,134 +27,82 @@
     <!-- CRT Scanline Visual Effect -->
     <div class="crt-overlay fixed inset-0 z-10"></div>
 
-    <div id="hud" class="combat-cockpit fixed inset-0 pointer-events-none z-20 flex flex-col justify-between p-3 sm:p-5 lg:p-6 hidden" data-vital="steady" data-combat-alert="patrol">
-        <!-- Top Bar -->
-        <div class="hud-top-deck flex flex-col gap-2 w-full">
-            <!-- XP, Kinetic Momentum & Overdrive Progress Bars -->
-            <div class="hud-signal-deck grid gap-2" aria-label="Çekirdek durum göstergeleri">
-                <!-- XP BAR -->
-                <div class="hud-meter hud-meter-xp bg-gray-900/90 h-5 rounded-full overflow-hidden border border-cyan-500/50 p-0.5 relative shadow-[0_0_15px_rgba(0,243,255,0.3)]" aria-label="Deneyim çubuğu">
-                    <div id="xpBar" role="progressbar" aria-label="Deneyim yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="hud-meter-fill h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 rounded-full transition-all duration-150" style="width: 0%;"></div>
-                    <div class="hud-meter-label absolute inset-0 flex items-center justify-center text-[11px] sm:text-xs font-cyber font-bold tracking-widest text-white drop-shadow">
-                        SV <span id="levelText" class="mx-1 text-cyan-300">1</span> · XP <span id="xpText" class="ml-1">0 / 125</span>
-                    </div>
-                </div>
-                <!-- KINETIC MOMENTUM BAR -->
-                <div class="hud-meter hud-meter-momentum bg-gray-900/90 h-5 rounded-full overflow-hidden border border-green-400/60 p-0.5 relative shadow-[0_0_15px_rgba(0,255,102,0.25)]" aria-label="Momentum çubuğu">
-                    <div id="momentumBar" role="progressbar" aria-label="Momentum yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="hud-meter-fill h-full bg-gradient-to-r from-emerald-500 via-green-400 to-cyan-300 rounded-full transition-all duration-75" style="width: 0%;"></div>
-                    <div id="momentumText" class="hud-meter-label absolute inset-0 flex items-center justify-center text-[10px] sm:text-xs font-cyber font-black tracking-wider text-white drop-shadow">
-                        MOMENTUM · %0
-                    </div>
-                </div>
-                <!-- OVERDRIVE FEVER BAR -->
-                <div class="hud-meter hud-meter-overdrive bg-gray-900/90 h-5 rounded-full overflow-hidden border border-pink-500/60 p-0.5 relative shadow-[0_0_15px_rgba(255,0,127,0.3)]" aria-label="Cinnet çubuğu">
-                    <div id="overdriveBar" role="progressbar" aria-label="Cinnet enerjisi yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="hud-meter-fill h-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600 rounded-full transition-all duration-100" style="width: 0%;"></div>
-                    <div id="overdriveText" class="hud-meter-label absolute inset-0 flex items-center justify-center text-[10px] sm:text-xs font-cyber font-black tracking-widest text-white drop-shadow">
-                        CİNNET · %0
-                    </div>
-                </div>
-            </div>
-
-            <div class="hud-information-row flex flex-wrap items-center justify-between gap-2 mt-0.5">
-                <!-- Health, Shield, Defibrillator & Gold -->
-                <div class="hud-vitals-group flex flex-wrap items-center gap-2 sm:gap-3">
-                    <div class="hud-vitals flex items-center gap-3 bg-gray-950/85 border border-pink-500/40 px-3 py-1.5 rounded-xl backdrop-blur-md">
-                        <div class="flex items-center gap-2">
-                            <i class="fa-solid fa-heart text-pink-500 animate-pulse"></i>
-                            <div class="hud-health-track w-24 sm:w-36 bg-gray-800 h-3 rounded-full overflow-hidden">
-                                <div id="hpBar" role="progressbar" aria-label="Can yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" class="bg-gradient-to-r from-red-600 to-pink-500 h-full transition-all duration-150" style="width: 100%;"></div>
-                            </div>
-                            <span id="hpText" class="text-xs sm:text-sm font-bold w-16 text-right">100/100</span>
+    <div id="hud" class="combat-cockpit fixed inset-0 pointer-events-none z-20 flex flex-col justify-between hidden" data-vital="steady" data-combat-alert="patrol">
+        <!-- Odak 2.2 · Top deck: one status row, then the contextual boss bar and event strips. -->
+        <div class="hud-top-deck">
+            <div class="hud-status-row" aria-label="Çekirdek durum göstergeleri">
+                <div class="hud-status-left">
+                    <div class="hud-vitals" aria-label="Can">
+                        <i class="fa-solid fa-heart hud-vitals-icon" aria-hidden="true"></i>
+                        <div class="hud-health-track">
+                            <div id="hpBar" role="progressbar" aria-label="Can yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" class="hud-health-fill" style="width: 100%;"></div>
+                            <span id="hpText" class="hud-health-text">100/100</span>
                         </div>
-                        <!-- Shield indicator -->
-                        <div id="shieldIndicator" class="hidden items-center gap-1 text-cyan-400 border-l border-gray-700 pl-2 text-xs sm:text-sm font-bold">
-                            <i class="fa-solid fa-shield-halved"></i>
+                        <div id="shieldIndicator" class="hud-vital-flag hidden" data-state="active" title="Kalkan">
+                            <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
                             <span id="shieldText">AKTİF</span>
                         </div>
-                        <!-- Defibrillator indicator -->
-                        <div id="reviveIndicator" title="Diriliş hakkı" class="flex items-center gap-1 text-emerald-400 border-l border-gray-700 pl-2 text-xs sm:text-sm font-bold">
-                            <i class="fa-solid fa-heart-circle-bolt"></i>
-                            <span id="reviveCountText">1x</span>
+                        <div id="reviveIndicator" class="hud-vital-flag hud-revive" data-empty="false" title="Diriliş hakkı">
+                            <i class="fa-solid fa-heart-circle-bolt" aria-hidden="true"></i>
+                            <span id="reviveCountText" class="hud-sr">1x</span>
                         </div>
                     </div>
-
-                    <!-- Gold Cores Counter -->
-                    <div class="hud-gold-panel flex items-center gap-2 bg-gray-950/85 border border-yellow-500/40 px-3 py-1.5 rounded-xl backdrop-blur-md">
-                        <i class="fa-solid fa-coins text-yellow-400"></i>
-                        <span id="goldHudText" class="font-cyber text-sm font-bold text-yellow-300 text-glow-yellow">0</span>
-                    </div>
-
-                    <!-- Live Mini-Mission Tracker -->
-                    <div id="questHudBox" class="hidden xl:flex items-center gap-2 bg-gray-950/85 border border-green-500/40 px-3 py-1.5 rounded-xl backdrop-blur-md">
-                        <i class="fa-solid fa-trophy text-green-400 text-xs"></i>
-                        <span id="questHudText" class="text-xs font-bold text-green-300">AV · 0/15</span>
-                    </div>
-                    <div class="flex xl:hidden items-center gap-1.5 bg-gray-950/85 border border-green-500/40 px-2 py-1.5 rounded-lg" aria-label="Aktif görev">
-                        <i class="fa-solid fa-crosshairs text-green-300 text-[10px]" aria-hidden="true"></i>
-                        <span id="questMobileText" class="text-[10px] sm:text-xs font-bold text-green-300">AV · 0/15</span>
+                    <div id="goldHudChip" class="hud-gold-panel hud-chip" data-context="off" title="Altın">
+                        <i class="fa-solid fa-coins" aria-hidden="true"></i>
+                        <span id="goldHudText">0</span>
                     </div>
                 </div>
 
-                <!-- Wave, timer and Combat Director phase -->
-                <div class="hud-wave-panel bg-gray-950/85 border border-purple-500/40 px-4 py-1.5 rounded-xl backdrop-blur-md flex items-center gap-3">
-                    <div class="text-center">
-                        <span class="text-[10px] text-purple-300 block leading-none">DALGA</span>
-                        <span id="waveText" class="font-cyber text-base sm:text-lg font-black text-white text-glow-pink">1</span>
-                    </div>
-                    <div class="h-6 w-px bg-gray-800"></div>
-                    <div class="text-center">
-                        <span class="text-[10px] text-gray-400 block leading-none">SÜRE</span>
-                        <span id="timeText" class="font-cyber text-base sm:text-lg font-bold text-cyan-300">00:00</span>
-                    </div>
-                    <div class="hidden sm:block h-6 w-px bg-gray-800"></div>
-                    <div class="hidden sm:block text-center min-w-[70px]">
-                        <span class="text-[10px] text-gray-400 block leading-none">TEHDİT</span>
-                        <span id="directorPhaseText" class="font-cyber text-[10px] font-bold text-yellow-300">HAZIRLIK</span>
-                    </div>
-                    <span id="activeContractBadge" class="hidden sm:inline-block text-[9px] font-cyber font-bold border rounded px-1.5 py-1" title="Aktif Neon Sözleşmesi">STANDARD</span>
-                    <div id="arenaChapterChip" class="arena-chapter-chip hidden sm:flex flex-col min-w-[105px] px-2 py-0.5 rounded border" aria-label="Arena bölümü">
-                        <span id="arenaChapterBadge" class="font-cyber text-[9px] font-black">NORMAL</span>
-                        <span id="arenaChapterStatus" class="text-[8px] font-bold opacity-80">STANDARD ARENA</span>
-                    </div>
+                <div class="hud-meter hud-meter-xp" aria-label="Deneyim çubuğu">
+                    <div id="xpBar" role="progressbar" aria-label="Deneyim yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="hud-meter-fill" style="width: 0%;"></div>
+                    <span class="hud-meter-level">SV <span id="levelText">1</span></span>
+                    <span id="xpText" class="hud-sr">0 / 125</span>
                 </div>
 
-                <!-- Score, Combo Rank & Pause -->
-                <div class="hud-score-panel flex items-center gap-3 bg-gray-950/85 border border-cyan-500/40 px-3 sm:px-4 py-1.5 rounded-xl backdrop-blur-md">
-                    <!-- Dynamic Combo Rank Box -->
-                    <div id="comboContainer" class="hidden items-center gap-2 bg-gray-900/90 border border-yellow-400 px-2.5 py-0.5 rounded-lg">
-                        <div class="text-left">
-                            <span id="comboRankText" class="font-cyber font-black text-xs text-yellow-300 block leading-none">D</span>
-                            <div class="w-12 bg-gray-800 h-1 rounded-full overflow-hidden mt-0.5">
-                                <div id="comboTimerBar" class="bg-yellow-400 h-full" style="width: 100%;"></div>
-                            </div>
+                <div class="hud-status-right">
+                    <div class="hud-context-strip">
+                        <div id="questHudBox" class="hud-chip hud-quest-chip" data-context="off" aria-label="Aktif görev">
+                            <i class="fa-solid fa-crosshairs" aria-hidden="true"></i>
+                            <span id="questHudText">AV · 0/15</span>
                         </div>
-                        <span id="comboText" class="font-cyber font-black text-yellow-300 text-glow-yellow text-sm sm:text-base">x2</span>
+                        <div id="comboContainer" class="hud-chip hud-combo-chip" data-context="off" aria-label="Kombo">
+                            <span id="comboRankText">D</span>
+                            <span id="comboText">x2</span>
+                            <span class="hud-combo-timer"><span id="comboTimerBar" style="width: 100%;"></span></span>
+                        </div>
+                        <div id="momentumMeter" class="hud-meter hud-meter-momentum hud-chip" data-context="off" aria-label="Momentum çubuğu">
+                            <div id="momentumBar" role="progressbar" aria-label="Momentum yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="hud-meter-fill" style="width: 0%;"></div>
+                            <span id="momentumText" class="hud-meter-label">MOMENTUM · %0</span>
+                        </div>
+                        <div id="overdriveMeter" class="hud-meter hud-meter-overdrive hud-chip" data-context="off" aria-label="Cinnet çubuğu">
+                            <div id="overdriveBar" role="progressbar" aria-label="Cinnet enerjisi yüzdesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="hud-meter-fill" style="width: 0%;"></div>
+                            <span id="overdriveText" class="hud-meter-label">CİNNET · %0</span>
+                        </div>
+                        <div id="arenaChapterChip" class="arena-chapter-chip hud-chip" data-context="off" data-urgent="false" aria-label="Arena bölümü">
+                            <span id="arenaChapterBadge">NORMAL</span>
+                            <span id="arenaChapterStatus">STANDARD ARENA</span>
+                        </div>
                     </div>
-
-                    <div class="text-right">
-                        <span class="text-[10px] text-cyan-400 block leading-none">SKOR</span>
-                        <span id="scoreText" class="font-cyber text-base sm:text-xl font-black text-white text-glow-cyan">0</span>
+                    <div class="hud-clock" aria-label="Dalga ve süre">
+                        <span class="hud-clock-wave">DALGA <span id="waveText">1</span></span>
+                        <span id="timeText">00:00</span>
                     </div>
-                    <button id="fullscreenBtn" type="button" title="Tam Ekran [F]" class="pointer-events-auto ml-1 w-8 h-8 rounded-lg bg-gray-800 hover:bg-cyan-900 border border-cyan-500/40 flex items-center justify-center text-cyan-300 transition cursor-pointer">
-                        <i class="fa-solid fa-expand"></i>
-                    </button>
-                    <button id="pauseBtn" type="button" title="Duraklat [P / ESC]" class="pointer-events-auto w-8 h-8 rounded-lg bg-gray-800 hover:bg-cyan-900 border border-cyan-500/40 flex items-center justify-center text-cyan-300 transition cursor-pointer">
-                        <i class="fa-solid fa-pause"></i>
+                    <button id="pauseBtn" type="button" title="Duraklat [P / ESC]" aria-label="Duraklat" class="hud-pause-button pointer-events-auto cursor-pointer">
+                        <i class="fa-solid fa-pause" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
 
-            <div id="bossHudContainer" class="hud-boss-console hidden flex-col items-center w-full max-w-2xl mx-auto mt-1 bg-gray-950/90 border border-red-500/70 px-4 py-2 rounded-xl box-glow-pink">
-                <div class="flex justify-between w-full items-center mb-1">
-                    <span id="bossNameText" class="font-cyber text-xs sm:text-sm font-black text-red-400 tracking-wider flex items-center gap-2">
-                        <i class="fa-solid fa-triangle-exclamation animate-bounce"></i> MEGA-ÇEKİRDEK YIKICI
-                    </span>
-                    <span class="text-right flex flex-col items-end gap-0.5"><span id="bossPhaseText" class="font-cyber text-[9px] text-pink-200">FAZ 1 / 3</span><span id="bossHpText" class="font-cyber text-xs font-bold text-pink-300">2500 / 2500</span><span class="font-cyber text-[8px] text-cyan-300/80">TAB HEDEF DEĞİŞTİR</span></span>
+            <div id="bossHudContainer" class="hud-boss-console hidden" aria-label="Boss durumu">
+                <div class="hud-boss-head">
+                    <span id="bossNameText">MEGA-ÇEKİRDEK YIKICI</span>
+                    <span id="bossPhaseText">FAZ 1 / 3</span>
                 </div>
-                <div class="w-full bg-gray-900 h-3.5 rounded-full overflow-hidden border border-red-500/40 p-0.5">
-                    <div id="bossHpBar" class="h-full bg-gradient-to-r from-red-600 via-pink-500 to-yellow-500 rounded-full transition-all duration-100" style="width: 100%;"></div>
+                <div class="hud-boss-track">
+                    <div id="bossHpBar" style="width: 100%;"></div>
+                    <span id="bossHpText">2500 / 2500</span>
                 </div>
-                <div id="bossIdentityStrip" class="w-full flex flex-wrap gap-1 mt-1" aria-label="Aktif bosslar"></div>
+                <div id="bossIdentityStrip" class="hud-boss-names" aria-label="Aktif bosslar"></div>
             </div>
 
             <!-- Boss Warning Banner -->
@@ -167,7 +115,6 @@
             <div id="arenaChapterAnnouncement" class="hidden arena-chapter-announcement text-center mx-auto px-4 py-1.5 rounded-lg font-cyber font-bold text-[10px] sm:text-xs" role="status" aria-live="polite"></div>
             <div id="arenaShowcaseBanner" class="hidden arena-showcase-banner text-center mx-auto font-cyber font-bold text-[10px] sm:text-xs" role="note" aria-label="Arena özel karşılaşması" aria-live="off"></div>
             <div id="nemesisBanner" class="hidden nemesis-banner mx-auto text-center font-cyber font-bold text-[10px] sm:text-xs" role="note" aria-label="Yankı Avcısı tehdidi" aria-live="off"></div>
-            <div id="arenaChapterMobile" class="hidden sm:hidden arena-chapter-mobile mx-auto font-cyber font-bold text-[10px]" role="note" aria-label="Aktif arena taktik durumu" aria-live="off"></div>
             <div id="fieldDeviceBadge" class="hidden field-device-badge mx-auto text-center" role="note" aria-label="Sahadaki taktiksel cihaz" aria-live="off"></div>
             <div id="tacticalHintBadge" class="hidden tactical-hint-badge text-center px-3 py-1 rounded-lg font-cyber font-bold text-[9px] sm:text-[10px]" role="status" aria-live="polite"></div>
 
@@ -179,76 +126,54 @@
             </div>
         </div>
 
-        <div class="hud-command-deck flex flex-wrap items-end justify-between gap-2 w-full">
-            <!-- Control Mode, Audio & Active Modules Dock -->
-            <div class="flex flex-wrap items-center gap-2">
-                <div class="pointer-events-auto flex items-center gap-2 bg-gray-950/85 border border-gray-800 px-3 py-2 rounded-xl backdrop-blur-md">
-                    <button id="ctrlToggleBtn" type="button" class="text-xs sm:text-sm font-semibold text-cyan-300 hover:text-white flex items-center gap-1.5 cursor-pointer">
-                        <i class="fa-solid fa-computer-mouse text-cyan-400"></i>
-                        <span id="ctrlModeText">HİBRİT · M</span>
-                    </button>
-                    <div class="h-4 w-px bg-gray-800 mx-1"></div>
-                    <button id="musicToggleBtn" type="button" title="Adaptif Savaş Müziği (aç/kapat)" aria-label="Müzik aç veya kapat" class="text-purple-400 hover:text-white px-1 text-sm flex items-center gap-1 cursor-pointer">
-                        <i id="musicIcon" class="fa-solid fa-music"></i>
-                    </button>
-                    <button id="soundToggleBtn" type="button" title="Ses Efektleri (aç/kapat)" aria-label="Ses efektlerini aç veya kapat" class="text-cyan-400 hover:text-white px-1 text-sm cursor-pointer">
-                        <i id="soundIcon" class="fa-solid fa-volume-high"></i>
-                    </button>
-                </div>
-
-                <!-- Live Active Upgrades Dock -->
-                <div id="hudModulesDock" class="hidden lg:flex items-center gap-1.5 bg-gray-950/80 border border-gray-800/90 px-2.5 py-1.5 rounded-xl backdrop-blur-md flex-wrap max-w-[38vw] max-h-16 overflow-hidden">
-                    <!-- Populated dynamically -->
-                </div>
-                <details id="buildGuidePanel" class="pointer-events-auto relative text-xs font-cyber text-cyan-300">
-                    <summary id="buildGuideLabel" class="cursor-pointer bg-gray-950/90 border border-cyan-500/50 px-2.5 py-2 rounded-lg select-none">BUILD · 0 EVRİM / 0 SİNERJİ</summary>
-                    <div id="buildGuideDetails" class="absolute z-40 top-full right-0 mt-2 p-3 w-[min(85vw,340px)] max-h-[55vh] overflow-y-auto rounded-xl bg-gray-950 border border-cyan-500/50 text-[11px] leading-relaxed shadow-2xl"></div>
-                </details>
-            </div>
-
-            <!-- Dash & EMP Nova Abilities -->
-            <div class="ability-command-row hud-action-bay flex items-center gap-3 pointer-events-auto" role="group" aria-label="Aktif savaş yetenekleri">
+        <!-- Odak 2.2 · Bottom deck: only the active abilities. Names and long key text live in tooltips and the pause menu. -->
+        <div class="hud-command-deck">
+            <div class="ability-command-row hud-action-bay pointer-events-auto" role="group" aria-label="Aktif savaş yetenekleri">
                 <!-- M5.14: Gold-only stationary defense (independent of upgrade cards) -->
-                <button id="bastionBtn" data-skill="bastion" type="button" disabled aria-keyshortcuts="Q" aria-label="Saha siperi kur" class="bastion-ability-button relative group bg-gray-950/90 border border-emerald-400 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 transition cursor-pointer">
+                <button id="bastionBtn" data-skill="bastion" type="button" disabled aria-keyshortcuts="Q" aria-label="Saha siperi kur" class="bastion-ability-button relative group bg-gray-950/90 border border-emerald-400 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 transition hover:border-white cursor-pointer">
                     <i class="fa-solid fa-shield-halved text-emerald-300 text-lg" aria-hidden="true"></i>
-                    <div class="text-left hidden sm:block">
+                    <div class="skill-text text-left hidden sm:block">
                         <div class="text-xs font-bold text-emerald-300 leading-none">SAHA SİPERİ</div>
                         <div class="text-[10px] text-gray-400">[Q] · 8sn / sabit bölge</div>
                         <div id="bastionCostText" class="text-[10px] font-bold text-yellow-300">70 ALTIN · 3 HAK</div>
                     </div>
-                    <span id="bastionStatus" class="font-cyber text-[10px] font-bold text-emerald-300" aria-live="off">DALGA 4</span>
+                    <span id="bastionStatus" class="skill-status font-cyber text-[10px] font-bold text-emerald-300" aria-live="off">DALGA 4</span>
+                    <kbd class="skill-key" aria-hidden="true">Q</kbd>
                 </button>
                 <!-- EMP Nova Ability -->
-                <button id="novaBtn" data-skill="nova" type="button" class="relative group bg-gray-950/90 border border-purple-500 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer">
-                    <div id="novaCooldownOverlay" class="absolute inset-0 bg-purple-950/80 origin-bottom transition-all duration-100" style="height: 0%;"></div>
-                    <i class="fa-solid fa-burst text-purple-400 text-lg relative z-10"></i>
-                    <div class="text-left relative z-10 hidden sm:block">
+                <button id="novaBtn" data-skill="nova" type="button" aria-keyshortcuts="E" title="EMP Nova [E / SAĞ TIK]" class="relative group bg-gray-950/90 border border-purple-500 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer">
+                    <div id="novaCooldownOverlay" class="skill-cooldown absolute inset-0 bg-purple-950/80 origin-bottom transition-all duration-100" style="height: 0%;"></div>
+                    <i class="fa-solid fa-burst text-purple-400 text-lg relative z-10" aria-hidden="true"></i>
+                    <div class="skill-text text-left relative z-10 hidden sm:block">
                         <div class="text-xs font-bold text-purple-300 leading-none">EMP NOVA</div>
                         <div class="text-[10px] text-gray-400">[E] veya [SAĞ TIK]</div>
                     </div>
-                    <span id="novaStatus" class="font-cyber text-xs font-bold text-green-400 relative z-10">HAZIR</span>
+                    <span id="novaStatus" class="skill-status font-cyber text-xs font-bold text-green-400 relative z-10">HAZIR</span>
+                    <kbd class="skill-key" aria-hidden="true">E</kbd>
                 </button>
 
                 <!-- M5.22: Timed Prism Riposte, a separate active projectile counter -->
-                <button id="prismBtn" data-skill="prism" type="button" class="relative group prism-skill-button bg-gray-950/90 border border-sky-300 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer" aria-label="Prizma Karşılığı hazır; C tuşu">
-                    <div id="prismCooldownOverlay" class="absolute inset-0 bg-sky-950/80 origin-bottom transition-all duration-75" style="height:0%;"></div>
+                <button id="prismBtn" data-skill="prism" type="button" aria-keyshortcuts="C" title="Prizma Karşılığı [C] · yaklaşan mermiyi geri gönder" class="relative group prism-skill-button bg-gray-950/90 border border-sky-300 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer" aria-label="Prizma Karşılığı hazır; C tuşu">
+                    <div id="prismCooldownOverlay" class="skill-cooldown absolute inset-0 bg-sky-950/80 origin-bottom transition-all duration-75" style="height:0%;"></div>
                     <i class="fa-solid fa-shield-halved text-sky-200 text-lg relative z-10" aria-hidden="true"></i>
-                    <div class="text-left relative z-10 hidden sm:block">
+                    <div class="skill-text text-left relative z-10 hidden sm:block">
                         <div class="text-xs font-bold text-sky-200 leading-none">PRİZMA KARŞILIĞI</div>
                         <div class="text-[10px] text-gray-400">[C] · YAKLAŞAN MERMİYİ GERİ GÖNDER</div>
                     </div>
-                    <span id="prismStatus" class="font-cyber text-xs font-bold text-green-400 relative z-10" aria-live="off">HAZIR</span>
+                    <span id="prismStatus" class="skill-status font-cyber text-xs font-bold text-green-400 relative z-10" aria-live="off">HAZIR</span>
+                    <kbd class="skill-key" aria-hidden="true">C</kbd>
                 </button>
 
                 <!-- Dash Ability -->
-                <button id="dashBtn" data-skill="dash" type="button" class="relative group bg-gray-950/90 border border-cyan-400 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer">
-                    <div id="dashCooldownOverlay" class="absolute inset-0 bg-cyan-950/80 origin-bottom transition-all duration-75" style="height: 0%;"></div>
-                    <i class="fa-solid fa-bolt text-cyan-400 text-lg relative z-10"></i>
-                    <div class="text-left relative z-10 hidden sm:block">
+                <button id="dashBtn" data-skill="dash" type="button" aria-keyshortcuts="Space" title="Siber Atılım [BOŞLUK / SOL TIK]" class="relative group bg-gray-950/90 border border-cyan-400 p-2.5 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2.5 transition hover:border-white overflow-hidden cursor-pointer">
+                    <div id="dashCooldownOverlay" class="skill-cooldown absolute inset-0 bg-cyan-950/80 origin-bottom transition-all duration-75" style="height: 0%;"></div>
+                    <i class="fa-solid fa-bolt text-cyan-400 text-lg relative z-10" aria-hidden="true"></i>
+                    <div class="skill-text text-left relative z-10 hidden sm:block">
                         <div class="text-xs font-bold text-cyan-300 leading-none">SİBER ATILIM</div>
                         <div class="text-[10px] text-gray-400">[BOŞLUK] veya [SOL TIK]</div>
                     </div>
-                    <span id="dashStatus" class="font-cyber text-xs font-bold text-green-400 relative z-10">HAZIR</span>
+                    <span id="dashStatus" class="skill-status font-cyber text-xs font-bold text-green-400 relative z-10">HAZIR</span>
+                    <kbd class="skill-key" aria-hidden="true">␣</kbd>
                 </button>
             </div>
         </div>
@@ -612,26 +537,72 @@
     </div>
 
     <div id="pauseModal" class="fixed inset-0 z-30 hidden items-center justify-center p-4 bg-black/75 backdrop-blur-md">
-        <div class="max-w-sm w-full bg-gray-950 border border-cyan-500/60 rounded-2xl p-6 text-center box-glow-cyan">
-            <h2 class="font-cyber text-2xl font-black text-white text-glow-cyan mb-6">OYUN DURAKLATILDI</h2>
-            <div class="flex flex-col gap-3">
-                <label for="pauseGraphicsQuality" class="flex items-center justify-between gap-2 font-cyber text-xs font-bold text-cyan-200">
-                    GRAFİK KALİTESİ
-                    <select id="pauseGraphicsQuality" class="graphics-quality-select" aria-label="Duraklatma ekranı grafik kalitesi">
-                        <option value="high">YÜKSEK</option>
-                        <option value="medium">ORTA</option>
-                        <option value="low">DÜŞÜK</option>
-                    </select>
-                </label>
-                <button id="resumeBtn" type="button" class="cyber-btn w-full py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 font-cyber font-bold text-white cursor-pointer">
-                    DEVAM ET [P / ESC]
-                </button>
-                <button id="restartFromPauseBtn" type="button" class="cyber-btn w-full py-3 rounded-xl bg-gray-800 hover:bg-gray-700 font-cyber font-bold text-gray-200 border border-gray-600 cursor-pointer">
-                    YENİDEN BAŞLAT
-                </button>
-                <button id="menuFromPauseBtn" type="button" class="cyber-btn w-full py-3 rounded-xl bg-gray-900 hover:bg-gray-800 font-cyber font-bold text-gray-400 border border-gray-800 cursor-pointer">
-                    ANA MENÜYE DÖN
-                </button>
+        <div class="pause-shell bg-gray-950 border border-cyan-500/60 rounded-2xl box-glow-cyan">
+            <h2 class="font-cyber text-2xl font-black text-white text-glow-cyan">OYUN DURAKLATILDI</h2>
+            <div class="pause-columns">
+                <div class="flex flex-col gap-3">
+                    <label for="pauseGraphicsQuality" class="flex items-center justify-between gap-2 font-cyber text-xs font-bold text-cyan-200">
+                        GRAFİK KALİTESİ
+                        <select id="pauseGraphicsQuality" class="graphics-quality-select" aria-label="Duraklatma ekranı grafik kalitesi">
+                            <option value="high">YÜKSEK</option>
+                            <option value="medium">ORTA</option>
+                            <option value="low">DÜŞÜK</option>
+                        </select>
+                    </label>
+                    <button id="resumeBtn" type="button" class="cyber-btn w-full py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 font-cyber font-bold text-white cursor-pointer">
+                        DEVAM ET [P / ESC]
+                    </button>
+                    <button id="restartFromPauseBtn" type="button" class="cyber-btn w-full py-3 rounded-xl bg-gray-800 hover:bg-gray-700 font-cyber font-bold text-gray-200 border border-gray-600 cursor-pointer">
+                        YENİDEN BAŞLAT
+                    </button>
+                    <button id="menuFromPauseBtn" type="button" class="cyber-btn w-full py-3 rounded-xl bg-gray-900 hover:bg-gray-800 font-cyber font-bold text-gray-400 border border-gray-800 cursor-pointer">
+                        ANA MENÜYE DÖN
+                    </button>
+                </div>
+
+                <!-- Odak 2.2 · Settings and run details moved out of the combat HUD. -->
+                <section id="pauseCockpit" class="pause-cockpit" aria-label="Koşu bilgisi ve ayarlar">
+                    <div class="pause-stats">
+                        <div class="pause-stat">
+                            <span class="pause-label">SKOR</span>
+                            <span id="scoreText" class="pause-value">0</span>
+                        </div>
+                        <div class="pause-stat">
+                            <span class="pause-label">SÖZLEŞME</span>
+                            <span id="activeContractBadge" class="pause-contract" title="Aktif Neon Sözleşmesi">STANDARD</span>
+                        </div>
+                    </div>
+                    <div class="pause-settings" role="group" aria-label="Kokpit ayarları">
+                        <button id="ctrlToggleBtn" type="button" class="pause-setting cursor-pointer">
+                            <i class="fa-solid fa-computer-mouse" aria-hidden="true"></i>
+                            <span id="ctrlModeText">HİBRİT · M</span>
+                        </button>
+                        <button id="musicToggleBtn" type="button" title="Adaptif Savaş Müziği (aç/kapat)" aria-label="Müzik aç veya kapat" class="pause-setting cursor-pointer">
+                            <i id="musicIcon" class="fa-solid fa-music"></i>
+                        </button>
+                        <button id="soundToggleBtn" type="button" title="Ses Efektleri (aç/kapat)" aria-label="Ses efektlerini aç veya kapat" class="pause-setting cursor-pointer">
+                            <i id="soundIcon" class="fa-solid fa-volume-high"></i>
+                        </button>
+                        <button id="fullscreenBtn" type="button" title="Tam Ekran [F]" aria-label="Tam ekran" class="pause-setting cursor-pointer">
+                            <i class="fa-solid fa-expand" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div class="pause-build">
+                        <div id="hudModulesDock" class="pause-modules" aria-label="Alınan modüller"></div>
+                        <details id="buildGuidePanel" class="pause-build-guide font-cyber" open>
+                            <summary id="buildGuideLabel" class="cursor-pointer select-none">BUILD · 0 EVRİM / 0 SİNERJİ</summary>
+                            <div id="buildGuideDetails" class="pause-build-details"></div>
+                        </details>
+                    </div>
+                    <ul class="pause-keys" aria-label="Klavye kısayolları">
+                        <li><kbd>BOŞLUK</kbd> / <kbd>SOL TIK</kbd> Siber Atılım</li>
+                        <li data-system="emp"><kbd>E</kbd> / <kbd>SAĞ TIK</kbd> EMP Nova</li>
+                        <li data-system="prism"><kbd>C</kbd> Prizma Karşılığı</li>
+                        <li data-system="bastion"><kbd>Q</kbd> Saha Siperi</li>
+                        <li><kbd>TAB</kbd> Boss hedefini değiştir</li>
+                        <li><kbd>M</kbd> Kontrol modu · <kbd>F</kbd> Tam ekran</li>
+                    </ul>
+                </section>
             </div>
         </div>
     </div>

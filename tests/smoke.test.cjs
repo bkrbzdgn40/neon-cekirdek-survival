@@ -2832,7 +2832,7 @@ test('M5.2 rescue capsules require two distinct physical pickups and no double r
 
 test('M5.2 quest world marker renders safely and stays absent outside active game',()=>{
   const {run}=setup();
-  const a=JSON.parse(run("(()=>{startNewGame();wave=3;generateNextQuest('DEFEND');const ctx={save(){},restore(){},setLineDash(){},beginPath(){},arc(){},fill(){},stroke(){},fillText(){}};drawQuestObjective(ctx);const live=activeQuest.point!=null;gameState='PAUSED';drawQuestObjective(ctx);return JSON.stringify({live,mobile:document.getElementById('questMobileText').textContent,description:document.getElementById('questMobileText').title});})()"));
+  const a=JSON.parse(run("(()=>{startNewGame();wave=3;generateNextQuest('DEFEND');const ctx={save(){},restore(){},setLineDash(){},beginPath(){},arc(){},fill(){},stroke(){},fillText(){}};drawQuestObjective(ctx);const live=activeQuest.point!=null;gameState='PAUSED';drawQuestObjective(ctx);return JSON.stringify({live,mobile:document.getElementById('questHudText').textContent,description:document.getElementById('questHudText').title});})()"));
   assert.equal(a.live,true);
   assert.match(a.mobile,/^SAVUN · 0\/5 · \+\d+$/);
   assert.match(a.description,/SİNYAL NOKTASINI SAVUN/);
@@ -3819,10 +3819,10 @@ test('M6.2-PC2 stable boss HUD skips expensive markup and gradient DOM writes', 
   assert.equal(state.hpOnly.htmlWrites, 1);
   assert.equal(state.hpOnly.gradientWrites, 1);
   assert.match(state.hpOnly.hpText, /90 \/ 150/);
-  assert.equal(state.phase.htmlWrites, 2);
+  assert.equal(state.phase.htmlWrites, 1);
   assert.equal(state.phase.gradientWrites, 1);
-  assert.match(state.phase.markup, /F2/);
-  assert.equal(state.color.htmlWrites, 3);
+  assert.equal(state.phase.markup, '');
+  assert.equal(state.color.htmlWrites, 1);
   assert.equal(state.color.gradientWrites, 2);
   assert.match(state.color.gradient, /#0f0/);
   assert.deepEqual(state.cooldown, { dashClassWrites: 2, novaClassWrites: 2 });
@@ -5807,11 +5807,13 @@ test('M5.18 portal seeks a safe nearby landing only if its exit is crowded',()=>
 
 test('M5.18 mobile status and honest cooldown arcs expose terrain mechanics',()=>{
  const {run}=setup();
- const s=JSON.parse(run("(()=>{startNewGame();nextBossTime=500;wave=9;updateArenaChapter(.02);updateArenaChapterHud();const garden=document.getElementById('arenaChapterMobile').textContent;wave=12;updateArenaChapter(.02);updateArenaChapterHud();const rift=document.getElementById('arenaChapterMobile').textContent;return JSON.stringify({garden,rift});})()"));
+ const s=JSON.parse(run("(()=>{startNewGame();nextBossTime=500;const chip=document.getElementById('arenaChapterChip');const read=()=>document.getElementById('arenaChapterBadge').textContent+' · '+document.getElementById('arenaChapterStatus').textContent;wave=9;updateArenaChapter(.02);updateArenaChapterHud();const garden=read(),gardenUrgent=chip.dataset.urgent;chapterGardenContested[0]=true;updateArenaChapterHud();const contested=read(),contestedUrgent=chip.dataset.urgent;chapterGardenContested[0]=false;wave=12;updateArenaChapter(.02);updateArenaChapterHud();const rift=read(),riftUrgent=chip.dataset.urgent;return JSON.stringify({garden,gardenUrgent,contested,contestedUrgent,rift,riftUrgent});})()"));
  assert.match(s.garden,/BAHÇE.*İYON/);
+ assert.equal(s.gardenUrgent,'false');
+ assert.match(s.contested,/İYON BASKISI/);
+ assert.equal(s.contestedUrgent,'true');
  assert.match(s.rift,/YARIK.*GEÇİT/);
- assert.match(html,/id="arenaChapterMobile"/);
- assert.match(html,/aria-live="off"/);
+ assert.equal(s.riftUrgent,'false');
  assert.match(gameCode,/const readyIn=Math.max\(0,chapterGardenReady\[index\]-totalTime\)/);
  assert.match(gameCode,/const remaining=chapterRiftReadyAt-totalTime/);
 });
@@ -6245,20 +6247,6 @@ test('M5.24 cinematic extras preserve existing particle, weapon impact and light
  assert.equal(x.lightning,0);
 });
 
-
-test('M5.25 combat cockpit surfaces are semantic and preserve all critical action ids',()=>{
- for(const id of ['xpBar','momentumBar','overdriveBar','hpBar']){
-   assert.match(pageHtml,new RegExp('id="'+id+'"[^>]*role="progressbar"|role="progressbar"[^>]*id="'+id+'"'));
- }
- for(const slot of ['bastion','nova','prism','dash']){
-   assert.match(pageHtml,new RegExp('id="'+slot+'Btn"[^>]*data-skill="'+slot+'"|data-skill="'+slot+'"[^>]*id="'+slot+'Btn"'));
- }
- assert.match(pageHtml,/hud-signal-deck/);
- assert.match(pageHtml,/hud-information-row/);
- assert.match(pageHtml,/hud-action-bay/);
- assert.match(pageHtml,/hud-boss-console/);
- assert.match(gameCss,/COMBAT COCKPIT/);
-});
 
 test('M5.25 cockpit health urgency uses actual percentage and keeps values accessible',()=>{
  const {run}=setup();
@@ -6835,4 +6823,54 @@ test('Odak 1.5 a deferred field device still lands off its usual wave', () => {
 test('Odak 1.5 a new run forgets earlier first appearances', () => {
   const { run } = setup();
   assert.equal(run("startNewGame();totalTime=10;claimSystemIntro('conduits');startNewGame();totalTime=0;claimSystemIntro('chapters')"), true);
+});
+
+// Odak 2.2 · contextual HUD items and the cached HUD nodes.
+test('Odak 2.2 showContextual holds an item for its time, then one sweep fades it', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(()=>{startNewGame();const el=document.getElementById('goldHudChip');
+    const seen=[];const at=t=>{totalTime=t;updateContextualHud();seen.push(el.dataset.context);};
+    totalTime=10;showContextual(el,2000);totalTime=11;showContextual(el,500);at(11.9);at(12.01);
+    showContextual(el,300);at(12.2);at(12.4);
+    return JSON.stringify({seen,left:hudContextUntil.size});})()`));
+  // A shorter request never cuts an existing hold short.
+  assert.deepEqual(x.seen, ['on', 'off', 'on', 'off']);
+  assert.equal(x.left, 0);
+});
+
+test('Odak 2.2 gold, quest, combo and gauges appear only when they matter', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(()=>{startNewGame();nextBossTime=5000;
+    const ctx=id=>document.getElementById(id).dataset.context||'off';
+    totalTime=20;combo=4;player.overdrive=79;player.momentum=79;updateHUD();
+    const calm={gold:ctx('goldHudChip'),combo:ctx('comboContainer'),od:ctx('overdriveMeter'),mom:ctx('momentumMeter')};
+    totalGold+=15;combo=5;player.overdrive=80;player.momentum=80;updateHUD();
+    const busy={gold:ctx('goldHudChip'),combo:ctx('comboContainer'),od:ctx('overdriveMeter'),mom:ctx('momentumMeter')};
+    combo=1;player.overdrive=10;player.momentum=10;totalTime=20.5;updateHUD();
+    const dropped={gold:ctx('goldHudChip'),combo:ctx('comboContainer'),od:ctx('overdriveMeter'),mom:ctx('momentumMeter')};
+    totalTime=22.1;updateHUD();const goldLater=ctx('goldHudChip');
+    totalTime=25;generateNextQuest('ORBS');totalTime=28.1;updateHUD();const questIdle=ctx('questHudBox');totalTime=30;advanceQuest('ORBS',1);const quest=ctx('questHudBox');
+    totalTime=33.1;updateHUD();const questLater=ctx('questHudBox');
+    return JSON.stringify({calm,busy,dropped,goldLater,questIdle,quest,questLater});})()`));
+  assert.deepEqual(x.calm, { gold: 'off', combo: 'off', od: 'off', mom: 'off' });
+  assert.deepEqual(x.busy, { gold: 'on', combo: 'on', od: 'on', mom: 'on' });
+  assert.deepEqual(x.dropped, { gold: 'on', combo: 'off', od: 'off', mom: 'off' });
+  assert.equal(x.goldLater, 'off');
+  assert.equal(x.questIdle, 'off');
+  assert.equal(x.quest, 'on');
+  assert.equal(x.questLater, 'off');
+});
+
+test('Odak 2.2 updateHUD reuses cached HUD nodes instead of looking them up', () => {
+  const { run } = setup();
+  const lookups = run(`(()=>{startNewGame();nextBossTime=5000;updateHUD();
+    const original=document.getElementById;let n=0;
+    document.getElementById=id=>{n++;return original(id);};
+    updateHUD();document.getElementById=original;return n;})()`);
+  const before = run(`(()=>{const original=document.getElementById;let n=0;
+    document.getElementById=id=>{n++;return original(id);};
+    updateArenaChapterHud();updateNemesisHud();updatePrismGuardHud();updateFieldDeviceHud();
+    updateTacticalHint();updateBastionHud();document.getElementById=original;return n;})()`);
+  // Only the per-system helpers still look up their own nodes.
+  assert.equal(lookups, before);
 });
