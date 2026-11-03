@@ -61,7 +61,7 @@ Gold, meta progression, settings and optional learning/tempo comparison records 
 node --test tests/smoke.test.cjs
 
 # Optional local Chromium tests
-npm install --no-save --no-package-lock @playwright/test@1.56.1
+npm install --no-save --no-package-lock @playwright/test@1.64.1
 npx playwright install chromium
 npx playwright test
 ```
