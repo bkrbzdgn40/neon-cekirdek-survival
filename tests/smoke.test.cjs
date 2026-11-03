@@ -6659,7 +6659,10 @@ test('Odak 1.3 arena chapters stay off until level 3', () => {
 
 test('Odak 1.3 conduit zones never spawn until level 3', () => {
   // Odak 1.5: the first spawn waits 40 s; skip ahead to just before it.
+  // This test is about the lock gate, so another system's intro must not
+  // defer the spawn through the one-intro-per-60-s rule (tested on its own).
   const zones = level => JSON.parse(gatedGame(level).run(`player.takeDamage = () => {};
+    systemIntroSeen.add('conduits');
     conduitSpawnTimer = 1;
     for (let i = 0; i < 12; i++) updateGame(0.5);
     JSON.stringify([conduitZones.length, conduitSpawnTimer])`));

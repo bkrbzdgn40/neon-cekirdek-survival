@@ -4,7 +4,7 @@
 - Telefon yatayda (`orientation:landscape` + `max-height:500px`): sol üstte can ve seviye halkası (36 px), sağ üstte süre ve duraklat, sağ kenarda 52 px yuvarlak yetenek kolonu; altta HUD öğesi yok. "DALGA" etiketi artık kırpılmıyor.
 - Dokunmatik telefon dikey tutulunca ilk koşuda bir kereliğine "Daha geniş görüş için telefonu yatay çevir" ipucu (4 sn, `localStorage`).
 - Geometri ölçümü dar ve uzun bir yetenek kolonunu alt blok değil yan kolon sayar. 750×342 %48.2 → %79.1.
-- Kırılgan iki test sağlamlaştı: M5.22 döngüyü test boyunca dondurur, 1.3'ün 3 dakikalık koşusu sabit adım yerine 180 sn oyun süresine kadar ilerler.
+- Kırılgan testler sağlamlaştı: M5.22 döngüyü test boyunca dondurur; 1.3'ün 3 dakikalık koşusu sabit adım yerine 180 sn oyun süresine kadar ilerler; 1.3 ikmal testi duyuru aralığından etkilenmez.
 
 ## Odak 2.4 · Mobil dikey HUD
 - Telefon dikeyde (`max-width:639px` + `hover:none`) üstte 44 px tek satır: can, XP'yi halka olarak gösteren seviye, DALGA üst yazılı süre, duraklat. Bağlamsal çipler yalnızca görünürken ince ikinci satıra iner; görev ödülü mobilde gizlenir.
