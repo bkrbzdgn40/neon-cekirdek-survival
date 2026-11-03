@@ -1,5 +1,11 @@
 # Değişiklik Günlüğü
 
+## Odak 2.6 · Geometri testi etkin
+- `tests/hud.geometry.spec.cjs` içindeki `test.fixme` kalktı; sakin HUD her görünümde eşikleri geçiyor ve CI browser job'ında çalışıyor.
+- İkinci varyant: `?wave=8`, gerçek boss, Cinnet aktif, kombo 6. Eşik 5 puan düşük (`contextualFreePlayDrop`): 320×568 %65.7, 390×664 %69.1, 750×342 %69.1, 1280×800 %79.1, 1366×768 %78.2; çakışma, taşma ve küçük hedef 0.
+- Dikeyde bölüm çipi yalnızca ikon (tehlike anında durum metni), boss barı daha ince.
+- Oyun başlarken odak kapanan menüdeki butondan alınır; ilk tuşun (ör. Prizma için C) yutulması önlendi. M5.22'nin ara sıra düşmesinin sebebi buydu.
+
 ## Odak 2.5 · Mobil yatay HUD
 - Telefon yatayda (`orientation:landscape` + `max-height:500px`): sol üstte can ve seviye halkası (36 px), sağ üstte süre ve duraklat, sağ kenarda 52 px yuvarlak yetenek kolonu; altta HUD öğesi yok. "DALGA" etiketi artık kırpılmıyor.
 - Dokunmatik telefon dikey tutulunca ilk koşuda bir kereliğine "Daha geniş görüş için telefonu yatay çevir" ipucu (4 sn, `localStorage`).

@@ -6624,7 +6624,16 @@
             if(!hud||!badge||!status||!announcement)return;
             hud.setAttribute('data-arena-chapter',arenaChapter||'NONE');
             const d=arenaChapter?ARENA_CHAPTERS[arenaChapter]:null;
-            badge.textContent=d?d.glyph+' '+d.short:'NORMAL';
+            // Odak 2.6 · glyph and name in their own spans: phones keep only the icon.
+            const badgeGlyph=d?d.glyph:'',badgeName=d?' '+d.short:'NORMAL';
+            if(badge.dataset.label!==badgeGlyph+badgeName){
+                badge.dataset.label=badgeGlyph+badgeName;
+                if(typeof badge.replaceChildren==='function'){
+                    const g=document.createElement('span');g.className='chapter-glyph';g.textContent=badgeGlyph;
+                    const n=document.createElement('span');n.className='chapter-name';n.textContent=badgeName;
+                    badge.replaceChildren(g,n);
+                }else badge.textContent=badgeGlyph+badgeName;
+            }
             badge.title=d?d.caption:'Standart savaş alanı';
             let message='STANDARD ARENA';
             let urgent=false;
@@ -9752,6 +9761,10 @@
 
         function startNewGame() {
             clearGameplayInput();
+            // A button in the modal that just closed keeps focus until the browser
+            // re-renders; combat keys ignore focused buttons, so drop it now.
+            const focused = document.activeElement;
+            if (focused && focused !== document.body && typeof focused.blur === 'function') focused.blur();
             resetPc3Telemetry();
             resetEnemyCrowdSteering();
             resetChapterBiome();

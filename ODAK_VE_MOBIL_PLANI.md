@@ -307,7 +307,7 @@ Ayrıca dikey ekranda oyun başlarken bir kereliğine "Daha geniş görüş içi
 
 **Kabul:** 750×342'de `freePlayPct >= %65`, "DALGA" etiketi kırpılmıyor, taşma 0.
 
-### - [ ] 2.6 Geometri testini etkinleştir
+### - [x] 2.6 Geometri testini etkinleştir
 
 ```
 tests/hud.geometry.spec.cjs içindeki test.fixme'yi kaldır. Eşikleri sabit nesnede bırak.
