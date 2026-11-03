@@ -6545,3 +6545,110 @@ test('Odak 1.2 browser helper loads the real game with ?unlock=all by default', 
   assert.equal(run('window.NEON_UNLOCK_ALL'), true);
   assert.equal(run('startNewGame(); wave'), 4);
 });
+
+// Odak 1.3 · each gate is checked locked (level below) and open (its level).
+function gatedGame(level, before = '') {
+  const game = setup({}, { unlockAll: false });
+  game.run(`unlockLevel = ${level}; ${before} startNewGame();`);
+  return game;
+}
+
+test('Odak 1.3 EMP Nova does not fire until level 1', () => {
+  const nova = level => gatedGame(level).run('player.novaCooldown = 0; player.triggerNova(); player.novaCooldown');
+  assert.equal(nova(0), 0);
+  assert.ok(nova(1) > 0);
+});
+
+test('Odak 1.3 Prism Riposte refuses to activate until level 2', () => {
+  const prism = level => gatedGame(level).run('totalTime = 30; prismGuardReadyAt = 0; activatePrismGuard()');
+  assert.equal(prism(1), false);
+  assert.equal(prism(2), true);
+});
+
+test('Odak 1.3 Bastion cannot be bought until level 5 and keeps gold', () => {
+  const deploy = level => JSON.parse(gatedGame(level).run(`wave = 5; totalGold = 1000;
+    nextBossTime = totalTime + 300; JSON.stringify([deployBastion(), totalGold, bastionUses])`));
+  assert.deepEqual(deploy(4), [false, 1000, 0]);
+  const [ok, gold, uses] = deploy(5);
+  assert.equal(ok, true);
+  assert.ok(gold < 1000);
+  assert.equal(uses, 1);
+});
+
+test('Odak 1.3 quests are neither generated nor advanced until level 1', () => {
+  const locked = gatedGame(0);
+  assert.equal(locked.run("updateQuest(1); advanceQuest('KILL', 5); window.getNeonQuestSnapshot()"), null);
+  assert.equal(locked.run('generateNextQuest()'), null);
+  assert.notEqual(gatedGame(1).run('window.getNeonQuestSnapshot()'), null);
+});
+
+test('Odak 1.3 Overdrive never charges until level 2', () => {
+  const charge = level => gatedGame(level).run('player.addOverdrive(50); player.overdrive');
+  assert.equal(charge(1), 0);
+  assert.ok(charge(2) > 0);
+});
+
+test('Odak 1.3 momentum stays 0 and grants no fire-rate bonus until level 4', () => {
+  const momentum = level => gatedGame(level).run('player.momentum = 60; player.update(1 / 60); player.momentum');
+  assert.equal(momentum(3), 0);
+  assert.ok(momentum(4) > 0);
+});
+
+test('Odak 1.3 arena chapters stay off until level 3', () => {
+  assert.equal(gatedGame(2).run('chapterIdForWave(7)'), null);
+  assert.notEqual(gatedGame(3).run('chapterIdForWave(7)'), null);
+});
+
+test('Odak 1.3 conduit zones never spawn until level 3', () => {
+  const zones = level => JSON.parse(gatedGame(level).run(`player.takeDamage = () => {};
+    for (let i = 0; i < 12; i++) updateGame(0.5);
+    JSON.stringify([conduitZones.length, conduitSpawnTimer])`));
+  assert.deepEqual(zones(2), [0, 3]);
+  assert.ok(zones(3)[0] >= 1);
+});
+
+test('Odak 1.3 field devices do not spawn until level 4', () => {
+  const spawn = level => gatedGame(level).run(`wave = FIELD_RULES.firstWave;
+    nextBossTime = totalTime + 300; maybeSpawnFieldDevice()`);
+  assert.equal(spawn(3), false);
+  assert.equal(spawn(4), true);
+});
+
+test('Odak 1.3 arena events are not offered until level 4', () => {
+  const offer = level => gatedGame(level).run(`wave = 8; nextBossTime = totalTime + 300;
+    combatDirector.nextArenaAt = 0;
+    if (combatDirector.baseProfile) combatDirector.baseProfile.phase = 'PRESSURE';
+    combatDirector.profile.phase = 'PRESSURE';
+    combatDirector.updateArenaEvent(1 / 60); !!combatDirector.activeArenaEvent`);
+  assert.equal(offer(3), false);
+  assert.equal(offer(4), true);
+});
+
+test('Odak 1.3 Nemesis is not allowed until level 5', () => {
+  const allowed = level => gatedGame(level).run('nextBossTime = totalTime + 300; nemesisAllowed()');
+  assert.equal(allowed(4), false);
+  assert.equal(allowed(5), true);
+});
+
+test('Odak 1.3 contracts fall back to STANDARD until level 6', () => {
+  const contract = level => gatedGame(level, "selectedContractId = 'OVERCHARGE';").run('activeContractId');
+  assert.equal(contract(5), 'STANDARD');
+  assert.equal(contract(6), 'OVERCHARGE');
+});
+
+test('Odak 1.3 upgrade cards respect requires and EMP-free descriptions', () => {
+  const draws = level => JSON.parse(gatedGame(level).run(`(() => {
+    const seen = new Set();
+    for (let i = 0; i < 60; i++) { populateUpgradeCards(); currentUpgradeChoices.forEach(c => seen.add(c.upg.id)); }
+    return JSON.stringify([...seen]);
+  })()`));
+  const locked = draws(0);
+  assert.ok(!locked.includes('overdrive_boost'));
+  assert.ok(locked.includes('phase_echo'));
+  assert.ok(draws(2).includes('overdrive_boost'));
+  const desc = level => gatedGame(level).run("UPGRADES_POOL.find(u => u.id === 'kinetic_magnet').getDesc({ mult: 1 })");
+  assert.doesNotMatch(desc(0), /EMP/);
+  assert.match(desc(1), /EMP Nova/);
+  assert.equal(gatedGame(0).run("UPGRADES_POOL.find(u => u.id === 'overdrive_boost').requires"), 'overdrive');
+  assert.equal(gatedGame(0).run("UPGRADES_POOL.find(u => u.id === 'phase_echo').requires"), 'dash');
+});

@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 1.3 · Sistemleri kilide bağla
+- 12 sistem `isSystemUnlocked` ile tek satırlık erken dönüşlerle kapandı (EMP, Prizma, Siper, Görevler, Cinnet, Momentum, Bölümler, İkmal, Saha cihazları, Arena olayları, Nemesis, Sözleşmeler).
+- Kilitli sistemin HUD/menü öğesi `system-locked` sınıfıyla gizlenir; kartlar `requires` alanıyla filtrelenir, Kinetik Türbin EMP kilitliyken EMP'siz anlatılır.
+- Her kapı için kilitli/açık smoke testi ve 180 sn'lik kilitli koşu tarayıcı testi eklendi.
+
 ## Odak 1.2 · Testlerde varsayılan olarak tüm kilitler açık
 - Smoke `setup()` artık `NEON_UNLOCK_ALL=true` ile başlar; kilitli davranış testleri `{ unlockAll: false }` geçer.
 - Tarayıcı testleri oyunu `tests/browser.helpers.cjs` içindeki `gotoGame()` ile `?unlock=all` ekleyerek açar.
