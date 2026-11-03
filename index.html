@@ -392,7 +392,7 @@
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-cyan-300 text-xs"><i class="fa-solid fa-arrows-up-down-left-right mr-2" aria-hidden="true"></i>HAREKET</h3></div>
                           <div class="key text-cyan-200">WASD · OK TUŞLARI</div>
                           <p class="text-xs text-gray-200">Yakındaki hedeflere otomatik ateş edersin. Düşmanların arasına sıkışmamak için sürekli yer değiştir.</p>
-                          <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-cyan-200/90">Hareket ettikçe Momentum birikir; atış temposunu destekler.</p></details>
+                          <details class="menu-protocol-tip" data-system="momentum"><summary>İPUCU</summary><p class="text-[11px] text-cyan-200/90">Hareket ettikçe Momentum birikir; atış temposunu destekler.</p></details>
                       </div>
 <div class="menu-protocol-v2 rounded-xl p-3.5">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-yellow-300 text-xs"><i class="fa-solid fa-bolt mr-2" aria-hidden="true"></i>ATILIM</h3></div>
@@ -400,19 +400,19 @@
                           <p class="text-xs text-gray-200">Kısa bir hamleyle mermilerden ve boss saldırılarından sıyrıl. Atılımın kısa dokunulmazlık süresi var.</p>
                           <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-yellow-200/90">Atılımı, turuncu baskın uyarısı geldiğinde saklamak işe yarar.</p></details>
                       </div>
-<div class="menu-protocol-v2 rounded-xl p-3.5">
+<div class="menu-protocol-v2 rounded-xl p-3.5" data-system="emp">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-purple-300 text-xs"><i class="fa-solid fa-burst mr-2" aria-hidden="true"></i>EMP NOVA</h3></div>
                           <div class="key text-purple-200">E · SAĞ TIK</div>
                           <p class="text-xs text-gray-200">Yakınındaki düşmanları geri iter, tehlikeli mermileri temizler. Köşeye sıkıştığında güvenli alan açar.</p>
                           <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-purple-200/90">Boss ve elit kalabalığını dağıtmak için kullan.</p></details>
                       </div>
-<div class="menu-protocol-v2 rounded-xl p-3.5">
+<div class="menu-protocol-v2 rounded-xl p-3.5" data-system="momentum">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-sky-300 text-xs"><i class="fa-solid fa-gauge-high mr-2" aria-hidden="true"></i>MOMENTUM</h3></div>
                           <div class="key text-sky-200">HAREKETLE DOLAR</div>
                           <p class="text-xs text-gray-200">Aktif hareket savaş temposunu artırır. Yerinde durmak yerine kontrollü tur atarak baskını azalt.</p>
                           <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-sky-200/90">Hayalet ile kaçınma ve saldırı ritmini birlikte güçlendir.</p></details>
                       </div>
-<div class="menu-protocol-v2 rounded-xl p-3.5">
+<div class="menu-protocol-v2 rounded-xl p-3.5" data-system="overdrive">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-pink-300 text-xs"><i class="fa-solid fa-fire mr-2" aria-hidden="true"></i>SİBER CİNNET</h3></div>
                           <div class="key text-pink-200">BAR DOLUNCA</div>
                           <p class="text-xs text-gray-200">Dolduğunda kısa süreli güçlü savaş moduna geçersin. Atış ve kritik gücünü artırır; modül evrimleriyle birleşir.</p>
@@ -425,6 +425,7 @@
                           <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-emerald-200/90">Öncü, başlangıçta bir fazladan ücretsiz hakla gelir.</p></details>
                       </div>
                       <div class="sm:col-span-2 xl:col-span-3 text-[10px] text-gray-400 border-t border-gray-800 pt-2">M · KONTROL MODU　 P · ESC · DURAKLAT</div>
+                      <div id="menuUnlockHint" class="sm:col-span-2 xl:col-span-3 text-[11px] font-cyber text-yellow-200/90 system-locked"></div>
                       <div id="menuRunSteps" class="sm:col-span-2 xl:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
                        <div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">1</div><div><div class="text-[11px] font-cyber font-bold text-white">İLK DALGALAR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">XP kürelerini topla; hasar ve güvenlik temelini kur.</p></div></div>
 <div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">2</div><div><div class="text-[11px] font-cyber font-bold text-white">BUILD KUR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">Aynı modülü üçüncü kademeye çıkar, sinerji hedeflerini takip et.</p></div></div>
@@ -638,6 +639,7 @@
     <!-- M5.5: Report-first, scrollable end-of-run analysis -->
     <div id="gameOverModal" class="fixed inset-0 z-30 hidden items-start justify-center bg-black/90 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
         <div class="report-shell" id="reportShell">
+            <section id="reportUnlockBlock" class="report-unlock hidden" aria-label="Yeni protokol açıldı"></section>
             <header class="report-hero">
                 <div class="report-hero-top">
                     <span class="report-kicker"><i class="fa-solid fa-satellite-dish" aria-hidden="true"></i> OPERASYON KAYDI / M5.5</span>

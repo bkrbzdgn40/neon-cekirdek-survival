@@ -991,3 +991,33 @@ test('Odak 1.3 a locked first run plays 3 minutes without errors or locked syste
    quest:null,overdrive:0,momentum:0,contract:'STANDARD',chapter:null});
  expect(errors).toEqual([]);
 });
+
+test('Odak 1.4 reaching wave 3 on a clean save opens EMP and Quests and spotlights EMP next run',async({page})=>{
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await gotoGame(page,'/index.html',{unlockAll:false});
+ await expect(page.locator('#startBtn')).toBeVisible();
+ await expect(page.locator('[data-system="emp"]')).toBeHidden();
+ await expect(page.locator('#menuUnlockHint')).toHaveText("Yeni protokol: Dalga 3'e ulaşınca açılır.");
+ await page.locator('#startBtn').click();
+ await expect(page.locator('#novaBtn')).toBeHidden();
+ await page.evaluate(()=>{wave=3;triggerGameOver();});
+ const block=page.locator('#reportUnlockBlock');
+ await expect(block).toBeVisible();
+ await expect(block).toContainText('YENİ PROTOKOL AÇILDI');
+ await expect(block).toContainText('EMP Nova');
+ await expect(block).toContainText('Görevler');
+ await page.locator('#restartBtn').click();
+ const nova=page.locator('#novaBtn');
+ await expect(nova).toBeVisible();
+ await expect(nova).toHaveClass(/system-spotlight/);
+ expect(await nova.evaluate(el=>getComputedStyle(el).animationName)).toBe('system-spotlight-pulse');
+ await page.emulateMedia({reducedMotion:'reduce'});
+ expect(await nova.evaluate(el=>{const s=getComputedStyle(el);return [s.animationName,s.outlineStyle];}))
+   .toEqual(['none','solid']);
+ await page.evaluate(()=>{totalTime+=20;updateHUD();});
+ await expect(nova).not.toHaveClass(/system-spotlight/);
+ await page.reload({waitUntil:'domcontentloaded'});
+ await expect(page.locator('[data-system="emp"]')).toBeVisible();
+ await expect(page.locator('#menuUnlockHint')).toHaveText("Yeni protokol: Dalga 5'e ulaşınca açılır.");
+ expect(errors).toEqual([]);
+});
