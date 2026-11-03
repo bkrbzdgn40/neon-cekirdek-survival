@@ -4278,6 +4278,20 @@
             return /(?:^|[?&])perf=1(?:&|$)/.test(window.location?.search || '');
         }
         let performanceOverlayOn = shouldShowPerformanceOverlay();
+        // Odak 0.2 · test/playtest-only launch options, read once at load.
+        // ?wave=N starts runs at wave N; ?unlock=all opens every system unlock
+        // through window.NEON_UNLOCK_ALL (an outer harness may set it first).
+        const PLAYTEST_MAX_WAVE = 99;
+        function readPlaytestParams(search = window.location?.search || '') {
+            const waveMatch = /(?:^|[?&])wave=(\d{1,3})(?:&|$)/.exec(search);
+            const requestedWave = waveMatch ? Number(waveMatch[1]) : 1;
+            return {
+                wave: Math.min(PLAYTEST_MAX_WAVE, Math.max(1, requestedWave)),
+                unlockAll: /(?:^|[?&])unlock=all(?:&|$)/.test(search)
+            };
+        }
+        const playtestParams = readPlaytestParams();
+        if (playtestParams.unlockAll) window.NEON_UNLOCK_ALL = true;
         let performanceSampleFrames = 0;
         let performanceSampleMs = 0;
         const PERFORMANCE_FRAME_WINDOW = 300;
@@ -9366,6 +9380,15 @@
                 .join('');
         }
 
+        // Waves last 16 s (see the waveTimer tick). The first boss keeps its
+        // usual 55 s lead from the shifted start time.
+        function applyPlaytestStartWave(startWave) {
+            if (startWave <= 1) return;
+            wave = startWave;
+            totalTime = (startWave - 1) * 16;
+            nextBossTime += totalTime;
+        }
+
         function startNewGame() {
             clearGameplayInput();
             resetPc3Telemetry();
@@ -9415,6 +9438,7 @@
             waveTimer = 0;
             totalTime = 0;
             nextBossTime = 55;
+            applyPlaytestStartWave(playtestParams.wave);
             bossEncounterCount = 0;
             combatDirector = new CombatDirector();
             activeBosses = [];
