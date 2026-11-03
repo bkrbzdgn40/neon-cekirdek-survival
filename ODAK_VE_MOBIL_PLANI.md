@@ -263,7 +263,7 @@ Boss barı: üst-ortada tek bar, en fazla 40 px; çoklu boss'ta isimler barın a
 
 **Kabul:** 1366×768 ve 1280×800'de `freePlayPct >= %80`. Ekran görüntüsünü `press-capture/` altında karşılaştır.
 
-### - [ ] 2.3 Dokunmatik kontrol: göreli joystick
+### - [x] 2.3 Dokunmatik kontrol: göreli joystick
 
 ```
 updateTouchMovementTarget mutlak konum kullanıyor ve parmak çekirdeği kapatıyor.

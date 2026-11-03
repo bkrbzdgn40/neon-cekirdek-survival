@@ -1750,3 +1750,5 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
 #pauseModal .pause-keys kbd{font:800 10px/1 'Orbitron',sans-serif;border:1px solid #3f5b77;border-radius:4px;
     padding:2px 5px;color:#e6fbff;background:#0b192c;}
 @media(hover:none){#pauseModal .pause-keys{display:none;}}
+/* Odak 2.3 · touch movement choice only matters on touch screens. */
+@media(hover:hover) and (pointer:fine){#pauseModal .touch-setting{display:none;}}

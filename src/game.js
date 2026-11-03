@@ -891,6 +891,44 @@
 
         const keys = {};
         const mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2, active: false };
+        // Odak 2.3 · relative touch joystick. Distances are screen (CSS) pixels.
+        const TOUCH_STICK_RULES = Object.freeze({ zoneRatio: .6, fullTiltPx: 56, deadZonePx: 8, knobPx: 22 });
+        const TOUCH_MODE_SAVE_KEY = 'neonCekirdek.touchMode.v1';
+        const TOUCH_MOVE_MODES = Object.freeze(['joystick', 'follow']);
+        let touchMoveMode = 'joystick';
+        // id is the Touch.identifier of the steering finger; other fingers never move it.
+        const touchStick = { id: null, originX: 0, originY: 0, x: 0, y: 0 };
+        function touchStickVector() {
+            if (touchStick.id === null || touchMoveMode !== 'joystick') return null;
+            const dx = touchStick.x - touchStick.originX;
+            const dy = touchStick.y - touchStick.originY;
+            const dist = Math.hypot(dx, dy);
+            const { deadZonePx, fullTiltPx } = TOUCH_STICK_RULES;
+            if (dist <= deadZonePx) return { x: 0, y: 0, power: 0 };
+            return { x: dx / dist, y: dy / dist,
+                power: Math.min(1, (dist - deadZonePx) / (fullTiltPx - deadZonePx)) };
+        }
+        function applyTouchMoveMode(value, persist = true) {
+            if (!TOUCH_MOVE_MODES.includes(value)) return false;
+            touchMoveMode = value;
+            touchStick.id = null;
+            mouse.active = false;
+            const select = document.getElementById('pauseTouchMode');
+            if (select) select.value = value;
+            if (persist) {
+                try { localStorage.setItem(TOUCH_MODE_SAVE_KEY, value); }
+                catch (e) { console.warn('Dokunmatik tercih kaydedilemedi.', e); }
+            }
+            return true;
+        }
+        function loadTouchMoveMode() {
+            let selected = 'joystick';
+            try {
+                const saved = localStorage.getItem(TOUCH_MODE_SAVE_KEY);
+                if (TOUCH_MOVE_MODES.includes(saved)) selected = saved;
+            } catch (e) { /* storage restrictions must not block play */ }
+            applyTouchMoveMode(selected, false);
+        }
 
         let score = 0;
         let sessionGold = 0;
@@ -1392,6 +1430,14 @@
                         this.x += this.vx * dt;
                         this.y += this.vy * dt;
                         this.dashDir = { x: kx, y: ky };
+                    } else if (touchStick.id !== null && touchMoveMode === 'joystick') {
+                        const stick = touchStickVector();
+                        const moveSpd = this.speed * spdMult * stick.power;
+                        this.vx = stick.x * moveSpd;
+                        this.vy = stick.y * moveSpd;
+                        this.x += this.vx * dt;
+                        this.y += this.vy * dt;
+                        if (stick.power > 0) this.dashDir = { x: stick.x, y: stick.y };
                     } else if (controlMode === 'HYBRID' && mouse.active) {
                         const dx = mouse.x - this.x;
                         const dy = mouse.y - this.y;
@@ -9200,6 +9246,7 @@
 
             if (player) player.draw(ctx);
             drawOffscreenIndicators();
+            drawTouchStick(ctx);
 
             for (const ft of floatingTexts) {
                 // Text extends farther than a disc, so leave a conservative
@@ -9221,6 +9268,33 @@
             }
 
             ctx.restore();
+        }
+
+        // Odak 2.3 · two translucent rings drawn on the canvas, not as DOM UI.
+        function drawTouchStick(c) {
+            if (touchStick.id === null || touchMoveMode !== 'joystick' || gameState !== 'PLAYING') return;
+            const s = 1 / viewScale;
+            const { fullTiltPx, knobPx } = TOUCH_STICK_RULES;
+            const dx = touchStick.x - touchStick.originX;
+            const dy = touchStick.y - touchStick.originY;
+            const dist = Math.hypot(dx, dy);
+            const k = dist > fullTiltPx ? fullTiltPx / dist : 1;
+            const ox = touchStick.originX * s, oy = touchStick.originY * s;
+            c.save();
+            c.lineWidth = 2 * s;
+            c.strokeStyle = 'rgba(103, 232, 249, 0.45)';
+            c.fillStyle = 'rgba(103, 232, 249, 0.07)';
+            c.beginPath();
+            c.arc(ox, oy, fullTiltPx * s, 0, Math.PI * 2);
+            c.fill();
+            c.stroke();
+            c.strokeStyle = 'rgba(103, 232, 249, 0.7)';
+            c.fillStyle = 'rgba(103, 232, 249, 0.22)';
+            c.beginPath();
+            c.arc(ox + dx * k * s, oy + dy * k * s, knobPx * s, 0, Math.PI * 2);
+            c.fill();
+            c.stroke();
+            c.restore();
         }
 
         function formatTime(sec) {
@@ -10701,6 +10775,7 @@
         function clearGameplayInput() {
             for (const code of Object.keys(keys)) delete keys[code];
             mouse.active = false;
+            touchStick.id = null;
         }
         function isInteractiveKeyTarget(target) {
             return !!(target && typeof target.closest === 'function' &&
@@ -10798,23 +10873,57 @@
 
         window.addEventListener('contextmenu', (e) => e.preventDefault());
 
-        function updateTouchMovementTarget(touches) {
-            if (gameState !== 'PLAYING' || !touches || touches.length === 0) {
-                mouse.active = false;
+        // Odak 2.3 · one finger steers, tracked by Touch.identifier. Joystick mode
+        // (default) anchors the stick where the finger lands in the left 60%;
+        // "follow" keeps the old absolute target. Ability buttons are DOM
+        // elements, so their touches never reach these canvas listeners.
+        function touchById(list, id) {
+            if (!list) return null;
+            for (let i = 0; i < list.length; i++) if (list[i].identifier === id) return list[i];
+            return null;
+        }
+        function releaseTouchStick() {
+            touchStick.id = null;
+            mouse.active = false;
+        }
+        function moveTouchStick(t) {
+            touchStick.x = t.clientX;
+            touchStick.y = t.clientY;
+            if (touchMoveMode === 'follow') {
+                mouse.x = t.clientX / viewScale;
+                mouse.y = t.clientY / viewScale;
+                mouse.active = true;
+            }
+        }
+        function onCanvasTouchStart(e) {
+            if (gameState !== 'PLAYING') { releaseTouchStick(); return; }
+            if (touchStick.id !== null && touchById(e.touches, touchStick.id)) return;
+            const list = e.changedTouches || e.touches || [];
+            for (let i = 0; i < list.length; i++) {
+                const t = list[i];
+                if (touchMoveMode === 'joystick' &&
+                    t.clientX > window.innerWidth * TOUCH_STICK_RULES.zoneRatio) continue;
+                touchStick.id = t.identifier;
+                touchStick.originX = t.clientX;
+                touchStick.originY = t.clientY;
+                moveTouchStick(t);
                 return;
             }
-            mouse.x = touches[0].clientX / viewScale;
-            mouse.y = touches[0].clientY / viewScale;
-            mouse.active = true;
         }
-        canvas.addEventListener('touchstart', e => updateTouchMovementTarget(e.touches),
-            { passive: true });
-        canvas.addEventListener('touchmove', e => updateTouchMovementTarget(e.touches),
-            { passive: true });
-        canvas.addEventListener('touchend', e => updateTouchMovementTarget(e.touches),
-            { passive: true });
-        canvas.addEventListener('touchcancel', () => { mouse.active = false; },
-            { passive: true });
+        function onCanvasTouchMove(e) {
+            if (gameState !== 'PLAYING') { releaseTouchStick(); return; }
+            if (touchStick.id === null) return;
+            const t = touchById(e.changedTouches, touchStick.id) || touchById(e.touches, touchStick.id);
+            if (t) moveTouchStick(t);
+        }
+        function onCanvasTouchEnd(e) {
+            if (touchStick.id === null) return;
+            if (!touchById(e && e.touches, touchStick.id)) releaseTouchStick();
+        }
+        canvas.addEventListener('touchstart', onCanvasTouchStart, { passive: true });
+        canvas.addEventListener('touchmove', onCanvasTouchMove, { passive: true });
+        canvas.addEventListener('touchend', onCanvasTouchEnd, { passive: true });
+        canvas.addEventListener('touchcancel', onCanvasTouchEnd, { passive: true });
 
         function toggleControlMode() {
             controlMode = controlMode === 'HYBRID' ? 'KEYBOARD' : 'HYBRID';
@@ -10879,16 +10988,32 @@
         document.getElementById('menuFullscreenBtn').addEventListener('click', toggleFullscreen);
         document.getElementById('ctrlToggleBtn').addEventListener('click', toggleControlMode);
 
-        document.getElementById('dashBtn').addEventListener('click', () => {
+        // Odak 2.3 · touch fires abilities on pointerdown. While the joystick
+        // finger is down, a second finger's tap never becomes a click, so
+        // waiting for click would drop the ability. The click that may follow
+        // a touch is swallowed; mouse and keyboard still use click.
+        const ABILITY_TOUCH_CLICK_GUARD_MS = 700;
+        function bindAbilityButton(id, action) {
+            const button = document.getElementById(id);
+            let touchFiredAt = -Infinity;
+            button.addEventListener('pointerdown', e => {
+                if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+                touchFiredAt = performance.now();
+                action();
+            });
+            button.addEventListener('click', () => {
+                if (performance.now() - touchFiredAt < ABILITY_TOUCH_CLICK_GUARD_MS) return;
+                action();
+            });
+        }
+        bindAbilityButton('dashBtn', () => {
             if (gameState === 'PLAYING' && player) player.triggerDash();
         });
-        document.getElementById('novaBtn').addEventListener('click', () => {
+        bindAbilityButton('novaBtn', () => {
             if (gameState === 'PLAYING' && player) player.triggerNova();
         });
-        document.getElementById('prismBtn').addEventListener('click', activatePrismGuard);
-        document.getElementById('bastionBtn').addEventListener('click', () => {
-            deployBastion();
-        });
+        bindAbilityButton('prismBtn', activatePrismGuard);
+        bindAbilityButton('bastionBtn', () => deployBastion());
 
         document.getElementById('soundToggleBtn').addEventListener('click', () => {
             audio.enabled = !audio.enabled;
@@ -11036,6 +11161,9 @@
                 applyGraphicsQuality(event.target.value);
             });
         }
+        document.getElementById('pauseTouchMode').addEventListener('change', event => {
+            applyTouchMoveMode(event.target.value);
+        });
         document.getElementById('menuFromPauseBtn').addEventListener('click', returnToMainMenu);
         document.getElementById('backToMenuBtn').addEventListener('click', returnToMainMenu);
 
@@ -11177,6 +11305,7 @@
             loadMetaProgress();
             loadContractMastery();
             loadGraphicsQuality();
+            loadTouchMoveMode();
             resizeCanvas();
             initMenuDemoNodes();
             updateMenuCounters();

@@ -3465,17 +3465,87 @@ test('M6.1.1 window blur and hidden tab pause a real run without stuck keys', ()
 test('M6.1.1 touch release/cancel stops movement and menu touches do not latch', () => {
   const { run, canvasEvent } = setup();
   run('startNewGame()');
-  canvasEvent('touchstart', { touches: [{ clientX: 350, clientY: 250 }] });
-  assert.equal(run('mouse.active'), true);
-  canvasEvent('touchend', { touches: [] });
-  assert.equal(run('mouse.active'), false);
-  canvasEvent('touchmove', { touches: [{ clientX: 420, clientY: 290 }] });
-  assert.equal(run('mouse.active'), true);
+  const finger = (x, y) => ({ identifier: 1, clientX: x, clientY: y });
+  canvasEvent('touchstart', { touches: [finger(350, 250)], changedTouches: [finger(350, 250)] });
+  assert.equal(run('touchStick.id'), 1);
+  canvasEvent('touchend', { touches: [], changedTouches: [finger(350, 250)] });
+  assert.equal(run('touchStick.id'), null);
+  canvasEvent('touchstart', { touches: [finger(420, 290)], changedTouches: [finger(420, 290)] });
+  assert.equal(run('touchStick.id'), 1);
   canvasEvent('touchcancel');
-  assert.equal(run('mouse.active'), false);
+  assert.equal(run('touchStick.id === null && !mouse.active'), true);
   run("gameState='MENU'");
-  canvasEvent('touchstart', { touches: [{ clientX: 420, clientY: 290 }] });
+  canvasEvent('touchstart', { touches: [finger(420, 290)], changedTouches: [finger(420, 290)] });
+  assert.equal(run('touchStick.id === null && !mouse.active'), true);
+});
+
+test('Odak 2.3 relative joystick: dead zone, full tilt at 56 px and left 60% zone', () => {
+  const { run, canvasEvent } = setup();
+  run('startNewGame(); enemies=[]; player.x=400; player.y=300; player.lastPos.x=400; player.lastPos.y=300');
+  assert.equal(run('touchMoveMode'), 'joystick');
+  const at = (x, y, id = 1) => ({ identifier: id, clientX: x, clientY: y });
+  // Right 40% of a 1280 px wide screen is not a joystick zone.
+  canvasEvent('touchstart', { touches: [at(900, 300)], changedTouches: [at(900, 300)] });
+  assert.equal(run('touchStick.id'), null);
+  canvasEvent('touchstart', { touches: [at(200, 500)], changedTouches: [at(200, 500)] });
+  assert.deepEqual(Array.from(run('[touchStick.originX, touchStick.originY]')), [200, 500]);
+  // Inside the 8 px dead zone the core holds still.
+  canvasEvent('touchmove', { touches: [at(206, 500)], changedTouches: [at(206, 500)] });
+  assert.equal(run('touchStickVector().power'), 0);
+  assert.equal(run('player.update(.1); player.x'), 400);
+  // Half way and full tilt; the core moves, it does not jump to the finger.
+  canvasEvent('touchmove', { touches: [at(232, 500)], changedTouches: [at(232, 500)] });
+  assert.equal(run('touchStickVector().power'), .5);
+  canvasEvent('touchmove', { touches: [at(256, 500)], changedTouches: [at(256, 500)] });
+  assert.equal(run('touchStickVector().power'), 1);
+  canvasEvent('touchmove', { touches: [at(400, 500)], changedTouches: [at(400, 500)] });
+  assert.equal(run('touchStickVector().power'), 1);
+  const moved = run('const x0=player.x; player.update(.1); ({dx:player.x-x0, speed:player.speed, y:player.y})');
+  assert.ok(Math.abs(moved.dx - moved.speed * .1) < 1e-6, JSON.stringify(moved));
+  assert.equal(moved.y, 300);
   assert.equal(run('mouse.active'), false);
+});
+
+test('Odak 2.3 a second finger on an ability does not steal or stop the joystick', () => {
+  const { run, canvasEvent } = setup();
+  run('startNewGame(); enemies=[]');
+  const at = (x, y, id) => ({ identifier: id, clientX: x, clientY: y });
+  canvasEvent('touchstart', { touches: [at(100, 400, 7)], changedTouches: [at(100, 400, 7)] });
+  canvasEvent('touchmove', { touches: [at(160, 400, 7)], changedTouches: [at(160, 400, 7)] });
+  // A second finger lands (even inside the zone) while the first is down.
+  canvasEvent('touchstart', { touches: [at(100, 400, 7), at(120, 200, 8)], changedTouches: [at(120, 200, 8)] });
+  assert.equal(run('touchStick.id'), 7);
+  canvasEvent('touchmove', { touches: [at(160, 400, 7), at(10, 10, 8)], changedTouches: [at(10, 10, 8)] });
+  assert.deepEqual(Array.from(run('[touchStick.x, touchStick.y]')), [160, 400]);
+  canvasEvent('touchend', { touches: [at(160, 400, 7)], changedTouches: [at(10, 10, 8)] });
+  assert.equal(run('touchStick.id'), 7);
+  // Touch fires the ability on pointerdown; the click that may follow is swallowed.
+  run("globalThis.novaHits=0; player.triggerNova=()=>novaHits++");
+  run("document.getElementById('novaBtn').dispatch('pointerdown', { pointerType: 'touch' })");
+  run("document.getElementById('novaBtn').click()");
+  run("document.getElementById('novaBtn').dispatch('pointerdown', { pointerType: 'mouse' })");
+  assert.equal(run('novaHits'), 1);
+  assert.equal(run('touchStick.id === 7 && touchStickVector().power === 1'), true);
+  canvasEvent('touchend', { touches: [], changedTouches: [at(160, 400, 7)] });
+  assert.equal(run('touchStick.id'), null);
+});
+
+test('Odak 2.3 "follow finger" keeps the old absolute target and the choice persists', () => {
+  const a = setup();
+  a.run('startNewGame()');
+  a.run("document.getElementById('pauseTouchMode').dispatch('change', { target: { value: 'follow' } })");
+  assert.equal(a.run('touchMoveMode'), 'follow');
+  assert.equal(a.stored['neonCekirdek.touchMode.v1'], 'follow');
+  const at = (x, y) => ({ identifier: 3, clientX: x, clientY: y });
+  // Follow mode accepts the whole screen, like before.
+  a.canvasEvent('touchstart', { touches: [at(1000, 250)], changedTouches: [at(1000, 250)] });
+  assert.equal(a.run('mouse.active'), true);
+  assert.deepEqual(Array.from(a.run('[mouse.x * viewScale, mouse.y * viewScale]'), Math.round), [1000, 250]);
+  assert.equal(a.run('touchStickVector()'), null);
+  a.canvasEvent('touchend', { touches: [], changedTouches: [at(1000, 250)] });
+  assert.equal(a.run('mouse.active'), false);
+  assert.equal(setup(a.stored).run('touchMoveMode'), 'follow');
+  assert.equal(setup({ 'neonCekirdek.touchMode.v1': 'teleport' }).run('touchMoveMode'), 'joystick');
 });
 
 test('M6.1.1 native revive decision button keeps Enter/Space, ambient Enter revives', () => {

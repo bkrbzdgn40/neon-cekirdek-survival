@@ -1,5 +1,11 @@
 # Değişiklik Günlüğü
 
+## Odak 2.3 · Dokunmatik kontrol: göreli joystick
+- Ekranın sol %60'ında parmağın değdiği yer joystick merkezi olur: 8 px ölü bölge, 56 px'te tam hız; kanvas üzerinde iki yarı saydam halka çizilir.
+- Hareket parmağı `Touch.identifier` ile izlenir; ikinci parmak joystick'i çalmaz. Yetenek butonları dokunmatikte `pointerdown` ile tetiklenir (çoklu dokunmada `click` gelmediği için), ardından gelen `click` yutulur.
+- Eski mutlak hedef duraklatma menüsünde "PARMAĞI TAKİP ET" seçeneği olarak kaldı (yalnızca dokunmatik ekranda görünür, `localStorage`'da saklanır); varsayılan joystick.
+- Gerçek çoklu dokunma (CDP) tarayıcı testi eklendi; M5.22 Prizma testi canlı döngüyü dondurur ve mobilde `tap()` kullanır.
+
 ## Odak 2.2 · Masaüstü HUD diyeti
 - Üstte tek satır (can + kalkan + diriliş | ince XP ve seviye | DALGA üst yazılı süre + duraklat), altta yalnızca açık yeteneklerin 48 px ikonları: radyal bekleme, tek harf tuş ipucu, açıklamalar tooltip'te.
 - Altın, görev, kombo (≥ 5), Momentum ve Cinnet (≥ %80), bölüm ikonu tek `showContextual(el, ms)` yardımcısıyla bağlamsal; HUD düğümleri `hudEls` ile bir kez önbelleğe alınır.
