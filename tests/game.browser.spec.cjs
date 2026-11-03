@@ -48,11 +48,53 @@ test('mobile touchscreen controls and menu viewport stay usable', async ({ page,
   const result = await page.evaluate(() => {
     const touch = new Touch({ identifier: 1, target: canvas, clientX: 180, clientY: 270 });
     canvas.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true }));
-    const active = mouse.active && mouse.x > 0 && mouse.y > 0;
+    const active = touchStick.id === 1 && touchStick.originX === 180;
     canvas.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touch], bubbles: true }));
-    return { active, ended: !mouse.active };
+    return { active, ended: touchStick.id === null };
   });
   expect(result).toEqual({ active: true, ended: true });
+});
+
+test('Odak 2.3 joystick drag moves the core and an ability tap does not stop it', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'real multi-touch is checked in mobile Chromium');
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await gotoGame(page, '/index.html');
+  await page.locator('#startBtn').click();
+  await expect(page.locator('#startModal')).toBeHidden();
+  await page.evaluate(() => {
+    enemies = []; enemyProjectiles = []; nextBossTime = 9999;
+    player.invulnTimer = 99; player.xpToNext = 1e9;
+    player.x = player.lastPos.x = 30; player.y = player.lastPos.y = worldHeight * .45;
+  });
+  const nova = await page.locator('#novaBtn').boundingBox();
+  expect(nova).not.toBeNull();
+  const cdp = await page.context().newCDPSession(page);
+  const stick = (x, y) => ({ x, y, id: 1 });
+  const tap = { x: nova.x + nova.width / 2, y: nova.y + nova.height / 2, id: 2 };
+  const y = 300;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [stick(60, y)] });
+  for (let dx = 10; dx <= 70; dx += 10)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [stick(60 + dx, y)] });
+  const x0 = await page.evaluate(() => player.x);
+  await page.waitForTimeout(450);
+  const beforeTap = await page.evaluate(() => player.x);
+  expect(beforeTap).toBeGreaterThan(x0);
+  // Second finger taps EMP while the first keeps holding the stick.
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [stick(130, y), tap] });
+  // CDP lists the released points on touchEnd: only the EMP finger lifts.
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [tap] });
+  await page.waitForTimeout(150);
+  const afterTap = await page.evaluate(() => ({ x: player.x, id: touchStick.id, emp: player.novaCooldown > 0 }));
+  await page.waitForTimeout(400);
+  const later = await page.evaluate(() => player.x);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [stick(130, y)] });
+  expect(afterTap.emp).toBe(true);
+  expect(afterTap.id).not.toBeNull();
+  expect(afterTap.x).toBeGreaterThan(beforeTap);
+  expect(later).toBeGreaterThan(afterTap.x + 40);
+  await expect.poll(() => page.evaluate(() => touchStick.id)).toBeNull();
+  expect(errors).toEqual([]);
 });
 
 test('portable JSON backup can be downloaded and restored through the menu', async ({ page }) => {
@@ -518,11 +560,13 @@ test('M5.21 Echo Hunter visibly announces stationary, moving and dashing player 
 });
 
 
-test('M5.22 keyboard C and touch Prism Riposte deflect a real projectile in Chromium',async({page})=>{
+test('M5.22 keyboard C and touch Prism Riposte deflect a real projectile in Chromium',async({page,isMobile})=>{
  const errors=[];page.on('pageerror',err=>errors.push(err.message));
  await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
+ // Freeze the live loop so the shot cannot land between evaluate steps.
  await page.evaluate(()=>{
+   window.__m522Update=updateGame;updateGame=()=>{};
    totalTime=10;nextBossTime=500;
    const shot=new EnemyProjectile(player.x+72,player.y,-360,0,6,25);
    enemyProjectiles=[shot];enemies=[];
@@ -531,7 +575,8 @@ test('M5.22 keyboard C and touch Prism Riposte deflect a real projectile in Chro
  const result=await page.evaluate(()=>{
    const wasActive=getNeonPrismGuard().active;
    const hp=player.hp;
-   updateGame(.016);
+   window.__m522Update(.016);
+   updateGame=window.__m522Update;
    updatePrismGuardHud();
    const state=getNeonPrismGuard();
    return {wasActive,hp,afterHp:player.hp,state,
@@ -546,7 +591,9 @@ test('M5.22 keyboard C and touch Prism Riposte deflect a real projectile in Chro
  expect(result.label).toContain('KARŞILA');
  await expect(page.locator('#prismBtn')).toBeVisible();
  await page.evaluate(()=>{totalTime+=8.6;updatePrismGuard();updatePrismGuardHud();});
- await page.locator('#prismBtn').click();
+ // Odak 2.3: phones fire on pointerdown; the trailing click must not double-fire.
+ if(isMobile) await page.locator('#prismBtn').tap();
+ else await page.locator('#prismBtn').click();
  expect(await page.evaluate(()=>getNeonPrismGuard().stats.activations)).toBe(2);
  expect(errors).toEqual([]);
 });
