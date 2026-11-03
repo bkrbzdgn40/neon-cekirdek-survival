@@ -164,13 +164,9 @@
         }
         #bossHudContainer { border-color: #ff0055; box-shadow: 0 0 18px rgba(255, 0, 85, .18); }
         #bossHpBar { background: linear-gradient(90deg,#700d28,#ff0055,#ffbdd5); }
-        #bossIdentityStrip .boss-id-chip { display:inline-block; font:700 9px 'Orbitron',sans-serif;
-            padding:3px 6px; border:1px solid; border-radius:5px; background:rgba(2,8,20,.88); }
-        #bossIdentityStrip .boss-id-chip { flex:1 1 145px; min-width:132px; }
+        #bossIdentityStrip .boss-id-chip { display:inline-flex; align-items:center; gap:5px; font:700 9px/1.2 'Orbitron',sans-serif;
+            padding:1px 6px; border:1px solid; border-radius:5px; background:rgba(2,8,20,.88); white-space:nowrap; }
         #bossIdentityStrip .boss-id-chip[data-target="true"] { outline:2px solid #67e8f9; outline-offset:1px; }
-        #bossIdentityStrip .boss-id-head { display:flex; justify-content:space-between; gap:8px; }
-        #bossIdentityStrip .boss-id-meter { height:3px; margin-top:3px; border-radius:99px; background:#13243a; overflow:hidden; }
-        #bossIdentityStrip .boss-id-meter > span { display:block; height:100%; border-radius:99px; }
         #neonContractPanel { border:1px solid rgba(103,232,249,.28); background:rgba(5,13,27,.82); }
         .bastion-ability-button:disabled { opacity: .55; cursor: not-allowed; border-color: rgba(71,85,105,.55); }
         .bastion-ability-button:not(:disabled):hover { box-shadow: 0 0 18px rgba(79,255,224,.2); border-color: #99f6e4; }
@@ -981,25 +977,6 @@
     }
 }
 
-/* M5.18: Mobile players should not lose terrain instructions from the desktop-only chip. */
-#hud .arena-chapter-mobile {
-    max-width:min(96vw,460px);
-    padding:5px 12px;
-    margin-top:4px;
-    border:1px solid rgba(93,231,255,.65);
-    border-radius:9px;
-    color:#d8f5ff;
-    text-align:center;
-    line-height:1.35;
-    background:rgba(5,11,24,.93);
-    box-shadow:0 5px 14px rgba(0,0,0,.45);
-    pointer-events:none;
-}
-#hud[data-arena-chapter="FOUNDRY"] .arena-chapter-mobile { color:#ffe0ad;border-color:#ff9757; }
-#hud[data-arena-chapter="GARDEN"] .arena-chapter-mobile { color:#b3ffe0;border-color:#6fffc6; }
-#hud[data-arena-chapter="RIFT"] .arena-chapter-mobile { color:#ebe1ff;border-color:#bd93ff; }
-@media(min-width:640px) { #hud .arena-chapter-mobile { display:none!important; } }
-
 /* M5.20: signature operations have a single quiet progress strip and
    three distinct visual languages rendered inside the actual arena. */
 #hud .arena-showcase-banner {
@@ -1325,62 +1302,77 @@
 #hud.combat-cockpit[data-arena-chapter="RIFT"]{
     --cockpit-accent:#c49aff;--cockpit-rgb:196,154,255;
 }
-#hud .hud-signal-deck{
+/* Odak 2.2 · one status row on top (vitals | XP | context chips, clock, pause),
+   only the active abilities at the bottom. */
+#hud.combat-cockpit{padding:10px 12px 12px;}
+#hud .hud-top-deck{display:flex;flex-direction:column;gap:6px;width:100%;min-width:0;}
+#hud .hud-status-row{
+    position:relative;
     display:grid;
-    grid-template-columns:minmax(0,5fr) minmax(0,3fr) minmax(0,4fr);
+    grid-template-columns:minmax(0,auto) minmax(90px,1fr) minmax(0,auto);
+    align-items:center;
     gap:8px;
     width:100%;
     min-width:0;
 }
+#hud .hud-status-left,
+#hud .hud-status-right,
+#hud .hud-context-strip{display:flex;align-items:center;gap:6px;min-width:0;}
+#hud .hud-status-right{justify-content:flex-end;}
+#hud .hud-context-strip{justify-content:flex-end;}
+
+/* Contextual items: hidden until showContextual() sets data-context="on";
+   opacity fades in and out, display drops out of layout once faded. */
+#hud [data-context]{transition:opacity .22s ease,display .22s allow-discrete;}
+#hud [data-context="on"]{opacity:1;}
+#hud .hud-chip[data-context="off"]{display:none;opacity:0;}
+@starting-style{#hud [data-context="on"]{opacity:0;}}
+
 #hud .hud-meter {
     position:relative;
     min-width:0;
-    height:28px;
-    padding:3px;
-    border-radius:7px;
+    height:16px;
+    padding:2px;
+    border-radius:6px;
     border:1px solid rgba(var(--cockpit-rgb),.53);
     background:linear-gradient(100deg,rgba(4,14,27,.99),rgba(14,30,44,.95));
     box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
     isolation:isolate;
-}
-#hud .hud-meter::after{
-    content:'';
-    position:absolute;
-    inset:2px 2px auto;
-    height:2px;
-    border-radius:2px;
-    pointer-events:none;
-    background:linear-gradient(90deg,var(--cockpit-accent),transparent 65%);
-    opacity:.83;
+    overflow:hidden;
 }
 #hud .hud-meter-momentum{border-color:rgba(104,232,182,.57);}
 #hud .hud-meter-overdrive{border-color:rgba(255,122,191,.65);}
 #hud .hud-meter-fill{
     position:relative;
     height:100%;
-    border-radius:4px;
+    border-radius:3px;
     background:linear-gradient(90deg,#1b8ca9,#6be7ff);
     box-shadow:inset 0 -2px rgba(0,0,0,.25);
+    transition:width .3s ease-out;
 }
 #hud #momentumBar{background:linear-gradient(90deg,#087b59,#6bfac7);}
 #hud #overdriveBar{background:linear-gradient(90deg,#9d2d77,#ffa0dc);}
+#hud .hud-meter-level,
 #hud .hud-meter-label{
     position:absolute;
+    inset:0;
     z-index:2;
-    font:800 11px/1.2 'Segoe UI',system-ui,sans-serif;
+    display:flex;
+    align-items:center;
+    padding-inline:7px;
+    font:800 11px/1 'Segoe UI',system-ui,sans-serif;
     letter-spacing:.03em;
     color:#f5fcff;
     text-shadow:0 1px 3px #000,0 0 6px #001b2a;
-    padding-inline:5px;
     white-space:nowrap;
     pointer-events:none;
 }
-#hud .hud-information-row{gap:9px;}
-#hud .hud-vitals-group{min-width:0;gap:8px;}
+#hud .hud-meter-label{justify-content:center;}
+#hud .hud-meter.hud-chip{width:128px;height:24px;padding:3px;}
+
 #hud .hud-vitals,
-#hud .hud-gold-panel,
-#hud .hud-wave-panel,
-#hud .hud-score-panel{
+#hud .hud-chip,
+#hud .hud-clock{
     position:relative;
     isolation:isolate;
     min-width:0;
@@ -1389,68 +1381,94 @@
     border-radius:9px;
     box-shadow:inset 3px 0 0 rgba(var(--cockpit-rgb),.60),
         inset 0 1px 0 rgba(241,251,255,.05),0 3px 13px rgba(0,0,0,.27);
-    backdrop-filter:none;
 }
-#hud .hud-vitals{border-color:rgba(255,113,150,.52);box-shadow:inset 3px 0 #ff729b;}
-#hud .hud-gold-panel{border-color:rgba(245,196,90,.43);box-shadow:inset 3px 0 #f3c66b;}
+#hud .hud-vitals{
+    display:flex;align-items:center;gap:7px;padding:5px 9px;
+    border-color:rgba(255,113,150,.52);box-shadow:inset 3px 0 #ff729b;
+}
+#hud .hud-vitals-icon{color:#ff5c8a;font-size:13px;}
 #hud .hud-health-track {
-    height:12px;
+    position:relative;
+    width:150px;
+    height:18px;
+    overflow:hidden;
     border:1px solid rgba(250,147,174,.3);
     background:repeating-linear-gradient(90deg,#142131 0 13px,#233348 13px 14px);
-    border-radius:3px;
+    border-radius:4px;
 }
-#hud #hpBar{border-radius:2px;background:linear-gradient(90deg,#b52b50,#ff7898);}
-#hud #hpText{
-    font-family:'Segoe UI',system-ui,sans-serif;
-    font-size:13px;
-    font-weight:800;
+#hud .hud-health-fill{height:100%;transition:width .15s;}
+#hud #hpBar{border-radius:3px;background:linear-gradient(90deg,#b52b50,#ff7898);}
+#hud .hud-health-text{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    font:800 11px/1 'Segoe UI',system-ui,sans-serif;
     color:#fff1f5;
+    text-shadow:0 1px 2px #000,0 0 4px #3a0716;
     white-space:nowrap;
 }
-#hud .hud-wave-panel {
-    justify-content:center;
-    gap:10px;
-    padding-block:8px;
-}
-#hud .hud-wave-panel > div > span:first-child,
-#hud .hud-score-panel .text-right > span:first-child{
-    font:800 10px/1.3 'Segoe UI',system-ui,sans-serif;
-    letter-spacing:.08em;
-    color:#b4d8e9;
-}
-#hud #waveText,#hud #timeText,#hud #scoreText{
-    font-family:'Orbitron','Segoe UI',system-ui,sans-serif;
-    line-height:1.3;
-    letter-spacing:.02em;
-    text-shadow:none;
+#hud .hud-vital-flag{display:flex;align-items:center;gap:3px;font:800 11px/1 'Segoe UI',system-ui,sans-serif;color:#67e8f9;white-space:nowrap;}
+#hud .hud-vital-flag.hidden{display:none;}
+#hud .hud-vital-flag[data-state="cooldown"]{color:#7b8799;}
+#hud .hud-revive{color:#34d399;}
+#hud .hud-revive[data-empty="true"]{color:#475569;opacity:.55;}
+
+#hud .hud-chip{
+    display:flex;align-items:center;gap:5px;
+    height:30px;padding:0 9px;
+    font:800 11px/1 'Segoe UI',system-ui,sans-serif;
     white-space:nowrap;
 }
+#hud .hud-gold-panel{color:#fcd34d;border-color:rgba(245,196,90,.43);box-shadow:inset 3px 0 #f3c66b;}
+#hud .hud-quest-chip{color:#86efac;border-color:rgba(74,222,128,.4);}
+#hud .hud-combo-chip{color:#fde047;border-color:rgba(250,204,21,.6);}
+#hud #comboRankText{font:900 12px/1 'Orbitron',sans-serif;}
+#hud #comboText{font:900 13px/1 'Orbitron',sans-serif;}
+#hud .hud-combo-timer{width:28px;height:3px;border-radius:2px;background:#1f2937;overflow:hidden;}
+#hud #comboTimerBar{display:block;height:100%;background:#facc15;}
+#hud #arenaChapterBadge{font:900 10px/1 'Orbitron',sans-serif;}
+#hud #arenaChapterStatus{font:800 10px/1 'Segoe UI',system-ui,sans-serif;opacity:.9;}
+#hud .arena-chapter-chip[data-urgent="false"] #arenaChapterStatus{display:none;}
+
+#hud .hud-clock{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-width:66px;height:38px;padding:0 10px;
+}
+#hud .hud-clock-wave{font:800 9px/1.1 'Segoe UI',system-ui,sans-serif;letter-spacing:.08em;color:#b4d8e9;white-space:nowrap;}
 #hud #waveText{color:var(--cockpit-accent);}
-#hud .hud-score-panel{justify-content:flex-end;gap:9px;}
-#hud .hud-score-panel > button{
-    min-width:36px;min-height:36px;
-    border-radius:7px;
-    background:rgba(16,38,58,.96);
+#hud #timeText{font:800 16px/1.2 'Orbitron','Segoe UI',system-ui,sans-serif;letter-spacing:.02em;color:#a5f3fc;white-space:nowrap;}
+#hud .hud-pause-button{
+    display:flex;align-items:center;justify-content:center;flex:none;
+    width:38px;height:38px;border-radius:8px;
+    border:1px solid rgba(var(--cockpit-rgb),.45);
+    background:rgba(16,38,58,.96);color:#a5f3fc;
 }
-#hud .hud-score-panel > button:hover{
-    border-color:var(--cockpit-accent);
-    color:#fff;
-}
+#hud .hud-pause-button:hover{border-color:var(--cockpit-accent);color:#fff;}
+
 #hud .hud-boss-console{
     position:relative;
-    padding:10px 14px;
+    display:flex;flex-direction:column;gap:2px;
+    width:min(640px,100%);
+    margin:0 auto;
+    padding:4px 10px;
+    border:1px solid;
     border-radius:9px;
     background:linear-gradient(100deg,rgba(49,12,31,.98),rgba(10,16,34,.96));
     box-shadow:inset 4px 0 #ff6489,0 7px 21px rgba(0,0,0,.36);
 }
-#hud .hud-boss-console::before{
-    content:'';
-    width:70px;height:2px;
-    position:absolute;left:12px;top:0;
-    background:linear-gradient(90deg,#ffe3ed,transparent);
-    pointer-events:none;
-}
+#hud .hud-boss-console.hidden{display:none;}
+#hud .hud-boss-head{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+#hud #bossNameText{font:900 11px/1.2 'Orbitron',sans-serif;letter-spacing:.06em;white-space:nowrap;}
+#hud #bossPhaseText{font:800 9px/1.2 'Orbitron',sans-serif;color:#fbcfe8;white-space:nowrap;}
+#hud .hud-boss-track{position:relative;height:12px;border-radius:4px;overflow:hidden;
+    border:1px solid rgba(255,82,104,.4);background:#14091a;}
+#hud #bossHpBar{height:100%;transition:width .1s;}
+#hud #bossHpText{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font:800 9px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000;white-space:nowrap;}
+#hud .hud-boss-names{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 8px;}
+#hud .hud-boss-names:empty{display:none;}
+
 #hud .hud-command-deck{
+    display:flex;align-items:flex-end;justify-content:flex-end;gap:8px;width:100%;
     padding:8px;
     border:1px solid rgba(var(--cockpit-rgb),.18);
     border-radius:12px;
@@ -1489,6 +1507,7 @@
     outline:2px solid #fff;
     outline-offset:3px;
 }
+#hud .skill-key{display:none;}
 #hud.combat-cockpit[data-vital="critical"] .hud-vitals{
     border-color:#ff5e7f;
     box-shadow:inset 4px 0 #ff335f,0 0 16px rgba(255,51,95,.36);
@@ -1499,7 +1518,7 @@
     0%,100%{border-color:#ff5e7f;}
     50%{border-color:#ffc1cf;}
 }
-#hud.combat-cockpit[data-combat-alert="boss"] .hud-wave-panel{
+#hud.combat-cockpit[data-combat-alert="boss"] .hud-clock{
     border-color:rgba(255,98,138,.8);
     box-shadow:inset 3px 0 #ff658d,0 0 16px rgba(255,65,101,.2);
 }
@@ -1508,51 +1527,82 @@
     border-color:#ffb5dd;
     box-shadow:0 0 13px rgba(255,81,171,.22);
 }
-#hud.combat-cockpit[data-combat-alert="warning"] .hud-wave-panel{
+#hud.combat-cockpit[data-combat-alert="warning"] .hud-clock{
     border-color:rgba(255,199,103,.78);
     box-shadow:inset 3px 0 #ffce81;
 }
-@media(max-width:1023px){
-    #hud .hud-information-row{
-        display:grid;
-        grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-        align-items:stretch;
-        gap:7px;
+
+/* Desktop: thin top row (<= 56 px), 48 px ability icons with a radial
+   cooldown and a one-letter key hint; names and long key text in tooltips. */
+@media (min-width:1024px) and (hover:hover){
+    #hud.combat-cockpit{padding:10px 14px 12px;}
+    #hud .hud-status-row{
+        grid-template-columns:minmax(0,auto) minmax(160px,1fr) minmax(0,auto);
+        gap:12px;
+        max-height:56px;
     }
-    #hud .hud-vitals-group{
-        grid-column:1/-1;
-        display:flex;
-        flex-wrap:wrap;
-        gap:6px;
+    #hud .hud-meter-xp{height:16px;}
+    #hud .hud-command-deck{
+        justify-content:center;
+        padding:0 0 16px;
+        border:0;border-radius:0;
+        background:none;box-shadow:none;
     }
-    #hud .hud-wave-panel{grid-column:1;min-width:0;justify-content:center;}
-    #hud .hud-score-panel{grid-column:2;min-width:0;justify-content:flex-end;}
+    #hud .hud-action-bay{gap:12px;}
+    #hud .hud-action-bay > button{
+        width:48px;height:48px;min-height:48px;min-width:0;
+        padding:0;gap:0;
+        justify-content:center;
+        border-radius:11px;
+        overflow:visible;
+    }
+    #hud .hud-action-bay > button > i{font-size:19px;}
+    #hud .hud-action-bay .skill-text{display:none;}
+    #hud .hud-action-bay .skill-status{
+        position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;
+        overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+    }
+    #hud #bastionBtn[data-ready="false"] #bastionStatus{
+        position:absolute!important;width:auto;height:auto;margin:0;clip:auto;overflow:visible;
+        left:50%;bottom:2px;transform:translateX(-50%);
+        font:800 7px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:0;
+        color:#fde68a;text-shadow:0 1px 2px #000;
+    }
+    #hud .skill-cooldown{
+        height:100%!important;
+        border-radius:inherit;
+        background:conic-gradient(rgba(3,8,20,.8) calc(var(--cd,0) * 3.6deg),transparent 0);
+        transition:none;
+        pointer-events:none;
+    }
+    #hud .skill-key{
+        display:block;
+        position:absolute;
+        top:calc(100% + 3px);
+        left:50%;
+        transform:translateX(-50%);
+        font:800 10px/1 'Orbitron','Segoe UI',sans-serif;
+        color:#a9c6da;
+        text-shadow:0 1px 2px #000;
+        pointer-events:none;
+    }
 }
 @media(max-width:639px){
     #hud.combat-cockpit{padding:8px 9px 9px;}
     #hud .hud-top-deck{gap:5px;}
-    #hud .hud-signal-deck{
-        grid-template-columns:repeat(2,minmax(0,1fr));
-        gap:5px;
+    #hud .hud-status-row{
+        grid-template-columns:minmax(0,1fr) auto;
+        grid-template-areas:"left right" "xp xp";
+        row-gap:5px;
     }
-    #hud .hud-meter{height:26px;}
-    #hud .hud-meter-xp{grid-column:1/-1;}
-    #hud .hud-meter-momentum,
-    #hud .hud-meter-overdrive{grid-column:auto;}
-    #hud .hud-meter-label{font-size:11px;letter-spacing:0;}
-    #hud .hud-vitals{padding:6px 8px;gap:6px;flex-wrap:wrap;}
-    #hud .hud-vitals .hud-health-track{width:76px;}
-    #hud #hpText{width:auto;min-width:54px;text-align:right;}
-    #hud .hud-gold-panel{padding:5px 8px;}
-    #hud .hud-wave-panel{padding:6px;gap:7px;}
-    #hud .hud-score-panel{padding:5px 7px;gap:5px;}
-    #hud #waveText,#hud #timeText,#hud #scoreText{font-size:14px;}
-    #hud .hud-score-panel > button{min-width:36px;min-height:36px;width:36px;height:36px;margin-left:0;}
-    #hud .hud-boss-console{padding:6px 9px;max-width:100%;}
-    #hud .hud-command-deck{
-        gap:6px;
-        padding:6px;
-    }
+    #hud .hud-status-left{grid-area:left;}
+    #hud .hud-meter-xp{grid-area:xp;}
+    #hud .hud-status-right{grid-area:right;}
+    #hud .hud-context-strip{position:absolute;top:calc(100% + 4px);right:0;flex-wrap:wrap;max-width:100%;}
+    #hud .hud-health-track{width:84px;}
+    #hud .hud-vitals{padding:5px 7px;gap:5px;}
+    #hud .hud-boss-console{padding:5px 8px;}
+    #hud .hud-command-deck{gap:6px;padding:6px;}
     #hud .hud-action-bay{
         display:flex;
         flex-wrap:nowrap;
@@ -1576,9 +1626,12 @@
 }
 @media(max-width:375px){
     #hud.combat-cockpit{padding:6px;}
-    #hud .hud-vitals{padding:5px 6px;}
+    #hud .hud-health-track{width:70px;}
     #hud .hud-action-bay > button{padding-inline:2px;}
     #hud .hud-action-bay > button > i{font-size:13px;}
+}
+@media(hover:none){
+    #hud .hud-pause-button{width:44px;height:44px;}
 }
 @media(prefers-reduced-motion:reduce){
     #hud.combat-cockpit[data-vital="critical"] .hud-vitals{animation:none;}
@@ -1665,3 +1718,35 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
     50% { box-shadow: 0 0 18px 4px #ffe08acc; filter: brightness(1.35); }
 }
 @media (prefers-reduced-motion: reduce) { .system-spotlight { animation: none; } }
+
+/* Odak 2.2 · screen-reader-only text (utilities.css is prebuilt, no sr-only). */
+.hud-sr{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;
+    overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+
+/* Odak 2.2 · pause menu carries the settings and run details the HUD dropped. */
+#pauseModal .pause-shell{width:min(760px,100%);max-height:calc(100dvh - 32px);overflow-y:auto;padding:22px;text-align:left;}
+#pauseModal .pause-shell > h2{text-align:center;margin-bottom:18px;}
+#pauseModal .pause-columns{display:grid;gap:18px;}
+@media(min-width:720px){#pauseModal .pause-columns{grid-template-columns:minmax(0,250px) minmax(0,1fr);}}
+#pauseModal .pause-cockpit{display:flex;flex-direction:column;gap:12px;min-width:0;}
+#pauseModal .pause-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+#pauseModal .pause-stat{display:flex;flex-direction:column;gap:5px;min-width:0;padding:10px 12px;
+    border:1px solid rgba(103,232,249,.25);border-radius:10px;background:rgba(8,20,36,.9);}
+#pauseModal .pause-label{font:800 10px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.1em;color:#94b8cc;}
+#pauseModal .pause-value{font:900 20px/1.1 'Orbitron',sans-serif;color:#fff;font-variant-numeric:tabular-nums;}
+#pauseModal .pause-contract{align-self:flex-start;font:800 11px/1 'Orbitron',sans-serif;border:1px solid;border-radius:6px;padding:4px 7px;}
+#pauseModal .pause-settings{display:flex;flex-wrap:wrap;gap:8px;}
+#pauseModal .pause-setting{display:inline-flex;align-items:center;justify-content:center;gap:7px;
+    min-width:44px;min-height:44px;padding:0 12px;
+    border:1px solid rgba(103,232,249,.35);border-radius:10px;background:#0b1a2d;
+    color:#a5f3fc;font:800 12px/1 'Segoe UI',system-ui,sans-serif;}
+#pauseModal .pause-setting:hover{border-color:#67e8f9;color:#fff;}
+#pauseModal .pause-build{display:flex;flex-direction:column;gap:8px;min-width:0;}
+#pauseModal .pause-modules{display:flex;flex-wrap:wrap;gap:6px;}
+#pauseModal .pause-build-guide summary{font-size:12px;color:#67e8f9;padding:4px 0;}
+#pauseModal .pause-build-details{font-size:11px;line-height:1.6;max-height:220px;overflow-y:auto;padding-right:4px;}
+#pauseModal .pause-keys{list-style:none;margin:0;padding:0;display:grid;gap:5px;
+    font:600 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#c9d9ea;}
+#pauseModal .pause-keys kbd{font:800 10px/1 'Orbitron',sans-serif;border:1px solid #3f5b77;border-radius:4px;
+    padding:2px 5px;color:#e6fbff;background:#0b192c;}
+@media(hover:none){#pauseModal .pause-keys{display:none;}}

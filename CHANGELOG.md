@@ -1,5 +1,11 @@
 # Değişiklik Günlüğü
 
+## Odak 2.2 · Masaüstü HUD diyeti
+- Üstte tek satır (can + kalkan + diriliş | ince XP ve seviye | DALGA üst yazılı süre + duraklat), altta yalnızca açık yeteneklerin 48 px ikonları: radyal bekleme, tek harf tuş ipucu, açıklamalar tooltip'te.
+- Altın, görev, kombo (≥ 5), Momentum ve Cinnet (≥ %80), bölüm ikonu tek `showContextual(el, ms)` yardımcısıyla bağlamsal; HUD düğümleri `hudEls` ile bir kez önbelleğe alınır.
+- TEHDİT etiketi, NORMAL rozeti, mobil bölüm şeridi, ayrı dalga paneli ve tek boss'taki ikinci can barı kalktı; skor, sözleşme, kontrol modu, müzik, ses, tam ekran, build ve kısayollar duraklatma menüsünde.
+- Oynanacak alan: 1280×800 %59.8 → %84.5, 1366×768 %66.4 → %83.9. Geometri testi ölçümden önce komboyu sabitler, kombo açık hâli ayrı ölçülür.
+
 ## Odak 2.1 · HUD envanteri ve karar tablosu
 - `docs/HUD_ENVANTERI.md`: `#hud` içindeki her öğe için (42 satır) ne gösterdiği, ne sıklıkla değiştiği ve kararı (HER ZAMAN / BAĞLAMSAL / DURAKLATMA MENÜSÜ / KALDIR).
 - 5 görünümde sakin ve yoğun durum ölçümü; plan kuralının söz etmediği öğeler ★ ile işaretli, 4 açık soru onaya sunuldu.

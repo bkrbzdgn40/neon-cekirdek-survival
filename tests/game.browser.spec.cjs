@@ -390,24 +390,35 @@ test('arena chapters change visual HUD identity and rift teleports without spend
 });
 
 
-test('M5.18 mobile displays chapter status through warning, garden and rift',async({page,isMobile})=>{
- test.skip(!isMobile,'mobile-only terrain HUD visibility');
+test('M5.18 chapter chip shows terrain status only while the chapter is dangerous',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
- await page.evaluate(()=>{nextBossTime=500;wave=6;totalTime=23.7;updateArenaChapter(.02);updateArenaChapterHud();});
- const mobile=page.locator('#arenaChapterMobile');
- await expect(mobile).toBeVisible();
- await expect(mobile).toContainText('DÖKÜMHANE');
- await expect(mobile).toContainText('ISI YÜKLENİYOR');
- await page.evaluate(()=>{totalTime+=1.55;updateArenaChapter(.02);updateArenaChapterHud();});
- await expect(mobile).toContainText('RAYLARDAN KAÇ');
- await page.evaluate(()=>{wave=9;updateArenaChapter(.02);updateArenaChapterHud();});
- await expect(mobile).toContainText('İYON DOLDUR');
- await page.evaluate(()=>{wave=12;updateArenaChapter(.02);updateArenaChapterHud();});
- await expect(mobile).toContainText('İKİ GEÇİT AKTİF');
+ // Fixture: skip the 5 s entry announcement so the chip itself is on screen.
+ const enter=w=>page.evaluate(w=>{nextBossTime=500;wave=w;updateArenaChapter(.02);
+   chapterAnnounceUntil=0;updateArenaChapterHud();},w);
+ await page.evaluate(()=>{totalTime=23.7;});
+ await enter(6);
+ const chip=page.locator('#arenaChapterChip');
+ const status=page.locator('#arenaChapterStatus');
+ await expect(chip).toBeVisible();
+ await expect(chip).toContainText('DÖKÜMHANE');
+ await expect(status).toBeVisible();
+ await expect(status).toContainText('ISI YÜKLENİYOR');
+ await page.evaluate(()=>{totalTime+=1.55;updateArenaChapterHud();});
+ await expect(status).toContainText('RAYLARDAN KAÇ');
+ await expect(status).toBeVisible();
+ await enter(9);
+ await expect(status).toHaveText(/İYON DOLDUR/);
+ await expect(status).toBeHidden();
+ await expect(chip).toBeVisible();
+ await enter(12);
+ await expect(status).toHaveText(/İKİ GEÇİT AKTİF/);
+ await expect(status).toBeHidden();
+ await expect(chip).toBeVisible();
  expect(errors).toEqual([]);
 });
+
 
 
 test('M5.19 contested garden and warned rift pursuit have readable HUD in Chromium',async({page})=>{
@@ -761,35 +772,28 @@ test('M5.25 cockpit fits 320–1440px without covering command controls or losin
  for(const [width,height] of [[320,568],[360,740],[390,844],[768,800],[1024,768],[1440,900]]){
    await page.setViewportSize({width,height});
    const v=await page.evaluate(()=>{
-     const rect=id=>{const r=document.getElementById(id).getBoundingClientRect();
+     const box=el=>{const r=el.getBoundingClientRect();
        return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
-     // Gauge containers always have geometry; a valid 0% fill is zero-width.
-     const bars=['xpBar','momentumBar','overdriveBar'].map(id=>{
-       const r=document.getElementById(id).closest('.hud-meter').getBoundingClientRect();
-       return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};
-     });
+     const rect=id=>box(document.getElementById(id));
+     const always=[document.querySelector('.hud-health-track'),document.querySelector('.hud-meter-xp'),
+       document.getElementById('timeText'),document.getElementById('pauseBtn')].map(box);
      const skills=['bastionBtn','novaBtn','prismBtn','dashBtn'].map(rect);
-     const labels=['xpText','momentumText','overdriveText'].map(id=>{
-       const n=document.getElementById(id);
-       return {text:n.textContent,font:parseFloat(getComputedStyle(n).fontSize)};
-     });
-     return {bars,skills,labels,top:rect('hud').top,
-       wave:rect('waveText'),score:rect('scoreText'),
-       row:document.querySelector('.hud-information-row').getBoundingClientRect().bottom,
-       command:document.querySelector('.hud-command-deck').getBoundingClientRect().top,
-       overflow:document.documentElement.scrollWidth-innerWidth,
-       columns:getComputedStyle(document.querySelector('.hud-signal-deck')).gridTemplateColumns.split(' ').length};
+     const font=el=>parseFloat(getComputedStyle(el).fontSize);
+     return {always,skills,
+       fonts:[font(document.getElementById('hpText')),font(document.querySelector('.hud-meter-level'))],
+       row:document.querySelector('.hud-status-row').getBoundingClientRect().bottom,
+       command:document.querySelector('.hud-action-bay').getBoundingClientRect().top,
+       overflow:document.documentElement.scrollWidth-innerWidth};
    });
    expect(v.overflow, 'horizontal overflow at '+width).toBeLessThanOrEqual(3);
-   expect(v.columns).toBe(width<640?2:3);
-   for(const item of [...v.bars,...v.skills,v.wave,v.score]){
+   for(const item of [...v.always,...v.skills]){
      expect(item.left, 'item left at '+width).toBeGreaterThanOrEqual(-2);
      expect(item.right,'item right at '+width).toBeLessThanOrEqual(width+2);
      expect(item.width).toBeGreaterThan(0);
    }
    expect(v.row,'top HUD overlaps action bay at '+width).toBeLessThan(v.command);
    for(const button of v.skills)expect(button.height).toBeGreaterThanOrEqual(43);
-   for(const label of v.labels)expect(label.font).toBeGreaterThanOrEqual(11);
+   for(const size of v.fonts)expect(size).toBeGreaterThanOrEqual(11);
    for(let i=1;i<v.skills.length;i++){
      expect(v.skills[i].left,'combat skills overlap at '+width)
        .toBeGreaterThanOrEqual(v.skills[i-1].right-2);
@@ -816,7 +820,7 @@ test('M5.25 damage and boss state change cockpit hierarchy, progress bars remain
    activeBosses.push(arch);
    updateHUD();
    const boss=document.getElementById('hud').dataset.combatAlert;
-   const color=getComputedStyle(document.querySelector('.hud-wave-panel')).borderTopColor;
+   const color=getComputedStyle(document.querySelector('.hud-clock')).borderTopColor;
    return {initial,critical,hpAria,s,boss,color};
  });
  expect(r.initial).toBe('steady');
@@ -837,7 +841,7 @@ test('M5.25 reduced-motion and low graphics keep HUD legible without decorative 
    const first=getComputedStyle(document.querySelector('.hud-vitals')).animationName;
    applyGraphicsQuality('low',false);
    const slot=getComputedStyle(document.getElementById('dashBtn'));
-   const title=getComputedStyle(document.getElementById('waveText'));
+   const title=getComputedStyle(document.getElementById('timeText'));
    return {animation:first,shadow:slot.boxShadow,font:parseFloat(title.fontSize)};
  });
  expect(r.animation).toBe('none');
@@ -952,12 +956,12 @@ test('Odak 1.3 first run without unlocks shows only the core HUD',async({page})=
  await expect(page.locator('#neonContractPanel')).toBeHidden();
  await page.locator('#startBtn').click();
  await expect(page.locator('#hud')).toBeVisible();
- for(const id of ['dashBtn','pauseBtn','waveText','timeText','scoreText','hpBar'])
+ for(const id of ['dashBtn','pauseBtn','waveText','timeText','hpBar'])
    await expect(page.locator('#'+id),id+' should stay visible').toBeVisible();
+ await expect(page.locator('#pauseModal #scoreText')).toHaveCount(1);
  await expect(page.locator('#xpBar').locator('xpath=..')).toBeVisible();
  for(const id of ['novaBtn','prismBtn','bastionBtn','questHudBox','arenaChapterChip','activeContractBadge'])
    await expect(page.locator('#'+id),id+' should be hidden').toBeHidden();
- await expect(page.locator('#questMobileText')).toBeHidden();
  await expect(page.locator('#momentumBar').locator('xpath=..')).toBeHidden();
  await expect(page.locator('#overdriveBar').locator('xpath=..')).toBeHidden();
  expect(await page.evaluate(()=>unlockLevel)).toBe(0);
@@ -996,7 +1000,7 @@ test('Odak 1.4 reaching wave 3 on a clean save opens EMP and Quests and spotligh
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await gotoGame(page,'/index.html',{unlockAll:false});
  await expect(page.locator('#startBtn')).toBeVisible();
- await expect(page.locator('[data-system="emp"]')).toBeHidden();
+ await expect(page.locator('#startModal [data-system="emp"]')).toBeHidden();
  await expect(page.locator('#menuUnlockHint')).toHaveText("Yeni protokol: Dalga 3'e ulaşınca açılır.");
  await page.locator('#startBtn').click();
  await expect(page.locator('#novaBtn')).toBeHidden();
@@ -1017,7 +1021,7 @@ test('Odak 1.4 reaching wave 3 on a clean save opens EMP and Quests and spotligh
  await page.evaluate(()=>{totalTime+=20;updateHUD();});
  await expect(nova).not.toHaveClass(/system-spotlight/);
  await page.reload({waitUntil:'domcontentloaded'});
- await expect(page.locator('[data-system="emp"]')).toBeVisible();
+ await expect(page.locator('#startModal [data-system="emp"]')).toBeVisible();
  await expect(page.locator('#menuUnlockHint')).toHaveText("Yeni protokol: Dalga 5'e ulaşınca açılır.");
  expect(errors).toEqual([]);
 });
@@ -1052,3 +1056,84 @@ test('Odak 1.5 with ?unlock=all the first 60 s add at most two systems besides d
    expect(times[i]-times[i-1],JSON.stringify(seen)).toBeGreaterThanOrEqual(59.9);
  expect(errors).toEqual([]);
 });
+
+// Odak 2.2 · desktop HUD diet acceptance.
+for(const [width,height] of [[1280,800],[1366,768]]){
+test('Odak 2.2 desktop HUD at '+width+'x'+height+' keeps one thin top row and 48 px ability icons',async({page,isMobile})=>{
+ test.skip(!!isMobile,'desktop layout');
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.setViewportSize({width,height});
+ await gotoGame(page,'/index.html');
+ await page.locator('#startBtn').click();
+ // Fixture: a calm moment; combo pinned as in the geometry note from Odak 0.1.
+ const calm=await page.evaluate(()=>{
+   nextBossTime=5000;combo=1;comboTimer=0;resetContextualHud();updateHUD();
+   const r=el=>el.getBoundingClientRect();
+   const row=r(document.querySelector('.hud-status-row'));
+   const bay=r(document.querySelector('.hud-action-bay'));
+   const skills=['bastionBtn','novaBtn','prismBtn','dashBtn'].map(id=>{
+     const b=r(document.getElementById(id));
+     const key=document.querySelector('#'+id+' .skill-key');
+     return {w:Math.round(b.width),h:Math.round(b.height),key:key.textContent,
+       keyVisible:key.checkVisibility(),text:document.querySelector('#'+id+' .skill-text').checkVisibility()};
+   });
+   const shown=sel=>document.querySelector(sel).checkVisibility({opacityProperty:true});
+   return {rowHeight:row.height,rowBottom:row.bottom,bayTop:bay.top,skills,
+     context:['#goldHudChip','#questHudBox','#comboContainer','#momentumMeter','#overdriveMeter','#arenaChapterChip'].map(shown),
+     removed:['#directorPhaseText','#arenaChapterMobile','#questMobileText'].map(sel=>!!document.querySelector(sel)),
+     inHud:['#scoreText','#ctrlToggleBtn','#musicToggleBtn','#soundToggleBtn','#fullscreenBtn','#buildGuidePanel','#activeContractBadge']
+       .map(sel=>!!document.querySelector('#hud '+sel)),
+     progress:['xpBar','hpBar','momentumBar','overdriveBar'].map(id=>document.getElementById(id).getAttribute('role'))};
+ });
+ expect(calm.rowHeight).toBeLessThanOrEqual(56);
+ expect((calm.bayTop-calm.rowBottom)/height,'free play band').toBeGreaterThanOrEqual(0.80);
+ expect(calm.skills.map(s=>[s.w,s.h])).toEqual([[48,48],[48,48],[48,48],[48,48]]);
+ expect(calm.skills.map(s=>s.key)).toEqual(['Q','E','C','␣']);
+ expect(calm.skills.every(s=>s.keyVisible&&!s.text)).toBe(true);
+ expect(calm.context).toEqual([false,false,false,false,false,false]);
+ expect(calm.removed).toEqual([false,false,false]);
+ expect(calm.inHud).toEqual([false,false,false,false,false,false,false]);
+ expect(calm.progress).toEqual(['progressbar','progressbar','progressbar','progressbar']);
+
+ // One boss: a single bar of at most 40 px, no second per-boss bar.
+ const boss=await page.evaluate(()=>{
+   activeBosses=[new Enemy(player.x+300,player.y,'BOSS_DESTROYER')];
+   document.getElementById('bossHudContainer').classList.remove('hidden');updateHUD();
+   const one={h:document.getElementById('bossHudContainer').getBoundingClientRect().height,
+     names:document.getElementById('bossIdentityStrip').children.length};
+   activeBosses.push(new Enemy(player.x-300,player.y,'BOSS_PRISM'));updateHUD();
+   const strip=document.getElementById('bossIdentityStrip');
+   const chips=[...strip.children].map(c=>c.getBoundingClientRect().top);
+   return {one,names:strip.children.length,oneLine:new Set(chips.map(Math.round)).size,
+     meters:strip.querySelectorAll('.boss-id-meter').length};
+ });
+ expect(boss.one.h).toBeLessThanOrEqual(40);
+ expect(boss.one.names).toBe(0);
+ expect(boss.names).toBe(2);
+ expect(boss.oneLine).toBe(1);
+ expect(boss.meters).toBe(0);
+
+ // Contextual items come and go with their state.
+ const context=await page.evaluate(()=>{
+   activeBosses=[];document.getElementById('bossHudContainer').classList.add('hidden');
+   const shown=sel=>document.getElementById(sel).dataset.context;
+   combo=6;comboTimer=2;totalGold+=10;player.overdrive=85;updateHUD();
+   const on=['comboContainer','goldHudChip','overdriveMeter'].map(shown);
+   combo=1;player.overdrive=0;totalTime+=2.1;updateHUD();
+   const off=['comboContainer','goldHudChip','overdriveMeter'].map(shown);
+   return {on,off};
+ });
+ expect(context.on).toEqual(['on','on','on']);
+ expect(context.off).toEqual(['off','off','off']);
+
+ // Settings moved to the pause menu and still work there.
+ await page.keyboard.press('KeyP');
+ await expect(page.locator('#pauseModal')).toBeVisible();
+ for(const id of ['scoreText','ctrlToggleBtn','musicToggleBtn','soundToggleBtn','fullscreenBtn','buildGuidePanel'])
+   await expect(page.locator('#pauseModal #'+id),id).toBeVisible();
+ const music=await page.evaluate(()=>audio.musicEnabled);
+ await page.locator('#musicToggleBtn').click();
+ expect(await page.evaluate(()=>audio.musicEnabled)).toBe(!music);
+ expect(errors).toEqual([]);
+});
+}
