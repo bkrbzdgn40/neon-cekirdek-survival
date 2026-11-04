@@ -8,7 +8,7 @@ const { setup, html, pageHtml, gameCss, gameCode } = require('./harness.cjs');
 // Odak 3.2 · one list for pool-size checks; a new upgrade is added here once.
 const UPGRADE_IDS = ['circuit_weaver', 'mine_trail', 'phase_echo', 'multishot', 'firerate', 'orbital',
   'pierce_ricochet', 'homing', 'lightning', 'overdrive_boost', 'crit_mastery', 'vampiric',
-  'aegis_shield', 'kinetic_magnet'];
+  'aegis_shield', 'kinetic_magnet', 'boomerang_disc'];
 
 test('Odak 3.2 Mayın İzi tier rules, card and evolution are wired', () => {
   const { run } = setup();
@@ -115,6 +115,90 @@ test('Odak 3.2 Mayın İzi draws without glow on low graphics', () => {
   run(`graphicsQuality = 'low'; drawTrailMines(ctx)`);
   assert.ok(high.some(v => v > 0));
   assert.ok(blurs.length > 0 && blurs.every(v => v === 0));
+});
+
+test('Odak 3.2 Bumerang Disk tier rules, card and evolution are wired', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    const u = UPGRADES_POOL.find(u => u.id === 'boomerang_disc');
+    return JSON.stringify({ rules: BOOMERANG_RULES, max: MAX_BOOMERANG_DISCS, kind: u.kind,
+      evo: EVOLUTION_DEFS.boomerang_disc.name, fire: !!WEAPON_SFX.disc, hit: !!HIT_SFX.disc,
+      style: PROJECTILE_VISUAL_STYLES.disc.type,
+      label: getUpgradeCardPresentation(u, RARITIES[0], 0).label, desc: u.getDesc(RARITIES[2]) });
+  })()`));
+  assert.equal(x.kind, 'weapon');
+  assert.equal(x.label, 'SİLAH MODÜLÜ');
+  assert.deepEqual(x.rules.cooldown, [0, 2.2, 1.9, 1.8]);
+  assert.deepEqual(x.rules.range, [0, 260, 290, 320]);
+  assert.deepEqual(x.rules.radius, [0, 14, 16, 18]);
+  assert.equal(x.max, 4);
+  assert.equal(x.evo, 'Ayna Disk');
+  assert.ok(x.fire && x.hit);
+  assert.equal(x.style, 'disc');
+  assert.match(x.desc, /Disk hasarı \+%11/);
+});
+
+test('Odak 3.2 Bumerang Disk flies along movement, turns at range, hits again and is caught', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    enemies = []; nextBossTime = 9999;
+    player.x = 300; player.y = 400; player.dashDir = { x: 1, y: 0 };
+    player.upgradeCounts.boomerang_disc = 1; player.refreshBuildTraits();
+    const foe = new Enemy(420, 400, 'TANK'); foe.hp = foe.maxHp = 5000; foe.speed = 0; enemies.push(foe);
+    const hitsOnFoe = [];
+    let maxDist = 0, turnedAt = null;
+    const lastThrow = player.boomerangReadyAt;
+    updateBoomerangDiscs(1 / 60);
+    const thrown = { discs: boomerangDiscs.length, dx: boomerangDiscs[0].dx, cooldown: player.boomerangReadyAt - totalTime };
+    for (let f = 0; f < 240 && boomerangDiscs.length; f++) {
+      totalTime += 1 / 60;
+      const before = foe.hp;
+      updateBoomerangDiscs(1 / 60);
+      if (foe.hp < before) hitsOnFoe.push(boomerangDiscs[0]?.returning ? 'back' : 'out');
+      const d = boomerangDiscs[0];
+      if (d) { maxDist = Math.max(maxDist, d.x - 300); if (d.returning && turnedAt === null) turnedAt = Math.round(d.x - 300); }
+    }
+    return JSON.stringify({ thrown, hitsOnFoe, maxDist: Math.round(maxDist), turnedAt,
+      left: boomerangDiscs.length, stats: player.buildStats });
+  })()`));
+  assert.equal(x.thrown.discs, 1);
+  assert.equal(x.thrown.dx, 1);
+  assert.ok(Math.abs(x.thrown.cooldown - 2.2) < 1e-9);
+  // One hit going out, one coming back: each leg hits a target once.
+  assert.deepEqual(x.hitsOnFoe, ['out', 'back']);
+  assert.ok(x.turnedAt >= 260 && x.turnedAt < 275, 'turns at range: ' + x.turnedAt);
+  assert.equal(x.left, 0);
+  assert.equal(x.stats.discThrows, 1);
+  assert.equal(x.stats.discHits, 2);
+  assert.equal(x.stats.discCatches, 1);
+});
+
+test('Odak 3.2 Bumerang Disk evolution throws a mirrored pair and respects the disc cap', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    enemies = [];
+    player.dashDir = { x: 0, y: -1 };
+    player.upgradeCounts.boomerang_disc = 3; player.refreshBuildTraits();
+    updateBoomerangDiscs(1 / 60);
+    const pair = boomerangDiscs.map(d => [d.dx, d.dy]);
+    for (let i = 0; i < 10; i++) throwBoomerangDisc(player, 1, 0);
+    const capped = boomerangDiscs.length;
+    // A lost disc never lingers past its lifetime.
+    player.x = -5000;
+    for (let f = 0; f < 60 * 5; f++) { totalTime += 1 / 60; player.boomerangReadyAt = 1e9; updateBoomerangDiscs(1 / 60); }
+    const afterLifetime = boomerangDiscs.length;
+    player.upgradeCounts.boomerang_disc = 0;
+    throwBoomerangDisc(player, 1, 0);
+    return JSON.stringify({ evo: player.evolutions.has('boomerang_disc'), pair, capped, afterLifetime,
+      noTier: boomerangDiscs.length });
+  })()`));
+  assert.equal(x.evo, true);
+  assert.deepEqual(x.pair, [[0, -1], [0, 1]]);
+  assert.equal(x.capped, 4);
+  assert.equal(x.afterLifetime, 0);
+  assert.equal(x.noTier, 0);
 });
 
 test('Odak 3.2 upgrade pool matches the shared id list', () => {
@@ -2400,7 +2484,7 @@ test('Odak 3.1 every upgrade has a kind; plasma holds weapon slot 1 and multisho
     return JSON.stringify({ kinds, limits: BUILD_SLOT_LIMITS, empty, slots: getBuildSlots(player) });
   })()`));
   assert.deepEqual(Object.keys(x.kinds).filter(id => x.kinds[id] === 'weapon').sort(),
-    ['circuit_weaver', 'homing', 'lightning', 'mine_trail', 'multishot', 'orbital']);
+    ['boomerang_disc', 'circuit_weaver', 'homing', 'lightning', 'mine_trail', 'multishot', 'orbital']);
   assert.deepEqual(Object.keys(x.kinds).filter(id => x.kinds[id] === 'passive').sort(),
     ['aegis_shield', 'crit_mastery', 'firerate', 'kinetic_magnet', 'overdrive_boost',
       'phase_echo', 'pierce_ricochet', 'vampiric']);
@@ -2700,7 +2784,7 @@ test('M4.4.2 audio family is derived from real projectile flags', () => {
 test('M4.4.2 unique firing, impact and boss envelopes have bounded frequencies and amplitude', () => {
   const {run}=setup();
   const data=JSON.parse(run("JSON.stringify({fire:WEAPON_SFX,hit:HIT_SFX,boss:BOSS_DEATH_SFX})"));
-  assert.deepEqual(Object.keys(data.fire),['plasma','prism','reactor','rail','missile','cluster','arc','mine']);
+  assert.deepEqual(Object.keys(data.fire),['plasma','prism','reactor','rail','missile','cluster','arc','mine','disc']);
   assert.deepEqual(Object.keys(data.boss),['BOSS_DESTROYER','BOSS_TITAN','BOSS_VOID','BOSS_PRISM']);
   assert.equal(new Set(Object.values(data.boss).map(x=>x.start)).size,4);
   for(const channel of Object.values(data)){

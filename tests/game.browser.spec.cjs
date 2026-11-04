@@ -1441,7 +1441,7 @@ test('Odak 3.1 slot row and skip button fit the upgrade screen and ATLA resumes 
 });
 
 // Odak 3.2 · new weapons run in the real loop without page errors.
-for(const weapon of ['mine_trail']){
+for(const [weapon,statKey] of [['mine_trail','mineDrops'],['boomerang_disc','discThrows']]){
  test(`Odak 3.2 ${weapon} fires in a real run without page errors`,async({page,isMobile})=>{
    test.skip(isMobile,'weapon loop is checked once on desktop');
    const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -1458,8 +1458,8 @@ for(const weapon of ['mine_trail']){
    await page.keyboard.down('KeyS');
    await page.waitForTimeout(900);
    await page.keyboard.up('KeyS');
-   const stats=await page.evaluate(()=>({tier:player.upgradeCounts.mine_trail,evo:player.evolutions.has('mine_trail'),
-     drops:player.buildStats.mineDrops,state:gameState}));
+   const stats=await page.evaluate(([id,key])=>({tier:player.upgradeCounts[id],evo:player.evolutions.has(id),
+     drops:player.buildStats[key],state:gameState}),[weapon,statKey]);
    expect(stats.tier).toBe(3);
    expect(stats.evo).toBe(true);
    expect(stats.drops).toBeGreaterThan(0);
