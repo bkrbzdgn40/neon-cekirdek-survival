@@ -1,5 +1,9 @@
 # Değişiklik Günlüğü
 
+## Odak 2.7 · Cihaz turu ve karar
+- Gerçek cihaz turu TECNO CK6n üzerinde yapıldı; sonuçlar `docs/DEVICE_QA.md`'de, düzeltmeler 2.7a–2.7e.
+- Karar: masaüstü öncelikli. Mobil ileride telefona özel ekranlar, yalnızca yatay oyun ve tam ekran paketle ayrıca ele alınacak; Faz 3'te mobil tasarım işi yok.
+
 ## Odak 2.7e · Dokunmatik rötuşlar
 - Dokunmatik ekranda klavye ipuçları (`.key-hint`) gizli: diriliş butonundaki "BOŞLUK", kartlardaki [1] [2] [3], "R", menü kısayolları. Kontrol kartları dokunmatik karşılığını gösterir (`.touch-hint`: ATILIM BUTONU, EMP BUTONU…).
 - Telefon dikeyde yükseltme ekranı 1342 → 840 px (360×668): ilk iki kart tamamen görünür, yazı boyutları (M5.23) aynı.

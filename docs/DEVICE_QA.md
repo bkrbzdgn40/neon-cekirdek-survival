@@ -24,3 +24,18 @@ Takip: [#44](https://github.com/bkrbzdgn40/neon-cekirdek-survival/issues/44).
 ## Otomatik süreli Chromium kontrolü
 
 [neon-soak.yml](../.github/workflows/neon-soak.yml) içindeki ayrı job, bu dosyalardaki PR değişikliğinde 25 saniye, haftalık veya manuel tetiklemede 90 saniye **gerçek zamanlı** örnek alır. Dalga 16, gövdeye hasar vermeyen izole bir test fikstürü ve gerçek CombatDirector spawn akışı kullanılır. Her çalışmada sayım limitleri, Canvas, P95 kare süresi, zaman ilerlemesi, runtime JS hataları ve son ekran görüntüsü doğrulanır. 90 saniyelik otomasyon **30–60 dakika gerçek cihaz benchmarkı değildir**. Donanım ve oyun hissi testi ayrı yapılmalıdır.
+
+## Gerçek cihaz turu · 4 Kasım 2026 (Odak 2.7)
+
+Cihaz: TECNO CK6n, Android 14, Chrome 156, 1080×2400, DPR 3. Görünür alan: dikey 360×668 (adres çubuğu gizliyken 724), yatay 724×280 (gizliyken 336). Oyun USB üzerinden (`adb reverse`) açıldı, dokunuşlar `adb input` ile, ölçümler Chrome DevTools bağlantısıyla alındı.
+
+| Kontrol | Sonuç |
+|---|---|
+| Göreli joystick | Çalışıyor; basılı kaydırma çekirdeği doğru yöne taşıyor |
+| Boss sırasında kare hızı | YÜKSEK 18 fps, ORTA 16 fps, DÜŞÜK 60 fps → otomatik düşürme (2.7d) |
+| Adres çubuğu gizlenince | Canvas eski boyda kalıyordu → düzeltildi (2.7c) |
+| Küçük ekranda düşman yoğunluğu | Arena yarı büyüklükte, akış aynıydı → alana göre ölçek (2.7a) |
+| Klavye ipuçları, kart yüksekliği, yatay Siper/duraklat çakışması | Düzeltildi (2.7e) |
+| Konsol hataları | Yok |
+
+Kullanıcı değerlendirmesi: telefonda masaüstü hissi alınamıyor; menü ve kartlar hâlâ kaydırma istiyor. Karar: masaüstü öncelikli (bkz. `ODAK_VE_MOBIL_PLANI.md` 2.7).
