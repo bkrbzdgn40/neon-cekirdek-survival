@@ -1274,7 +1274,8 @@ test('Odak 2.4 phone portrait HUD at '+width+'x'+height+' keeps one top row and 
 }
 
 // Odak 2.5 · phone landscape HUD acceptance.
-for(const [width,height] of [[750,342],[568,320]]){
+// 724x280: a TECNO CK6n in landscape with the address bar shown (Odak 2.7e).
+for(const [width,height] of [[750,342],[568,320],[724,280]]){
 test('Odak 2.5 phone landscape HUD at '+width+'x'+height+' keeps the bottom clear and abilities on the right edge',async({browser,isMobile},testInfo)=>{
  test.skip(!isMobile,'runs once, in the mobile project');
  const context=await browser.newContext({baseURL:testInfo.project.use.baseURL,
@@ -1322,9 +1323,11 @@ test('Odak 2.5 phone landscape HUD at '+width+'x'+height+' keeps the bottom clea
  expect(r.wave.box.left).toBeGreaterThanOrEqual(r.wave.clock.left);
  expect(r.wave.box.right).toBeLessThanOrEqual(r.wave.clock.right);
  expect(r.wave.box.top).toBeGreaterThanOrEqual(r.wave.clock.top);
- // A 52 px column of round abilities on the right edge, below the clock.
+ // A column of round abilities on the right edge, below the clock: 52 px
+ // when there is room, shrinking to fit (never under 44 px) on short screens.
  for(const s of r.skills){
-   expect(Math.round(s.width)).toBe(52);
+   if(height>=320) expect(Math.round(s.width)).toBe(52);
+   else{expect(s.width).toBeGreaterThanOrEqual(44);expect(s.width).toBeLessThanOrEqual(52);}
    expect(s.right).toBeGreaterThan(width-20);
    expect(s.top).toBeGreaterThan(r.right[1].bottom);
  }
@@ -1373,5 +1376,32 @@ test('Odak 2.7d a slow device drops graphics to low during play and keeps it nex
    .toEqual(['low',null,'low']);
  await page.reload();
  await expect.poll(()=>page.evaluate(()=>graphicsQuality)).toBe('low');
+ expect(errors).toEqual([]);
+});
+
+// Odak 2.7e · keyboard hints only where there is a keyboard.
+test('Odak 2.7e touch screens get touch wording instead of keyboard hints',async({page,isMobile})=>{
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await gotoGame(page,'/index.html');
+ const shown=sel=>page.evaluate(sel=>[...document.querySelectorAll(sel)].some(el=>el.checkVisibility()),sel);
+ // Menu: control cards and the shortcut footer.
+ expect(await shown('#startModal .key-hint')).toBe(!isMobile);
+ expect(await shown('#startModal .touch-hint')).toBe(!!isMobile);
+ await page.locator('#startBtn').click();
+ // Upgrade cards: [1] [2] [3] and the R reroll key are keyboard-only.
+ await page.evaluate(()=>triggerLevelUp());
+ await expect(page.locator('#upgradeCardsContainer .upgrade-card')).toHaveCount(3);
+ expect(await shown('#upgradeModal .key-hint')).toBe(!isMobile);
+ const footer=await page.locator('#upgradeCardsContainer .upgrade-card-footer').first().innerText();
+ if(isMobile) expect(footer).not.toContain('[');
+ else expect(footer).toContain('[ 1 ]');
+ await page.evaluate(()=>selectUpgradeOption(0));
+ // Revive prompt: no "BOŞLUK" on a touch screen.
+ await page.evaluate(()=>{player.hp=0;showRevivePromptOrGameOver();});
+ await expect(page.locator('#confirmReviveBtn')).toBeVisible();
+ const revive=await page.locator('#confirmReviveBtn').innerText();
+ expect(revive).toMatch(/DİRİL/);
+ if(isMobile) expect(revive).not.toMatch(/BOŞLUK/);
+ else expect(revive).toMatch(/BOŞLUK/);
  expect(errors).toEqual([]);
 });

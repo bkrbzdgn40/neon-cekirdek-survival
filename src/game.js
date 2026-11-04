@@ -10036,7 +10036,7 @@
                         <div class="upgrade-card-labels">
                             <span class="upgrade-rarity-label">
                                 <span class="upgrade-rarity-gem" aria-hidden="true"><i class="${rarityMotif.icon}"></i></span>
-                                <span class="upgrade-rarity-title">[${index+1}] ${isLegendary?'✦ ':''}${rarityMotif.tag}</span>
+                                <span class="upgrade-rarity-title"><span class="key-hint">[${index+1}] </span>${isLegendary?'✦ ':''}${rarityMotif.tag}</span>
                             </span>
                             <span class="upgrade-role-label"><i class="${roleIcon}"></i>${label}</span>
                         </div>
@@ -10054,9 +10054,8 @@
                     ${unlocks.map(s=>`<p class="upgrade-synergy-benefit"><strong>YENİ SİNERJİ:</strong> ${s.name} · ${s.desc}</p>`).join('')}
                 </div>
                 <div class="upgrade-card-footer flex items-center justify-between gap-2 font-bold">
-                    <span>${role==='evolution'?'[ '+(index+1)+' ] EVRİMİ AÇ':
-                        role==='weapon'?'[ '+(index+1)+' ] SİLAHI GÜÇLENDİR':
-                        '[ '+(index+1)+' ] MODÜLÜ ENTEGRE ET'}</span>
+                    <span><span class="key-hint">[ ${index+1} ] </span>${role==='evolution'?'EVRİMİ AÇ':
+                        role==='weapon'?'SİLAHI GÜÇLENDİR':'MODÜLÜ ENTEGRE ET'}</span>
                     <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
                 </div>`;
         }
@@ -10192,9 +10191,9 @@
 
                 const confirmBtn = document.getElementById('confirmReviveBtn');
                 if (canUseFree) {
-                    confirmBtn.innerHTML = `DİRİL · ${player.freeRevives} HAK · BOŞLUK`;
+                    confirmBtn.innerHTML = `DİRİL · ${player.freeRevives} HAK<span class="key-hint"> · BOŞLUK</span>`;
                 } else {
-                    confirmBtn.innerHTML = `DİRİL · ${goldReviveCost} ALTIN · BOŞLUK`;
+                    confirmBtn.innerHTML = `DİRİL · ${goldReviveCost} ALTIN<span class="key-hint"> · BOŞLUK</span>`;
                 }
 
                 const modal = document.getElementById('reviveModal');
