@@ -1441,7 +1441,7 @@ test('Odak 3.1 slot row and skip button fit the upgrade screen and ATLA resumes 
 });
 
 // Odak 3.2 · new weapons run in the real loop without page errors.
-for(const [weapon,statKey] of [['mine_trail','mineDrops'],['boomerang_disc','discThrows']]){
+for(const [weapon,statKey] of [['mine_trail','mineDrops'],['boomerang_disc','discThrows'],['shock_ring','shockRings']]){
  test(`Odak 3.2 ${weapon} fires in a real run without page errors`,async({page,isMobile})=>{
    test.skip(isMobile,'weapon loop is checked once on desktop');
    const errors=[];page.on('pageerror',error=>errors.push(error.message));

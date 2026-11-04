@@ -8,7 +8,7 @@ const { setup, html, pageHtml, gameCss, gameCode } = require('./harness.cjs');
 // Odak 3.2 · one list for pool-size checks; a new upgrade is added here once.
 const UPGRADE_IDS = ['circuit_weaver', 'mine_trail', 'phase_echo', 'multishot', 'firerate', 'orbital',
   'pierce_ricochet', 'homing', 'lightning', 'overdrive_boost', 'crit_mastery', 'vampiric',
-  'aegis_shield', 'kinetic_magnet', 'boomerang_disc'];
+  'aegis_shield', 'kinetic_magnet', 'boomerang_disc', 'shock_ring'];
 
 test('Odak 3.2 Mayın İzi tier rules, card and evolution are wired', () => {
   const { run } = setup();
@@ -199,6 +199,84 @@ test('Odak 3.2 Bumerang Disk evolution throws a mirrored pair and respects the d
   assert.equal(x.capped, 4);
   assert.equal(x.afterLifetime, 0);
   assert.equal(x.noTier, 0);
+});
+
+test('Odak 3.2 Şok Halkası tier rules, card and evolution are wired', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    const u = UPGRADES_POOL.find(u => u.id === 'shock_ring');
+    return JSON.stringify({ rules: SHOCK_RING_RULES, max: MAX_SHOCK_RINGS, kind: u.kind,
+      evo: EVOLUTION_DEFS.shock_ring.name, fire: !!WEAPON_SFX.shock, hit: !!HIT_SFX.shock,
+      style: PROJECTILE_VISUAL_STYLES.shock.type,
+      label: getUpgradeCardPresentation(u, RARITIES[0], 0).label });
+  })()`));
+  assert.equal(x.kind, 'weapon');
+  assert.equal(x.label, 'SİLAH MODÜLÜ');
+  assert.deepEqual(x.rules.interval, [0, 3.2, 2.9, 2.6]);
+  assert.deepEqual(x.rules.maxRadius, [0, 130, 145, 160]);
+  assert.deepEqual(x.rules.damageMult, [0, 0.45, 0.55, 0.7]);
+  assert.equal(x.max, 3);
+  assert.equal(x.evo, 'Artçı Şok');
+  assert.ok(x.fire && x.hit);
+  assert.equal(x.style, 'shock');
+});
+
+test('Odak 3.2 Şok Halkası hits each enemy once per ring and harder near the core', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    enemies = []; nextBossTime = 9999;
+    player.x = 500; player.y = 400;
+    player.upgradeCounts.shock_ring = 1; player.refreshBuildTraits();
+    const near = new Enemy(530, 400, 'TANK'), far = new Enemy(610, 400, 'TANK'), out = new Enemy(800, 400, 'TANK');
+    for (const e of [near, far, out]) { e.hp = e.maxHp = 5000; enemies.push(e); }
+    const lost = () => [near, far, out].map(e => Math.round(5000 - e.hp));
+    updateShockRings();
+    const first = { rings: shockRings.length, next: +(player.shockReadyAt - totalTime).toFixed(2) };
+    for (let f = 0; f < 40; f++) { totalTime += 1 / 60; player.shockReadyAt = 1e9; updateShockRings(); }
+    const once = lost();
+    const left = shockRings.length;
+    player.shockReadyAt = 0;
+    updateShockRings();
+    for (let f = 0; f < 40; f++) { totalTime += 1 / 60; player.shockReadyAt = 1e9; updateShockRings(); }
+    return JSON.stringify({ first, once, left, twice: lost(), stats: player.buildStats });
+  })()`));
+  assert.deepEqual(x.first, { rings: 1, next: 3.2 });
+  assert.equal(x.left, 0);
+  assert.ok(x.once[0] > 0 && x.once[1] > 0, 'both enemies inside the ring are hit');
+  assert.ok(x.once[0] > x.once[1] * 1.4, 'near enemy takes clearly more: ' + x.once);
+  assert.equal(x.once[2], 0, 'outside the ring is untouched');
+  assert.deepEqual(x.twice.slice(0, 2), x.once.slice(0, 2).map(v => v * 2));
+  assert.equal(x.stats.shockRings, 2);
+  assert.equal(x.stats.shockHits, 4);
+});
+
+test('Odak 3.2 Şok Halkası evolution adds a delayed half-strength aftershock', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    enemies = []; nextBossTime = 9999;
+    player.x = 500; player.y = 400;
+    player.upgradeCounts.shock_ring = 3; player.refreshBuildTraits();
+    const foe = new Enemy(540, 400, 'TANK'); foe.hp = foe.maxHp = 5000; enemies.push(foe);
+    updateShockRings();
+    const queued = shockRings.map(r => [r.scale, +(r.startAt - totalTime).toFixed(2)]);
+    const hits = [];
+    for (let f = 0; f < 60; f++) {
+      totalTime += 1 / 60; player.shockReadyAt = 1e9;
+      const before = foe.hp; updateShockRings();
+      if (foe.hp < before) hits.push(Math.round(before - foe.hp));
+    }
+    for (let i = 0; i < 6; i++) emitShockRing(player);
+    return JSON.stringify({ evo: player.evolutions.has('shock_ring'), queued, hits, capped: shockRings.length,
+      after: player.buildStats.shockAftershocks });
+  })()`));
+  assert.equal(x.evo, true);
+  assert.deepEqual(x.queued, [[1, 0], [0.5, 0.35]]);
+  assert.equal(x.hits.length, 2);
+  assert.ok(Math.abs(x.hits[1] - x.hits[0] / 2) <= 1, 'aftershock is half: ' + x.hits);
+  assert.equal(x.capped, 3);
+  assert.equal(x.after, 1);
 });
 
 test('Odak 3.2 upgrade pool matches the shared id list', () => {
@@ -2484,7 +2562,8 @@ test('Odak 3.1 every upgrade has a kind; plasma holds weapon slot 1 and multisho
     return JSON.stringify({ kinds, limits: BUILD_SLOT_LIMITS, empty, slots: getBuildSlots(player) });
   })()`));
   assert.deepEqual(Object.keys(x.kinds).filter(id => x.kinds[id] === 'weapon').sort(),
-    ['boomerang_disc', 'circuit_weaver', 'homing', 'lightning', 'mine_trail', 'multishot', 'orbital']);
+    ['boomerang_disc', 'circuit_weaver', 'homing', 'lightning', 'mine_trail', 'multishot', 'orbital',
+      'shock_ring']);
   assert.deepEqual(Object.keys(x.kinds).filter(id => x.kinds[id] === 'passive').sort(),
     ['aegis_shield', 'crit_mastery', 'firerate', 'kinetic_magnet', 'overdrive_boost',
       'phase_echo', 'pierce_ricochet', 'vampiric']);
@@ -2784,7 +2863,7 @@ test('M4.4.2 audio family is derived from real projectile flags', () => {
 test('M4.4.2 unique firing, impact and boss envelopes have bounded frequencies and amplitude', () => {
   const {run}=setup();
   const data=JSON.parse(run("JSON.stringify({fire:WEAPON_SFX,hit:HIT_SFX,boss:BOSS_DEATH_SFX})"));
-  assert.deepEqual(Object.keys(data.fire),['plasma','prism','reactor','rail','missile','cluster','arc','mine','disc']);
+  assert.deepEqual(Object.keys(data.fire),['plasma','prism','reactor','rail','missile','cluster','arc','mine','disc','shock']);
   assert.deepEqual(Object.keys(data.boss),['BOSS_DESTROYER','BOSS_TITAN','BOSS_VOID','BOSS_PRISM']);
   assert.equal(new Set(Object.values(data.boss).map(x=>x.start)).size,4);
   for(const channel of Object.values(data)){

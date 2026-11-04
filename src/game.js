@@ -43,7 +43,8 @@
             cluster:{wave:'triangle',start:340,end:160,length:.1,gain:.037,lowpass:650},
             arc:{wave:'triangle',start:670,end:370,length:.08,gain:.032,lowpass:970},
             mine:{wave:'square',start:210,end:140,length:.05,gain:.022,lowpass:620},
-            disc:{wave:'sine',start:520,end:880,length:.12,gain:.03,lowpass:990}
+            disc:{wave:'sine',start:520,end:880,length:.12,gain:.03,lowpass:990},
+            shock:{wave:'sine',start:330,end:95,length:.22,gain:.042,lowpass:700}
         });
         const HIT_SFX=Object.freeze({
             plasma:{wave:'triangle',start:310,end:110,length:.06,gain:.031,lowpass:750},
@@ -54,7 +55,8 @@
             cluster:{wave:'triangle',start:380,end:135,length:.085,gain:.031,lowpass:680},
             arc:{wave:'triangle',start:810,end:420,length:.09,gain:.036,lowpass:980},
             mine:{wave:'sawtooth',start:150,end:48,length:.2,gain:.05,lowpass:430},
-            disc:{wave:'triangle',start:700,end:460,length:.06,gain:.028,lowpass:960}
+            disc:{wave:'triangle',start:700,end:460,length:.06,gain:.028,lowpass:960},
+            shock:{wave:'triangle',start:260,end:120,length:.07,gain:.03,lowpass:640}
         });
         const BOSS_DEATH_SFX=Object.freeze({
             BOSS_DESTROYER:{wave:'sawtooth',start:265,end:65,length:.48,gain:.076,lowpass:630},
@@ -1373,7 +1375,10 @@
                     phaseEchoes: 0, phaseEchoTargets: 0,
                     circuitClosures: 0, circuitPulseHits: 0, circuitCrossings: 0,
                     mineDrops: 0, mineBlasts: 0, mineHits: 0, mineChains: 0,
-                    discThrows: 0, discHits: 0, discCatches: 0 };
+                    discThrows: 0, discHits: 0, discCatches: 0,
+                    shockRings: 0, shockHits: 0, shockAftershocks: 0 };
+                this.shockReadyAt = 0;
+                this.shockDamageBonus = 1;
                 this.boomerangReadyAt = 0;
                 this.discDamageBonus = 1;
                 this.mineTrailDistance = 0;
@@ -2189,7 +2194,8 @@
             critical: { type:'critical', color:'#ffe070', core:'#ffffff', trail:26, width:4, glow:12 },
             plasma: { type:'plasma', color:'#15d7ed', core:'#e3ffff', trail:18, width:3, glow:7 },
             mine: { type:'mine', color:'#ff9f1c', core:'#fff3d6', trail:0, width:3, glow:10 },
-            disc: { type:'disc', color:'#c084fc', core:'#f5e8ff', trail:22, width:3, glow:12 }
+            disc: { type:'disc', color:'#c084fc', core:'#f5e8ff', trail:22, width:3, glow:12 },
+            shock: { type:'shock', color:'#5eead4', core:'#e6fffa', trail:0, width:4, glow:16 }
         });
         function getProjectileVisualStyle(b) {
             if (b.evoRail) return PROJECTILE_VISUAL_STYLES.rail;
@@ -3810,7 +3816,8 @@
             orbital: { name: 'Darbe Uyduları', desc: '6 saniyede bir çevrendeki düşmanlara alan darbesi uygular.' },
             pierce_ricochet: { name: 'Prizma Rotası', desc: 'Sekmeler güçlenir ve yakın hedefe yön değiştirebilir.' },
             mine_trail: { name: 'Zincir Mayın', desc: 'Patlayan mayın 150 px içindeki diğer mayınları da patlatır; bir ek mayın taşınır.' },
-            boomerang_disc: { name: 'Ayna Disk', desc: 'Her atışta ikinci bir disk ters yöne fırlar; iki disk de dönüşte vurur.' }
+            boomerang_disc: { name: 'Ayna Disk', desc: 'Her atışta ikinci bir disk ters yöne fırlar; iki disk de dönüşte vurur.' },
+            shock_ring: { name: 'Artçı Şok', desc: 'Her halkanın ardından 0,35 sn sonra yarı hasarlı ikinci bir halka yayılır.' }
         });
         const SYNERGY_DEFS = Object.freeze([
             { id: 'swarm_guidance', name: 'Sürü Protokolü', modules: ['multishot', 'homing'],
@@ -3880,6 +3887,7 @@
             p.speed = Math.min(p.speed, 470);
             p.mineDamageBonus = Math.min(p.mineDamageBonus, 1.6);
             p.discDamageBonus = Math.min(p.discDamageBonus, 1.6);
+            p.shockDamageBonus = Math.min(p.shockDamageBonus, 1.6);
         }
 
         function getBuildGuideModel(p) {
@@ -3968,6 +3976,16 @@
                 getDesc: (r) => 'Hareket yönüne delici bir disk fırlatır; disk sana geri döner ve dönüşte yine vurur. Dönüş yolunda düşmanları toplayacak yerde dur.' +
                     (r.mult > 1 ? ` Disk hasarı +%${Math.round(15 * (r.mult - 1))}.` : ''),
                 apply: (p, r) => { p.discDamageBonus *= 1 + 0.15 * (r.mult - 1); }
+            },
+            {
+                id: 'shock_ring',
+                kind: 'weapon',
+                name: 'Şok Halkası',
+                icon: 'fa-solid fa-circle-radiation',
+                color: '#5eead4',
+                getDesc: (r) => 'Çekirdekten düzenli aralıkla genişleyen bir şok halkası yayar; merkeze yakın düşmanlar çok daha fazla hasar alır. Kalabalığın içine dal.' +
+                    (r.mult > 1 ? ` Halka hasarı +%${Math.round(15 * (r.mult - 1))}.` : ''),
+                apply: (p, r) => { p.shockDamageBonus *= 1 + 0.15 * (r.mult - 1); }
             },
             {
                 id: 'phase_echo',
@@ -5629,6 +5647,106 @@
                 ctx.beginPath();
                 ctx.arc(disc.x, disc.y, 3, 0, Math.PI * 2);
                 ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // Odak 3.2 · SHOCK RING (Şok Halkası). A ring grows from the core on a
+        // timer; damage falls off with distance, so diving into a crowd pays.
+        const SHOCK_RING_RULES = Object.freeze({
+            interval: [0, 3.2, 2.9, 2.6],
+            maxRadius: [0, 130, 145, 160],
+            damageMult: [0, 0.45, 0.55, 0.7],
+            flatDamage: [0, 3, 4, 5],
+            farFactor: .3, expandSeconds: .45,
+            maxTargets: 12, maxDamage: 220,
+            aftershockDelay: .35, aftershockScale: .5
+        });
+        const MAX_SHOCK_RINGS = 3;
+        let shockRings = [];
+        function getShockRingTier(p = player) {
+            return Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.shock_ring || 0);
+        }
+        function emitShockRing(p, scale = 1, startAt = totalTime) {
+            const tier = getShockRingTier(p);
+            if (!tier || shockRings.length >= MAX_SHOCK_RINGS) return false;
+            shockRings.push({ x: p.x, y: p.y, startAt, scale, tier,
+                maxRadius: SHOCK_RING_RULES.maxRadius[tier], hitIds: new Set(), hits: 0, dead: false });
+            return true;
+        }
+        // Full damage at the core, farFactor of it at the ring's edge.
+        function getShockRingDamage(p, tier, dist, maxRadius, scale = 1) {
+            const rules = SHOCK_RING_RULES;
+            const base = p.damage * rules.damageMult[tier] * p.shockDamageBonus + rules.flatDamage[tier];
+            const falloff = 1 - (1 - rules.farFactor) * Math.min(1, dist / maxRadius);
+            return Math.min(rules.maxDamage, base * falloff * scale);
+        }
+        function updateShockRings() {
+            const tier = getShockRingTier(player);
+            if (!tier) {
+                if (shockRings.length) shockRings = [];
+                return;
+            }
+            const rules = SHOCK_RING_RULES;
+            if (gameState === 'PLAYING' && totalTime >= player.shockReadyAt) {
+                player.shockReadyAt = totalTime + rules.interval[tier];
+                if (emitShockRing(player)) {
+                    player.buildStats.shockRings++;
+                    audio.playWeaponFire('shock', false);
+                    if (player.evolutions.has('shock_ring') &&
+                        emitShockRing(player, rules.aftershockScale, totalTime + rules.aftershockDelay)) {
+                        player.buildStats.shockAftershocks++;
+                    }
+                }
+            }
+            for (const ring of shockRings) {
+                const age = totalTime - ring.startAt;
+                if (age < 0) continue;
+                const progress = Math.min(1, age / rules.expandSeconds);
+                const radius = ring.maxRadius * progress;
+                for (const target of enemies) {
+                    if (ring.hits >= rules.maxTargets) break;
+                    if (target.dead || ring.hitIds.has(target.id)) continue;
+                    const dx = target.x - ring.x, dy = target.y - ring.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist - target.radius > radius) continue;
+                    ring.hitIds.add(target.id);
+                    ring.hits++;
+                    const push = 260 / Math.max(1, dist);
+                    target.takeDamage(getShockRingDamage(player, ring.tier, dist, ring.maxRadius, ring.scale),
+                        dx * push, dy * push, false, false);
+                    player.buildStats.shockHits++;
+                }
+                if (progress >= 1) ring.dead = true;
+            }
+            if (shockRings.some(ring => ring.dead)) shockRings = shockRings.filter(ring => !ring.dead);
+        }
+        function drawShockRings(ctx) {
+            if (!shockRings.length) return;
+            const style = PROJECTILE_VISUAL_STYLES.shock;
+            const low = graphicsQuality === 'low';
+            ctx.save();
+            for (const ring of shockRings) {
+                const age = totalTime - ring.startAt;
+                if (age < 0) continue;
+                const progress = Math.min(1, age / SHOCK_RING_RULES.expandSeconds);
+                ctx.globalAlpha = (1 - progress * .8) * (ring.scale < 1 ? .6 : 1);
+                ctx.shadowBlur = low ? 0 : getGraphicsBlur(style.glow);
+                ctx.shadowColor = style.color;
+                ctx.strokeStyle = style.color;
+                ctx.lineWidth = (low ? 2 : style.width) * (1 - progress * .5);
+                ctx.beginPath();
+                ctx.arc(ring.x, ring.y, Math.max(1, ring.maxRadius * progress), 0, Math.PI * 2);
+                ctx.stroke();
+                if (!low) {
+                    ctx.shadowBlur = 0;
+                    ctx.globalAlpha *= .35;
+                    ctx.strokeStyle = style.core;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(ring.x, ring.y, Math.max(1, ring.maxRadius * progress * .82), 0, Math.PI * 2);
+                    ctx.stroke();
+                }
             }
             ctx.restore();
         }
@@ -8958,6 +9076,7 @@
             updateCircuitField();
             updateTrailMines();
             updateBoomerangDiscs(dt);
+            updateShockRings();
 
             if (bannerHideTimer > 0) {
                 bannerHideTimer -= dt;
@@ -9650,6 +9769,7 @@
             drawCircuitWeaver(ctx);
             drawTrailMines(ctx);
             drawBoomerangDiscs(ctx);
+            drawShockRings(ctx);
             drawBastion(ctx);
             drawBossAttackTelegraphs(ctx);
 
@@ -10230,6 +10350,7 @@
             phaseEchoes = [];
             trailMines = [];
             boomerangDiscs = [];
+            shockRings = [];
             circuitField = null;
             circuitFlash = null;
             bastion = null;

@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 3.2c · Yeni silah: Şok Halkası
+- Çekirdekten 3,2/2,9/2,6 sn'de bir genişleyen halka (130/145/160 px); her düşmana halka başına bir kez vurur. Hasar merkezde tam, kenarda %30'a iner: kalabalığın içine dalmak ödüllenir. Kendi dizisi ve sınırı var (`MAX_SHOCK_RINGS = 3`).
+- 3. kademe evrimi Artçı Şok: her halkadan 0,35 sn sonra yarı hasarlı ikinci halka. Yeni ses ailesi ve görsel; DÜŞÜK grafikte parıltı ve iç halka yok.
+- DPS (dalga 6, 5 tohum): K1 +22,8 · K2 +32,4 · K3 +63,0; üç kademe de ±%25 bandında. Silah sayısı 8 oldu (plazma + 7).
+
 ## Odak 3.2b · Yeni silah: Bumerang Disk
 - Hareket yönüne delici bir disk fırlatır (2,2/1,9/1,8 sn'de bir, 260/290/320 px); disk oyuncuya geri döner ve dönüşte aynı düşmana bir kez daha vurur. Kendi dizisi ve sınırı var (`MAX_BOOMERANG_DISCS = 4`), 4 sn'de dönemeyen disk kaybolur.
 - 3. kademe evrimi Ayna Disk: her atışta ikinci disk ters yöne fırlar. Yeni ses ailesi ve görsel; DÜŞÜK grafikte iz ve parıltı yok.
