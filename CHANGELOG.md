@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 2.7d · Otomatik grafik düşürme
+- Gerçek cihazda (TECNO CK6n) boss sırasında YÜKSEK 18 fps, ORTA 16 fps, DÜŞÜK 60 fps ölçüldü; varsayılan YÜKSEK telefonda ağır çekim gibi akıyordu.
+- Oyuncu elle kalite seçmediyse, oynanan her 3 sn'nin ortanca karesi 28 ms'yi aşınca kalite bir kademe, 40 ms'yi aşınca doğrudan DÜŞÜK'e iner; asla kendiliğinden yükselmez. Sonuç ayrı bir anahtarda saklanır, menüden seçim her zaman önceliklidir.
+- Telefonda: 5. sn ORTA, 12. sn DÜŞÜK, sonra 60 fps. Tarayıcı testleri kaliteyi `NEON_GRAPHICS_AUTO=false` ile sabitler; yeni test gerçek döngüyü yavaşlatıp düşüşü ölçer.
+
 ## Odak 2.7c · Mobil adres çubuğu gizlenince canvas tam ekran
 - Gerçek cihazda (TECNO CK6n, Android 14, Chrome) bulundu: menü kaydırılınca adres çubuğu gizleniyor; `clientHeight` eski boyda kaldığı için canvas ekranın altını boş bırakıyordu (yatay 280/336 px, dikey 668/724 px). Atılım butonu oyun alanının dışında kalıyordu.
 - `resizeCanvas` artık `clientHeight` ile `innerHeight`'ın büyüğünü kullanıyor; yatay dünya 965×373 → 965×448. Smoke testi eklendi.

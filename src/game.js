@@ -416,11 +416,63 @@
         }
         function loadGraphicsQuality() {
             let selected = 'high';
+            graphicsAuto.enabled = true;
             try {
                 const saved = localStorage.getItem(GRAPHICS_SAVE_KEY);
-                if (isValidGraphicsQuality(saved)) selected = saved;
+                const auto = localStorage.getItem(GRAPHICS_AUTO_SAVE_KEY);
+                if (isValidGraphicsQuality(saved)) {
+                    // A quality the player picked by hand is never changed for them.
+                    selected = saved;
+                    graphicsAuto.enabled = false;
+                } else if (isValidGraphicsQuality(auto)) selected = auto;
             } catch (e) { /* local file/storage restrictions must not block play */ }
             applyGraphicsQuality(selected, false);
+        }
+
+        // Odak 2.7d · on a real phone (TECNO CK6n) High ran at 18 fps and Low at
+        // 60. Until the player picks a quality, a slow run steps it down: the
+        // median frame of each 3 s of play decides. It never steps back up, and
+        // the result is remembered so the next launch starts smooth.
+        const GRAPHICS_AUTO_SAVE_KEY = 'neonCekirdek.graphicsAuto.v1';
+        const GRAPHICS_AUTO_RULES = Object.freeze({
+            windowMs: 3000, warmupMs: 2000, cooldownMs: 4000,
+            slowFrameMs: 28, verySlowFrameMs: 40, ignoreFrameMs: 250
+        });
+        const GRAPHICS_STEP_DOWN = Object.freeze({ high: 'medium', medium: 'low' });
+        const graphicsAuto = { enabled: true, frames: [], windowMs: 0, holdUntil: 0, steps: 0 };
+        function resetGraphicsAutoWindow(now, holdMs = GRAPHICS_AUTO_RULES.warmupMs) {
+            graphicsAuto.frames.length = 0;
+            graphicsAuto.windowMs = 0;
+            graphicsAuto.holdUntil = Math.max(graphicsAuto.holdUntil, now + holdMs);
+        }
+        function observeGraphicsFrame(frameMs, now, playing) {
+            // Browser specs pin the quality (like NEON_UNLOCK_ALL) so a busy CI
+            // machine cannot change what they render.
+            if (window.NEON_GRAPHICS_AUTO === false) return null;
+            if (!graphicsAuto.enabled || graphicsQuality === 'low') return null;
+            // Pauses, menus, modals and hidden tabs restart the warm-up.
+            if (!playing || frameMs > GRAPHICS_AUTO_RULES.ignoreFrameMs) {
+                graphicsAuto.frames.length = 0;
+                graphicsAuto.windowMs = 0;
+                graphicsAuto.holdUntil = now + GRAPHICS_AUTO_RULES.warmupMs;
+                return null;
+            }
+            if (now < graphicsAuto.holdUntil) return null;
+            graphicsAuto.frames.push(frameMs);
+            graphicsAuto.windowMs += frameMs;
+            if (graphicsAuto.windowMs < GRAPHICS_AUTO_RULES.windowMs) return null;
+            const sorted = graphicsAuto.frames.slice().sort((a, b) => a - b);
+            const median = sorted[sorted.length >> 1];
+            resetGraphicsAutoWindow(now, 0);
+            if (median < GRAPHICS_AUTO_RULES.slowFrameMs) return null;
+            const target = median >= GRAPHICS_AUTO_RULES.verySlowFrameMs ? 'low' : GRAPHICS_STEP_DOWN[graphicsQuality];
+            applyGraphicsQuality(target, false);
+            try { localStorage.setItem(GRAPHICS_AUTO_SAVE_KEY, target); } catch (e) { /* storage may be blocked */ }
+            graphicsAuto.steps++;
+            graphicsAuto.holdUntil = now + GRAPHICS_AUTO_RULES.cooldownMs;
+            if (player) createFloatingText(player.x, player.y - 64,
+                'GRAFİK OTOMATİK · ' + (target === 'low' ? 'DÜŞÜK' : 'ORTA'), '#67e8f9', 13);
+            return target;
         }
 
         const META_SAVE_KEY = 'neonCekirdek.meta.v1';
@@ -11227,6 +11279,8 @@
 
         for (const id of ['menuGraphicsQuality', 'pauseGraphicsQuality']) {
             document.getElementById(id).addEventListener('change', event => {
+                // A hand-picked quality turns the automatic step-down off.
+                graphicsAuto.enabled = false;
                 applyGraphicsQuality(event.target.value);
             });
         }
@@ -11279,6 +11333,8 @@
                 lastCanvasRenderedState = gameState;
             }
             capturePc3LongRunSample();
+            observeGraphicsFrame(frameMs, now, gameState === 'PLAYING' &&
+                document.visibilityState !== 'hidden');
             if (performanceOverlayOn && frameMs > 0) {
                 const renderCpuEnd = performance.now();
                 perfRecentFrameMs[perfRecentFrameIndex] = frameMs;
