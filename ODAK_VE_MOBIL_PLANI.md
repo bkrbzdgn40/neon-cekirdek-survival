@@ -316,11 +316,15 @@ Ayrıca bu görünümlerde kombo, boss barı ve Cinnet aktifken de (bağlamsal �
 5 puan düşük olabilir. CI'daki browser job'ı bu testi otomatik çalıştırır.
 ```
 
-### - [ ] 2.7 Gerçek cihaz turu (sen yaparsın)
+### - [x] 2.7 Gerçek cihaz turu (sen yaparsın)
 
 - `python3 -m http.server 8000 --bind 0.0.0.0` çalıştır, telefondan aynı ağ üzerinden `http://<bilgisayar-ip>:8000` adresine gir.
 - Telefonu hem dikey hem yatay tutarak 10'ar dakika oyna. `docs/DEVICE_QA.md` kontrol listesini doldur.
 - Özellikle şunlara bak: başparmak hiçbir butonu yanlışlıkla tetikliyor mu, joystick kayıyor mu, boss sırasında okunabilirlik nasıl.
+
+**Sonuç (4 Kasım 2026).** Tur TECNO CK6n (Android 14, Chrome) üzerinde yapıldı; ölçümler `docs/DEVICE_QA.md` içinde. Bulunan sorunlar 2.7a–2.7e olarak düzeltildi (PR #89–#93).
+
+**Karar: masaüstü öncelikli.** Bu hâliyle telefon, masaüstündeki oyun hissini vermiyor: menü ve yükseltme kartları masaüstü için tasarlandığından kaydırma gerektiriyor. Oyun motoru telefonda yeterli (DÜŞÜK grafikte 60 fps), yeniden yazım gerekmiyor. Mobil ileride ayrı bir yaklaşımla ele alınacak: telefona özel ekranlar (tek ekran menü, kaydırmasız yükseltme seçimi), yalnızca yatay oyun ve tam ekran uygulama paketi. Faz 3'te mobil için yeni tasarım işi yapılmaz; mevcut mobil testler geçmeye devam eder.
 
 ---
 
