@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 2.7b · Masaüstü HUD daha az seyrek
+- Cihaz turu bulgusu: masaüstü fazla boştu. Masaüstünde (≥ 1024 px, fareli) skor (yeni üst satır çipi), altın, görev ve kombo artık hep görünür; kombo x5'in altında soluk.
+- Momentum, Cinnet ve bölüm çipi bağlamsal kaldı; telefon düzeni değişmedi (testle doğrulanıyor). Üst satır 38 px, 1024–1440 px'te taşma yok; oynanacak alan ≥ %80 korunuyor.
+- `docs/HUD_ENVANTERI.md` karar 2 masaüstü için güncellendi.
+
 ## Odak 2.7a · Küçük ekranda düşman yoğunluğu
 - Cihaz turu bulgusu: telefonda arena yarı büyüklükte (390×844'te 520×1125, masaüstünde ~1327×829) ama düşman akışı aynıydı, hayatta kalma yarıya iniyordu.
 - Alan 1 000 000 birimin altındaysa düşman jetonu ve aynı anda yaşayan düşman sınırı alan oranının karekökü kadar azalır (en az %50). Masaüstü değerleri değişmez.
