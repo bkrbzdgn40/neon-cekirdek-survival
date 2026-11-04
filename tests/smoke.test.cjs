@@ -1419,8 +1419,8 @@ test('M4.1 primary UI uses compact control cards and has no redundant parentheti
     'CANLI ARENA SİMÜLASYONU: AKTİF', 'SİBER CİNNET! ('
   ];
   for(const label of oldLabels) assert.equal(html.includes(label),false,label);
-  for(const label of ['id="tabProtocolContent"','WASD · OK TUŞLARI','BOŞLUK · SOL TIK',
-    'E · SAĞ TIK','M · KONTROL MODU','id="buildGuidePanel"']) {
+  // Odak 2.7e: key labels are checked per input type in the browser spec.
+  for(const label of ['id="tabProtocolContent"','id="buildGuidePanel"']) {
     assert.ok(html.includes(label),label);
   }
 });

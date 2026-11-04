@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 2.7e · Dokunmatik rötuşlar
+- Dokunmatik ekranda klavye ipuçları (`.key-hint`) gizli: diriliş butonundaki "BOŞLUK", kartlardaki [1] [2] [3], "R", menü kısayolları. Kontrol kartları dokunmatik karşılığını gösterir (`.touch-hint`: ATILIM BUTONU, EMP BUTONU…).
+- Telefon dikeyde yükseltme ekranı 1342 → 840 px (360×668): ilk iki kart tamamen görünür, yazı boyutları (M5.23) aynı.
+- Yatayda adres çubuğu açıkken (724×280) yetenek butonları sığacak kadar küçülür (en az 44 px); Siper artık duraklat butonuna değmiyor.
+
 ## Odak 2.7d · Otomatik grafik düşürme
 - Gerçek cihazda (TECNO CK6n) boss sırasında YÜKSEK 18 fps, ORTA 16 fps, DÜŞÜK 60 fps ölçüldü; varsayılan YÜKSEK telefonda ağır çekim gibi akıyordu.
 - Oyuncu elle kalite seçmediyse, oynanan her 3 sn'nin ortanca karesi 28 ms'yi aşınca kalite bir kademe, 40 ms'yi aşınca doğrudan DÜŞÜK'e iner; asla kendiliğinden yükselmez. Sonuç ayrı bir anahtarda saklanır, menüden seçim her zaman önceliklidir.

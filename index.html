@@ -320,19 +320,19 @@
                     <div id="tabProtocolContent" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 text-left content-start">
                       <div class="menu-protocol-v2 rounded-xl p-3.5">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-cyan-300 text-xs"><i class="fa-solid fa-arrows-up-down-left-right mr-2" aria-hidden="true"></i>HAREKET</h3></div>
-                          <div class="key text-cyan-200">WASD · OK TUŞLARI</div>
+                          <div class="key text-cyan-200"><span class="key-hint">WASD · OK TUŞLARI</span><span class="touch-hint">PARMAĞINI BASILI TUTUP KAYDIR</span></div>
                           <p class="text-xs text-gray-200">Yakındaki hedeflere otomatik ateş edersin. Düşmanların arasına sıkışmamak için sürekli yer değiştir.</p>
                           <details class="menu-protocol-tip" data-system="momentum"><summary>İPUCU</summary><p class="text-[11px] text-cyan-200/90">Hareket ettikçe Momentum birikir; atış temposunu destekler.</p></details>
                       </div>
 <div class="menu-protocol-v2 rounded-xl p-3.5">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-yellow-300 text-xs"><i class="fa-solid fa-bolt mr-2" aria-hidden="true"></i>ATILIM</h3></div>
-                          <div class="key text-yellow-200">BOŞLUK · SOL TIK</div>
+                          <div class="key text-yellow-200"><span class="key-hint">BOŞLUK · SOL TIK</span><span class="touch-hint">ATILIM BUTONU</span></div>
                           <p class="text-xs text-gray-200">Kısa bir hamleyle mermilerden ve boss saldırılarından sıyrıl. Atılımın kısa dokunulmazlık süresi var.</p>
                           <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-yellow-200/90">Atılımı, turuncu baskın uyarısı geldiğinde saklamak işe yarar.</p></details>
                       </div>
 <div class="menu-protocol-v2 rounded-xl p-3.5" data-system="emp">
                           <div class="flex justify-between gap-2 items-start"><h3 class="font-cyber font-bold text-purple-300 text-xs"><i class="fa-solid fa-burst mr-2" aria-hidden="true"></i>EMP NOVA</h3></div>
-                          <div class="key text-purple-200">E · SAĞ TIK</div>
+                          <div class="key text-purple-200"><span class="key-hint">E · SAĞ TIK</span><span class="touch-hint">EMP BUTONU</span></div>
                           <p class="text-xs text-gray-200">Yakınındaki düşmanları geri iter, tehlikeli mermileri temizler. Köşeye sıkıştığında güvenli alan açar.</p>
                           <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-purple-200/90">Boss ve elit kalabalığını dağıtmak için kullan.</p></details>
                       </div>
@@ -354,7 +354,7 @@
                           <p class="text-xs text-gray-200">Diriliş hakkın varsa koşuya geri dönersin. Yakın tehditleri uzaklaştıran güçlü bir patlama da yaşanır.</p>
                           <details class="menu-protocol-tip"><summary>İPUCU</summary><p class="text-[11px] text-emerald-200/90">Öncü, başlangıçta bir fazladan ücretsiz hakla gelir.</p></details>
                       </div>
-                      <div class="sm:col-span-2 xl:col-span-3 text-[10px] text-gray-400 border-t border-gray-800 pt-2">M · KONTROL MODU　 P · ESC · DURAKLAT</div>
+                      <div class="key-hint sm:col-span-2 xl:col-span-3 text-[10px] text-gray-400 border-t border-gray-800 pt-2">M · KONTROL MODU　 P · ESC · DURAKLAT</div>
                       <div id="menuUnlockHint" class="sm:col-span-2 xl:col-span-3 text-[11px] font-cyber text-yellow-200/90 system-locked"></div>
                       <div id="menuRunSteps" class="sm:col-span-2 xl:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
                        <div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">1</div><div><div class="text-[11px] font-cyber font-bold text-white">İLK DALGALAR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">XP kürelerini topla; hasar ve güvenlik temelini kur.</p></div></div>
@@ -421,7 +421,7 @@
 
             <!-- Supporting keyboard shortcuts -->
             <footer class="shrink-0 flex flex-wrap items-center justify-between gap-2 bg-gray-950/85 border border-cyan-500/20 rounded-xl px-4 py-2.5 text-[11px] font-cyber text-gray-400">
-                <div class="flex items-center gap-2">
+                <div class="key-hint flex items-center gap-2">
                     <span class="text-cyan-400 font-bold"><i class="fa-solid fa-keyboard mr-1"></i> HIZLI KISAYOLLAR:</span>
                     <span>SEVİYE EKRANINDA <b class="text-cyan-300">[1] [2] [3]</b> SEÇİM</span>
                     <span class="hidden sm:inline text-gray-700">|</span>
@@ -474,7 +474,7 @@
 
             <div class="flex flex-col gap-3">
                 <button id="confirmReviveBtn" type="button" class="cyber-btn w-full py-4 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 font-cyber font-black text-sm sm:text-base tracking-wider text-black border border-emerald-200 cursor-pointer shadow-[0_0_25px_rgba(16,185,129,0.5)]">
-                    ⚡ REAKTÖRÜ YENİDEN BAŞLAT [BOŞLUK / ENTER]
+                    ⚡ REAKTÖRÜ YENİDEN BAŞLAT<span class="key-hint"> [BOŞLUK / ENTER]</span>
                 </button>
                 <button id="declineReviveBtn" type="button" class="w-full py-2.5 rounded-xl bg-gray-900 hover:bg-red-950/60 font-cyber font-bold text-xs text-gray-400 hover:text-red-300 border border-gray-800 transition cursor-pointer">
                     OPERASYONU SONLANDIR (SKORU KAYDET)
@@ -514,7 +514,7 @@
     <!-- LEVEL UP / UPGRADE SELECTION MODAL -->
     <div id="upgradeModal" class="fixed inset-0 z-30 hidden items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
         <div class="upgrade-modal-shell max-w-6xl w-full text-center my-auto">
-            <div class="upgrade-modal-kicker mb-2">
+            <div class="upgrade-modal-kicker key-hint mb-2">
                 SEVİYE ATLADIN! — [1] [2] [3] TUŞLARIYLA SEÇEBİLİRSİN
             </div>
             <h2 class="font-cyber text-2xl sm:text-4xl font-black text-white text-glow-cyan mb-1">
@@ -530,7 +530,7 @@
             <!-- Reroll Button -->
             <div class="mb-5 flex justify-center">
                 <button id="rerollUpgradesBtn" type="button" class="cyber-btn px-4 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-cyan-400/65 font-cyber text-xs font-bold text-cyan-100 flex items-center gap-2 cursor-pointer">
-                    <i class="fa-solid fa-dice text-cyan-300"></i> YENİDEN SEÇ · R <span id="rerollCostText">15</span> <i class="fa-solid fa-coins"></i>
+                    <i class="fa-solid fa-dice text-cyan-300"></i> YENİDEN SEÇ<span class="key-hint"> · R</span> <span id="rerollCostText">15</span> <i class="fa-solid fa-coins"></i>
                 </button>
             </div>
 

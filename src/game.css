@@ -1977,3 +1977,38 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
 }
 /* Odak 2.3 · touch movement choice only matters on touch screens. */
 @media(hover:hover) and (pointer:fine){#pauseModal .touch-setting{display:none;}}
+
+/* Odak 2.7e · touch screens (measured on a TECNO CK6n).
+   Keyboard hints give way to touch wording; .touch-hint is its touch twin. */
+.touch-hint{display:none;}
+@media (hover:none) and (pointer:coarse){
+    .key-hint{display:none!important;}
+    .touch-hint{display:inline;}
+}
+/* Phones held upright: the upgrade header and cards lose padding, not text
+   size (M5.23 keeps description 16 px, title 21 px), so less scrolling. */
+@media (max-width:639px) and (hover:none){
+    #upgradeModal{padding:10px 12px;}
+    #upgradeModal .upgrade-modal-shell > p{display:none;}
+    #upgradeModal .upgrade-modal-shell > h2{font-size:20px;margin-bottom:6px;}
+    #upgradeModal #upgradeStatsSummary{gap:2px 12px;padding:4px 10px;margin-bottom:8px;font-size:12px;line-height:1.35;}
+    #upgradeModal .upgrade-modal-shell > .mb-5{margin-bottom:8px;}
+    #upgradeCardsContainer{gap:8px;}
+    #upgradeCardsContainer .upgrade-card{padding:12px 14px 10px!important;}
+    #upgradeCardsContainer .upgrade-card-header{grid-template-columns:44px minmax(0,1fr);gap:10px;margin-bottom:8px;}
+    #upgradeCardsContainer .upgrade-icon{width:44px;height:44px;font-size:20px;border-radius:12px;}
+    #upgradeCardsContainer .upgrade-card-labels{flex-direction:row;flex-wrap:wrap;justify-content:flex-end;gap:6px;}
+    #upgradeCardsContainer .upgrade-rarity-gem{width:22px;height:22px;}
+    #upgradeCardsContainer .upgrade-card-name{margin:0 0 4px;line-height:1.2;}
+    #upgradeCardsContainer .upgrade-card-desc{line-height:1.45;}
+    #upgradeCardsContainer .upgrade-card-tier-row{margin-top:4px;}
+    #upgradeCardsContainer .upgrade-card-footer{margin-top:6px;padding:6px 8px 0;}
+}
+/* Phones held sideways with the address bar shown (280 px): four 52 px
+   buttons no longer fit under the pause button, so they shrink to fit,
+   never below a 44 px touch target. */
+@media (orientation:landscape) and (max-height:500px){
+    #hud .hud-action-bay{width:var(--landscape-skill);}
+    #hud .hud-action-bay > button{width:var(--landscape-skill);height:var(--landscape-skill);}
+    #hud{--landscape-skill:clamp(44px,calc((100dvh - 82px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)) / 4),52px);}
+}
