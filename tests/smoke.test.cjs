@@ -2295,7 +2295,7 @@ test('M4.3.3 legendary evolution keeps purple transformation and golden rarity s
 
 test('M4.3.3 live modal draws 3 classified choices with preserved numeric shortcuts', () => {
   const {run}=setup();
-  const x=JSON.parse(run("(()=>{startNewGame();for(const u of UPGRADES_POOL)player.upgradeCounts[u.id]=3;player.upgradeCounts.homing=2;player.upgradeCounts.multishot=0;player.upgradeCounts.vampiric=0;const box=document.getElementById('upgradeCardsContainer'),cards=[];box.appendChild=c=>cards.push(c);const saved=rollRarity;let k=0;rollRarity=()=>[RARITIES[0],RARITIES[3],RARITIES[2]][k++];try{populateUpgradeCards();}finally{rollRarity=saved;}return JSON.stringify({ids:currentUpgradeChoices.map(c=>c.upg.id),cards:cards.map(c=>({role:c._attrs['data-role'],rarity:c._attrs['data-rarity'],shortcut:c._attrs['aria-keyshortcuts'],markup:c.innerHTML}))});})()"));
+  const x=JSON.parse(run("(()=>{startNewGame();player.upgradeCounts={orbital:3,lightning:3,homing:2,multishot:0,firerate:3,pierce_ricochet:3,crit_mastery:3,aegis_shield:3,vampiric:1};const box=document.getElementById('upgradeCardsContainer'),cards=[];box.appendChild=c=>cards.push(c);const saved=rollRarity;let k=0;rollRarity=()=>[RARITIES[0],RARITIES[3],RARITIES[2]][k++];try{populateUpgradeCards();}finally{rollRarity=saved;}return JSON.stringify({ids:currentUpgradeChoices.map(c=>c.upg.id),cards:cards.map(c=>({role:c._attrs['data-role'],rarity:c._attrs['data-rarity'],shortcut:c._attrs['aria-keyshortcuts'],markup:c.innerHTML}))});})()"));
   assert.equal(x.ids.length,3);
   assert.ok(x.ids.includes('homing'));
   assert.deepEqual(x.cards.map(c=>c.shortcut),['1','2','3']);
@@ -2316,10 +2316,132 @@ test('M4.3.3 selection grants unchanged level-three evolution and rarity power',
 
 test('M4.3.3 reduced motion covers all animations and keyboard/reroll flows remain wired', () => {
   assert.match(html,/@media\(prefers-reduced-motion:reduce\)\{[\s\S]*?upgrade-evolution-orbit[\s\S]*?upgrade-weapon-scan\{animation:none!important/);
-  assert.match(html,/card\.setAttribute\('aria-keyshortcuts',String\(idx\+1\)\)/);
-  assert.match(html,/else if \(e\.code === 'KeyR'\)/);
-  assert.match(html,/function triggerLevelUp\(\)/);
-  assert.match(html,/function selectUpgradeOption\(index\)/);
+  // Odak 3.1 · keys drive the real level-up flow (replaces source regexes).
+  const { run, windowEvent } = setup();
+  run('startNewGame(); totalGold = 999; triggerLevelUp()');
+  const before = run('rerollCost');
+  windowEvent('keydown', { code: 'KeyR' });
+  assert.equal(run('rerollCost'), before + 10);
+  assert.equal(run('gameState'), 'LEVEL_UP');
+  const picked = run('currentUpgradeChoices[1].upg.id');
+  windowEvent('keydown', { code: 'Digit2' });
+  assert.equal(run('gameState'), 'PLAYING');
+  assert.equal(run(`player.upgradeCounts[${JSON.stringify(picked)}]`), 1);
+  run('triggerLevelUp()');
+  windowEvent('keydown', { code: 'KeyX' });
+  assert.equal(run('gameState'), 'PLAYING');
+  assert.equal(run('upgradeSkipsLeft'), 1);
+});
+
+test('Odak 3.1 every upgrade has a kind; plasma holds weapon slot 1 and multishot takes no slot', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    const kinds = {};
+    for (const u of UPGRADES_POOL) kinds[u.id] = u.kind;
+    const empty = getBuildSlots(player);
+    player.upgradeCounts = { multishot: 2, homing: 1, vampiric: 1, firerate: 0 };
+    return JSON.stringify({ kinds, limits: BUILD_SLOT_LIMITS, empty, slots: getBuildSlots(player) });
+  })()`));
+  assert.deepEqual(Object.keys(x.kinds).filter(id => x.kinds[id] === 'weapon').sort(),
+    ['circuit_weaver', 'homing', 'lightning', 'multishot', 'orbital']);
+  assert.deepEqual(Object.keys(x.kinds).filter(id => x.kinds[id] === 'passive').sort(),
+    ['aegis_shield', 'crit_mastery', 'firerate', 'kinetic_magnet', 'overdrive_boost',
+      'phase_echo', 'pierce_ricochet', 'vampiric']);
+  assert.deepEqual(x.limits, { weapon: 4, passive: 5 });
+  assert.deepEqual(x.empty, { weapon: ['plasma'], passive: [] });
+  assert.deepEqual(x.slots, { weapon: ['plasma', 'homing'], passive: ['vampiric'] });
+});
+
+test('Odak 3.1 a full slot type only offers owned cards below tier 3', () => {
+  const { run } = setup();
+  const offered = JSON.parse(run(`(() => {
+    startNewGame();
+    // Weapons: plasma + homing, orbital, lightning = 4/4. Passives: 5/5.
+    player.upgradeCounts = { homing: 1, orbital: 3, lightning: 2,
+      firerate: 1, vampiric: 3, crit_mastery: 1, aegis_shield: 2, kinetic_magnet: 1 };
+    const seen = new Set();
+    for (let i = 0; i < 200; i++) {
+      populateUpgradeCards();
+      for (const c of currentUpgradeChoices) seen.add(c.upg.id);
+    }
+    return JSON.stringify([...seen].sort());
+  })()`));
+  assert.deepEqual(offered, ['aegis_shield', 'crit_mastery', 'firerate', 'homing',
+    'kinetic_magnet', 'lightning', 'multishot']);
+  // A free passive slot reopens unowned passives, but never a fifth weapon.
+  const reopened = JSON.parse(run(`(() => {
+    delete player.upgradeCounts.kinetic_magnet;
+    return JSON.stringify(UPGRADES_POOL.filter(u => isUpgradeOfferable(u, player)).map(u => u.id).sort());
+  })()`));
+  assert.ok(reopened.includes('phase_echo') && reopened.includes('pierce_ricochet'));
+  assert.ok(!reopened.includes('circuit_weaver'));
+  // Everything owned is maxed and both types are full: no empty choice dialog.
+  const done = JSON.parse(run(`(() => {
+    player.upgradeCounts = { homing: 3, orbital: 3, lightning: 3, multishot: 3,
+      firerate: 3, vampiric: 3, crit_mastery: 3, aegis_shield: 3, kinetic_magnet: 3 };
+    player.hp = player.maxHp - 40;
+    triggerLevelUp();
+    return JSON.stringify({ state: gameState, missing: player.maxHp - player.hp });
+  })()`));
+  assert.deepEqual(done, { state: 'PLAYING', missing: 20 });
+});
+
+test('Odak 3.1 card label follows kind and the slot row shows filled and empty slots', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    const label = id => getUpgradeCardPresentation(UPGRADES_POOL.find(u => u.id === id), RARITIES[0], 0).label;
+    startNewGame();
+    player.upgradeCounts = { homing: 1, firerate: 2 };
+    triggerLevelUp();
+    return JSON.stringify({ weapon: label('circuit_weaver'), passive: label('phase_echo'),
+      multishot: label('multishot'), row: document.getElementById('upgradeSlotRow').innerHTML });
+  })()`));
+  assert.equal(x.weapon, 'SİLAH MODÜLÜ');
+  assert.equal(x.multishot, 'SİLAH MODÜLÜ');
+  assert.equal(x.passive, 'SİSTEM MODÜLÜ');
+  const groups = x.row.split('upgrade-slot-group"').slice(1);
+  assert.equal(groups.length, 2);
+  const count = (s, re) => (s.match(re) || []).length;
+  assert.equal(count(groups[0], /class="upgrade-slot( filled)?"/g), 4);
+  assert.equal(count(groups[0], /upgrade-slot filled/g), 2);
+  assert.match(groups[0], /fa-circle-dot/);
+  assert.match(groups[0], /fa-rocket/);
+  assert.equal(count(groups[1], /class="upgrade-slot( filled)?"/g), 5);
+  assert.equal(count(groups[1], /upgrade-slot filled/g), 1);
+  assert.match(groups[1], /aria-label="PASİF yuvası 1 \/ 5"/);
+});
+
+test('Odak 3.1 ATLA skips twice per run with a 15 % XP refund', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    const out = [];
+    for (let i = 0; i < 3; i++) {
+      player.xp = 0;
+      triggerLevelUp();
+      const bar = player.xpToNext, tiers = JSON.stringify(player.upgradeCounts);
+      const ok = skipUpgradeChoice();
+      out.push({ ok, state: gameState, xp: player.xp, bar, tiersSame: tiers === JSON.stringify(player.upgradeCounts),
+        left: upgradeSkipsLeft, label: document.getElementById('skipUpgradeText').textContent,
+        disabled: document.getElementById('skipUpgradeBtn').disabled });
+      if (gameState === 'LEVEL_UP') selectUpgradeOption(0);
+    }
+    startNewGame();
+    return JSON.stringify({ out, fresh: upgradeSkipsLeft });
+  })()`));
+  for (const step of x.out.slice(0, 2)) {
+    assert.equal(step.ok, true);
+    assert.equal(step.state, 'PLAYING');
+    assert.equal(step.xp, Math.round(step.bar * 0.15));
+    assert.equal(step.tiersSame, true);
+  }
+  assert.deepEqual(x.out.map(s => s.left), [1, 0, 0]);
+  assert.deepEqual(x.out.map(s => String(s.label)), ['2', '1', '0']);
+  assert.equal(x.out[2].ok, false);
+  assert.equal(x.out[2].disabled, true);
+  assert.equal(x.out[2].state, 'LEVEL_UP');
+  assert.equal(x.fresh, 2);
 });
 
 
@@ -2446,8 +2568,6 @@ test('M4.3.3.2 original rarity odds and keyboard/reduced-motion safeguards remai
   const odds=JSON.parse(run("JSON.stringify(RARITIES.map(({id,weight,mult})=>({id,weight,mult})))"));
   assert.deepEqual(odds.map(x=>x.weight),[48,30,15,7]);
   assert.deepEqual(odds.map(x=>x.mult),[1,1.35,1.75,2.3]);
-  assert.match(html,/card\.setAttribute\('aria-keyshortcuts',String\(idx\+1\)\)/);
-  assert.match(html,/else if \(e\.code === 'KeyR'\)/);
   const css=html.slice(html.indexOf('/* M4.3.3.2:'),html.indexOf('/* M4.2: content-density'));
   assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
   assert.match(css,/\.upgrade-card \.upgrade-icon i \{transition:none!important;\}/);
@@ -5123,11 +5243,9 @@ test('upgrade draft keeps evolution priority, unique eligible cards and original
   const { run } = setup();
   const result = JSON.parse(run(`(() => {
     startNewGame();
-    for (const upgrade of UPGRADES_POOL) player.upgradeCounts[upgrade.id] = 3;
-    player.upgradeCounts.homing = 2;
-    player.upgradeCounts.firerate = 0;
-    player.upgradeCounts.multishot = 0;
-    player.upgradeCounts.vampiric = 0;
+    // Full weapon and passive slots: only owned cards and multishot remain.
+    player.upgradeCounts = { orbital: 3, lightning: 3, homing: 2, multishot: 0,
+      pierce_ricochet: 3, crit_mastery: 3, aegis_shield: 3, firerate: 1, vampiric: 1 };
     const originalIds = UPGRADES_POOL.map(u => u.id);
     const originalRandom = rng;
     try {
@@ -5569,7 +5687,7 @@ test('M5.15 Phase Echo stays selectable after 13th card and build guide reflects
  const d=JSON.parse(run("(()=>{startNewGame();const card=UPGRADES_POOL.find(u=>u.id==='phase_echo');const pool=UPGRADES_POOL.length;const guide=getBuildGuideModel(player);return JSON.stringify({pool,cardName:card.name,role:getUpgradeCardPresentation(card,RARITIES[0],0).role,evo:EVOLUTION_DEFS.phase_echo.name,guide:guide.totalTiers});})()"));
  assert.equal(d.pool,13);
  assert.equal(d.cardName,'Faz Yankısı');
- assert.equal(d.role,'weapon');
+ assert.equal(d.role,'module');
  assert.equal(d.evo,'Çift Yankı');
  assert.equal(d.guide,0);
  assert.match(gameCode,/UPGRADES_POOL\.length \* MAX_MODULE_TIER/);
