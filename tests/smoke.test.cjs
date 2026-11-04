@@ -6962,3 +6962,28 @@ test('Odak 2.5 the turn-sideways tip shows once, only on a touch phone held upri
   b.run('window.matchMedia = () => ({ matches: true })');
   assert.equal(b.run('maybeShowRotateHint()'), false, 'once per device, across reloads');
 });
+
+// Odak 2.7 · enemy flow follows the arena area on small screens.
+test('Odak 2.7 small arenas get fewer spawn tokens and a lower enemy cap', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(()=>{startNewGame();nextBossTime=1000;wave=6;totalTime=40;
+    const base=getDirectorProfile(40,6,0,1000,-Infinity,1);
+    const at=(w,h)=>{worldWidth=w;worldHeight=h;combatDirector.update(.01);
+      return {scale:arenaDensityScale(),rate:combatDirector.profile.tokenRate,cap:combatDirector.profile.cap,
+        same:combatDirector.profile===combatDirector.baseProfile};};
+    const desktop=at(1327,829),phone=at(520,1125),tiny=at(300,500);
+    const kept=scaleDirectorProfileForArena(base,1)===base;
+    return JSON.stringify({base:{rate:base.tokenRate,cap:base.cap},desktop,phone,tiny,kept});})()`));
+  // Desktop arenas keep the plan's director values untouched.
+  assert.equal(x.kept, true);
+  assert.equal(x.desktop.scale, 1);
+  assert.equal(x.desktop.rate, x.base.rate);
+  assert.equal(x.desktop.cap, x.base.cap);
+  // A 390x844 phone (world 520x1125) gets sqrt(0.585) of the flow.
+  assert.ok(Math.abs(x.phone.scale - Math.sqrt(520 * 1125 / 1e6)) < 1e-9);
+  assert.ok(Math.abs(x.phone.rate - x.base.rate * x.phone.scale) < 1e-9);
+  assert.equal(x.phone.cap, Math.round(x.base.cap * x.phone.scale));
+  assert.equal(x.phone.same, true);
+  // Never below half the desktop flow.
+  assert.equal(x.tiny.scale, 0.5);
+});

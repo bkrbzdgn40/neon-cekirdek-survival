@@ -7469,6 +7469,21 @@
         }
 
 
+        // Odak 2.7 · small screens get a smaller arena (world = screen / viewScale),
+        // so the same spawn flow would pack twice the enemies into it. Below the
+        // reference area, spawn tokens and the live-enemy cap shrink with the
+        // square root of the area ratio: a full ratio emptied phones too much.
+        const ARENA_DENSITY = Object.freeze({ referenceArea: 1000000, minScale: 0.5 });
+        function arenaDensityScale(width = worldWidth, height = worldHeight) {
+            const ratio = (width * height) / ARENA_DENSITY.referenceArea;
+            return Math.max(ARENA_DENSITY.minScale, Math.min(1, Math.sqrt(ratio)));
+        }
+        function scaleDirectorProfileForArena(profile, density = arenaDensityScale()) {
+            if (density >= 1) return profile;
+            return { ...profile, tokenRate: profile.tokenRate * density,
+                cap: Math.max(1, Math.round(profile.cap * density)), arenaDensity: density };
+        }
+
         // Gameplay V2, stage 1: observe real player pressure without changing spawns.
         // High kill counts alone never imply panic. Nearby combat and damage do.
         const INTENSITY_OBSERVER = Object.freeze({
@@ -7993,8 +8008,9 @@
                 const previous = this.profile.phase;
                 // Always calculate the old director profile separately so
                 // special encounters / arena events keep their legacy eligibility.
-                this.baseProfile = getDirectorProfile(totalTime, wave, activeBosses.length,
-                    nextBossTime, this.afterBossUntil, hpFraction);
+                const density = arenaDensityScale();
+                this.baseProfile = scaleDirectorProfileForArena(getDirectorProfile(totalTime, wave,
+                    activeBosses.length, nextBossTime, this.afterBossUntil, hpFraction), density);
                 const bossLocked = activeBosses.some(b => !b.dead) ||
                     nextBossTime - totalTime <= 3.8 || totalTime < this.afterBossUntil;
                 this.intensityObserver.observe(dt, totalTime, player, enemies,
@@ -8005,8 +8021,9 @@
                     mapAdaptiveStageToDirectorPhase(
                         this.intensityObserver.previewPhase, this.intensityObserver.previewAge) : null;
                 this.adaptivePhase = proposal;
-                this.profile = proposal ? getDirectorProfile(totalTime, wave, activeBosses.length,
-                    nextBossTime, this.afterBossUntil, hpFraction, proposal) : this.baseProfile;
+                this.profile = proposal ? scaleDirectorProfileForArena(getDirectorProfile(totalTime,
+                    wave, activeBosses.length, nextBossTime, this.afterBossUntil, hpFraction, proposal),
+                    density) : this.baseProfile;
                 // Normal spawns use the selected profile. The existing shared
                 // token budget and hard caps still apply; no extra spawn paths.
                 this.tokens = Math.min(14, this.tokens + dt * this.profile.tokenRate);

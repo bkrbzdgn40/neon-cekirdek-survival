@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 2.7a · Küçük ekranda düşman yoğunluğu
+- Cihaz turu bulgusu: telefonda arena yarı büyüklükte (390×844'te 520×1125, masaüstünde ~1327×829) ama düşman akışı aynıydı, hayatta kalma yarıya iniyordu.
+- Alan 1 000 000 birimin altındaysa düşman jetonu ve aynı anda yaşayan düşman sınırı alan oranının karekökü kadar azalır (en az %50). Masaüstü değerleri değişmez.
+- 10 tohumlu simülasyon, hareket eden oyuncu: 390×844 ortalama 29 sn → 65 sn, masaüstü 53 sn. Tam orantılı ölçek telefonu fazla boşaltıyordu (öldürme 111 → 87).
+
 ## Odak 2.6 · Geometri testi etkin
 - `tests/hud.geometry.spec.cjs` içindeki `test.fixme` kalktı; sakin HUD her görünümde eşikleri geçiyor ve CI browser job'ında çalışıyor.
 - İkinci varyant: `?wave=8`, gerçek boss, Cinnet aktif, kombo 6. Eşik 5 puan düşük (`contextualFreePlayDrop`): 320×568 %65.7, 390×664 %69.1, 750×342 %69.1, 1280×800 %79.1, 1366×768 %78.2; çakışma, taşma ve küçük hedef 0.
