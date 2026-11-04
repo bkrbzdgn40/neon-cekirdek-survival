@@ -1375,7 +1375,8 @@
                     phaseEchoes: 0, phaseEchoTargets: 0,
                     circuitClosures: 0, circuitPulseHits: 0, circuitCrossings: 0,
                     mineDrops: 0, mineBlasts: 0, mineHits: 0, mineChains: 0,
-                    discThrows: 0, discHits: 0, discCatches: 0,
+                    discThrows: 0, discHits: 0, discCatches: 0, discRicochets: 0, cryoDashRefunds: 0,
+                    launcherDrops: 0, shieldShocks: 0, satelliteHarvests: 0,
                     shockRings: 0, shockHits: 0, shockAftershocks: 0,
                     cryoCycles: 0, harvestPulls: 0 };
                 this.collectorOrbs = 0;
@@ -1491,6 +1492,7 @@
                     if (this.dashTimer <= 0) {
                         this.isDashing = false;
                         applyCryoCycle(this);
+                        applyMineLauncher(this);
                         deployPhaseEcho(this, this.phaseEchoOrigin);
                         this.phaseEchoOrigin = null;
                         if (this.evolutions.has('kinetic_magnet') && totalTime >= this.kineticVortexReadyAt) {
@@ -1794,6 +1796,7 @@
                     combatDirector?.intensityObserver.recordShieldBreak();
                     this.shieldCooldown = this.shieldMaxCooldown;
                     this.invulnTimer = 0.8;
+                    if (this.synergies.has('shock_aegis') && emitShockRing(this)) this.buildStats.shieldShocks++;
                     audio.playExplosion(false);
                     screenShake = 10;
                     shockwaves.push(new Shockwave(this.x, this.y, 130, '#00f3ff', 0.3));
@@ -3833,8 +3836,25 @@
             { id: 'orbital_aegis', name: 'Savunma Matrisi', modules: ['orbital', 'aegis_shield'],
                 desc: 'Kalkan kırılınca uydu karşı darbesi olur ve kalkan %12 hızlı dolar.' },
             { id: 'prism_optics', name: 'Prizma Optiği', modules: ['pierce_ricochet', 'crit_mastery'],
-                desc: 'Kritik plazma mermisi bir ek hedef deler ve bir kez daha seker.' }
+                desc: 'Kritik plazma mermisi bir ek hedef deler ve bir kez daha seker.' },
+            // Odak 3.4 · each new weapon pairs with a passive; every effect changes behaviour.
+            { id: 'mine_launcher', name: 'Mayın Fırlatıcı', modules: ['mine_trail', 'kinetic_magnet'],
+                desc: 'Atılım bittiği yere üç mayın bırakır.' },
+            { id: 'disc_ricochet', name: 'Sekme Disk', modules: ['boomerang_disc', 'pierce_ricochet'],
+                desc: 'Disk dönmeden önce en yakın düşmana bir kez seker.' },
+            { id: 'shock_aegis', name: 'Şok Kalkanı', modules: ['shock_ring', 'aegis_shield'],
+                desc: 'Kalkan kırıldığı anda bir şok halkası yayılır.' },
+            { id: 'harvest_satellites', name: 'Hasat Uyduları', modules: ['orbital', 'collector'],
+                desc: 'Uydular değdikleri XP küresini sana çeker.' },
+            { id: 'cryo_disc', name: 'Buzlu Disk', modules: ['boomerang_disc', 'coolant'],
+                desc: 'Yakaladığın her disk Atılımı 0,5 sn erken hazırlar.' }
         ]);
+        // Behaviour numbers for the Odak 3.4 synergies.
+        const SYNERGY_RULES = Object.freeze({
+            launcherMines: 3, launcherSpread: 34,
+            ricochetRange: 220, ricochetTravel: 150,
+            satelliteReach: 16, cryoDashRefund: .5
+        });
 
         const MAX_MODULE_TIER = 3;
         // Odak 3.1 · build slots. Plasma permanently holds weapon slot 1; a
@@ -5615,7 +5635,7 @@
                     disc.x += disc.dx * step;
                     disc.y += disc.dy * step;
                     disc.travelled += step;
-                    if (disc.travelled >= rules.range[tier]) {
+                    if (disc.travelled >= rules.range[tier] && !redirectDiscToNearest(disc, player)) {
                         disc.returning = true;
                         disc.hitIds.clear();
                     }
@@ -5625,6 +5645,10 @@
                     if (dist <= rules.catchRadius) {
                         disc.dead = true;
                         player.buildStats.discCatches++;
+                        if (player.synergies.has('cryo_disc') && player.dashCooldown > 0) {
+                            player.dashCooldown = Math.max(0, player.dashCooldown - SYNERGY_RULES.cryoDashRefund);
+                            player.buildStats.cryoDashRefunds++;
+                        }
                         continue;
                     }
                     disc.dx = tx / dist;
@@ -5642,6 +5666,23 @@
             if (boomerangDiscs.some(disc => disc.dead)) {
                 boomerangDiscs = boomerangDiscs.filter(disc => !disc.dead);
             }
+        }
+        // Sekme Disk: at the far end the disc bounces once toward the nearest foe.
+        function redirectDiscToNearest(disc, p) {
+            if (disc.bounced || !p.synergies.has('disc_ricochet')) return false;
+            disc.bounced = true;
+            let best = null, bestDist = SYNERGY_RULES.ricochetRange;
+            for (const target of enemies) {
+                if (target.dead || disc.hitIds.has(target.id)) continue;
+                const dist = Math.hypot(target.x - disc.x, target.y - disc.y);
+                if (dist < bestDist) { best = target; bestDist = dist; }
+            }
+            if (!best) return false;
+            disc.dx = (best.x - disc.x) / Math.max(1, bestDist);
+            disc.dy = (best.y - disc.y) / Math.max(1, bestDist);
+            disc.travelled = Math.max(0, BOOMERANG_RULES.range[getBoomerangTier(p)] - SYNERGY_RULES.ricochetTravel);
+            p.buildStats.discRicochets++;
+            return true;
         }
         function drawBoomerangDiscs(ctx) {
             if (!boomerangDiscs.length) return;
@@ -5698,6 +5739,36 @@
         // Prism and Phase Echo read getCooldownMult() when they start a cooldown.
         const COOLANT_RULES = Object.freeze({ perTier: .9, dashMin: .8, novaMin: 4, shieldMin: 4, cryoRefund: 1 });
         const COLLECTOR_RULES = Object.freeze({ perTier: .15, harvestEvery: 40 });
+        // Mayın Fırlatıcı: a dash end scatters three mines around the landing spot.
+        function applyMineLauncher(p) {
+            if (!p.synergies.has('mine_launcher')) return 0;
+            let dropped = 0;
+            for (let i = 0; i < SYNERGY_RULES.launcherMines; i++) {
+                const angle = i * Math.PI * 2 / SYNERGY_RULES.launcherMines;
+                if (dropTrailMine(p, p.x + Math.cos(angle) * SYNERGY_RULES.launcherSpread,
+                    p.y + Math.sin(angle) * SYNERGY_RULES.launcherSpread)) dropped++;
+            }
+            p.buildStats.launcherDrops += dropped;
+            return dropped;
+        }
+        // Hasat Uyduları: an orbital touching an XP orb pulls it to the player.
+        function harvestOrbsWithSatellites(p) {
+            if (!p?.synergies.has('harvest_satellites') || !p.orbitals || !orbs.length) return 0;
+            const sats = p.getOrbitalPositions();
+            let pulled = 0;
+            for (const orb of orbs) {
+                if (orb.dead || orb.magnetized || orb.isGold) continue;
+                for (const s of sats) {
+                    if (Math.hypot(orb.x - s.x, orb.y - s.y) <= s.r + orb.radius + SYNERGY_RULES.satelliteReach) {
+                        orb.magnetized = true;
+                        pulled++;
+                        break;
+                    }
+                }
+            }
+            p.buildStats.satelliteHarvests += pulled;
+            return pulled;
+        }
         function getCooldownMult(p = player) {
             return Math.pow(COOLANT_RULES.perTier, Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.coolant || 0));
         }
@@ -9335,6 +9406,7 @@
 
             updateNemesis(dt);
 
+            harvestOrbsWithSatellites(player);
             for (let i = orbs.length - 1; i >= 0; i--) {
                 orbs[i].update(dt);
                 if (orbs[i].dead) orbs.splice(i, 1);

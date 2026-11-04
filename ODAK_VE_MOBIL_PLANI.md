@@ -405,7 +405,7 @@ Tablo olarak stdout'a ve sim-results.json'a yaz. CI'ye ekleme; elle çalıştır
 
 **Hedef denge bandı:** Aynı kademedeki silahların DPS'i birbirinin ±%25'i içinde kalmalı. Destek silahları (Gravite Tohumu gibi) bu kuralın dışında; onların PR açıklamasında gerekçesi yazılır.
 
-### - [ ] 3.4 Sinerjileri genişlet
+### - [x] 3.4 Sinerjileri genişlet
 
 ```
 SYNERGY_DEFS'i her yeni silah için en az bir pasifle eşleşecek şekilde genişlet (hedef 8+).
