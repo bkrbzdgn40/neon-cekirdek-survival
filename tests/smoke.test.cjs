@@ -6987,3 +6987,14 @@ test('Odak 2.7 small arenas get fewer spawn tokens and a lower enemy cap', () =>
   // Never below half the desktop flow.
   assert.equal(x.tiny.scale, 0.5);
 });
+
+test('Odak 2.7c canvas fills the screen when the mobile address bar hides', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(()=>{window.devicePixelRatio=1;
+    document.documentElement.clientWidth=724;document.documentElement.clientHeight=280;
+    window.innerWidth=724;window.innerHeight=336;resizeCanvas();
+    return JSON.stringify({css:canvas.style.height,world:Math.round(worldHeight),scale:viewScale});})()`));
+  // Measured on a TECNO CK6n in landscape: the old code drew only 280 of 336 px.
+  assert.equal(x.css, '336px');
+  assert.equal(x.world, Math.round(336 / x.scale));
+});
