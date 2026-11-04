@@ -332,7 +332,7 @@ Ayrıca bu görünümlerde kombo, boss barı ve Cinnet aktifken de (bağlamsal �
 
 **Hedef:** 13 modül ve tek silahtan, birbirinden farklı oynanan **8 silah + 10 pasif**e çıkmak. Faz 1 ve 2 bitmeden başlama: önce gösterilen şey sadeleşmeli, sonra içerik derinleşmeli.
 
-### - [ ] 3.0 Tohumlu rastgelelik (denge ölçümünün ön şartı)
+### - [x] 3.0 Tohumlu rastgelelik (denge ölçümünün ön şartı)
 
 ```
 src/game.js'e küçük bir tohumlu RNG ekle (mulberry32 yeterli): rng() ve setRunSeed(n).

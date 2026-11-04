@@ -415,7 +415,7 @@ test('director spends only available tokens and tracks actual enemy spawns', () 
 
 test('elite supply chests have a short anti-burst cooldown rather than a minute quota',()=>{
   const {run}=setup();
-  const r=JSON.parse(run("(()=>{startNewGame();wave=20;Math.random=()=>0;for(let t=0;t<180;t++){totalTime=t;combatDirector.registerChestDrop('elite',100,100);lootChests.length=0;}return JSON.stringify({drops:combatDirector.stats.chestDrops.elite,kills:combatDirector.stats.eliteKills,denied:combatDirector.stats.chestDenied,next:combatDirector.getNextEliteChestChance()});})()"));
+  const r=JSON.parse(run("(()=>{startNewGame();wave=20;rng=()=>0;for(let t=0;t<180;t++){totalTime=t;combatDirector.registerChestDrop('elite',100,100);lootChests.length=0;}return JSON.stringify({drops:combatDirector.stats.chestDrops.elite,kills:combatDirector.stats.eliteKills,denied:combatDirector.stats.chestDenied,next:combatDirector.getNextEliteChestChance()});})()"));
   assert.equal(r.kills,180);
   assert.equal(r.drops,36);
   assert.ok(r.denied.cooldown>0);
@@ -1072,9 +1072,9 @@ test('M3.1 crit plus prism synergy adds precisely one pierce and ricochet', () =
     player.refreshBuildTraits();
     player.pierce=2;player.ricochet=1;
     enemies.push(new Enemy(player.x+90,player.y,'TANK'));
-    const originalRandom=Math.random;
-    Math.random=()=>0;
-    try { player.autoShoot(); } finally { Math.random=originalRandom; }
+    const originalRandom=rng;
+    rng=()=>0;
+    try { player.autoShoot(); } finally { rng=originalRandom; }
     const b=bullets[0];
     return JSON.stringify({synergy:player.synergies.has('prism_optics'),
       crit:b.isCrit,pierce:b.pierce,ricochet:b.ricochet});
@@ -2600,7 +2600,7 @@ test('M5.1 boss jackpot keeps original rewards while elite support uses a softer
 
 test('M5.1.1 successful elite drops lower their chance without enforcing two-per-minute',()=>{
   const {run}=setup();
-  const a=JSON.parse(run("(()=>{startNewGame();const c=combatDirector;const timeline=[];Math.random=()=>0;for(let t=1;t<=180;t++){totalTime=t;c.registerChestDrop('elite',player.x,player.y);if(lootChests.length){timeline.push(t);lootChests.length=0;}}return JSON.stringify({timeline,denied:c.stats.chestDenied,kills:c.stats.eliteKills,next:c.getNextEliteChestChance()});})()"));
+  const a=JSON.parse(run("(()=>{startNewGame();const c=combatDirector;const timeline=[];rng=()=>0;for(let t=1;t<=180;t++){totalTime=t;c.registerChestDrop('elite',player.x,player.y);if(lootChests.length){timeline.push(t);lootChests.length=0;}}return JSON.stringify({timeline,denied:c.stats.chestDenied,kills:c.stats.eliteKills,next:c.getNextEliteChestChance()});})()"));
   assert.equal(a.kills,180);
   assert.equal(a.timeline.length,36);
   for(let i=1;i<a.timeline.length;i++) assert.ok(a.timeline[i]-a.timeline[i-1]>=5);
@@ -2620,7 +2620,7 @@ test('M5.1 no-collected elite chests cannot crowd out boss guarantee',()=>{
 
 test('M5.1 actual chest gold and healing are tracked by source with no double counting',()=>{
   const {run}=setup();
-  const d=JSON.parse(run("(()=>{startNewGame();wave=20;player.hp=40;player.maxHp=150;Math.random=()=>0;const start=totalGold;const c=new LootChest(player.x,player.y,'elite');c.update(.016);const e=window.getNeonEconomySnapshot();const gold1=totalGold-start;const heal1=player.hp;const b=new LootChest(player.x,player.y,'boss');b.update(.016);const s=window.getNeonEconomySnapshot();return JSON.stringify({gold1,heal1,finalGold:totalGold-start,elite:e.chestRewards.elite,boss:s.chestRewards.boss,tracked:s.goldTracked,session:s.goldSession,opened:s.chestOpened});})()"));
+  const d=JSON.parse(run("(()=>{startNewGame();wave=20;player.hp=40;player.maxHp=150;rng=()=>0;const start=totalGold;const c=new LootChest(player.x,player.y,'elite');c.update(.016);const e=window.getNeonEconomySnapshot();const gold1=totalGold-start;const heal1=player.hp;const b=new LootChest(player.x,player.y,'boss');b.update(.016);const s=window.getNeonEconomySnapshot();return JSON.stringify({gold1,heal1,finalGold:totalGold-start,elite:e.chestRewards.elite,boss:s.chestRewards.boss,tracked:s.goldTracked,session:s.goldSession,opened:s.chestOpened});})()"));
   assert.equal(d.gold1,74);
   assert.equal(d.heal1,58);
   assert.equal(d.finalGold,216);
@@ -2634,7 +2634,7 @@ test('M5.1 actual chest gold and healing are tracked by source with no double co
 
 test('M5.1 source-aware nova opens with a shared projectile cap; boss remains stronger',()=>{
   const {run}=setup();
-  const data=JSON.parse(run("(()=>{startNewGame();wave=10;Math.random=()=>.99;bullets=[];new LootChest(player.x,player.y,'elite').update(.016);const elite=bullets.length;bullets=[];new LootChest(player.x,player.y,'boss').update(.016);const boss=bullets.length;bullets=new Array(MAX_PLAYER_PROJECTILES-4).fill({dead:false});new LootChest(player.x,player.y,'boss').update(.016);const capped=bullets.length;return JSON.stringify({elite,boss,capped,max:MAX_PLAYER_PROJECTILES,stats:combatDirector.stats.chestRewards});})()"));
+  const data=JSON.parse(run("(()=>{startNewGame();wave=10;rng=()=>.99;bullets=[];new LootChest(player.x,player.y,'elite').update(.016);const elite=bullets.length;bullets=[];new LootChest(player.x,player.y,'boss').update(.016);const boss=bullets.length;bullets=new Array(MAX_PLAYER_PROJECTILES-4).fill({dead:false});new LootChest(player.x,player.y,'boss').update(.016);const capped=bullets.length;return JSON.stringify({elite,boss,capped,max:MAX_PLAYER_PROJECTILES,stats:combatDirector.stats.chestRewards});})()"));
   assert.equal(data.elite,12);
   assert.equal(data.boss,24);
   assert.equal(data.capped,data.max);
@@ -2665,7 +2665,7 @@ test('M5.1 diagnostics return defensive copies and reset all economy counters pe
 
 test('M5.1.1 deterministic 5/10/20/30-minute decaying-chance economy stress',()=>{
   const {run}=setup();
-  const model=JSON.parse(run("(()=>{const horizons=[300,600,1200,1800],out=[];for(const horizon of horizons){startNewGame();let seed=731;Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);const times=[];for(let sec=1;sec<=horizon;sec++){totalTime=sec;wave=1+Math.floor(sec/16);if(sec===55||sec>55&&(sec-55)%150===0){combatDirector.onBossEncounter();combatDirector.registerChestDrop('boss',player.x,player.y);}if(sec%6===0){const before=combatDirector.stats.chestDrops.elite;combatDirector.registerChestDrop('elite',player.x,player.y);if(combatDirector.stats.chestDrops.elite>before)times.push(sec);}for(const chest of lootChests){chest.x=player.x;chest.y=player.y;chest.update(.016);}lootChests.length=0;bullets=[];}const d=window.getNeonEconomySnapshot();const byMinute={};for(const time of times){const k=Math.floor(time/60);byMinute[k]=(byMinute[k]||0)+1;}out.push({minutes:horizon/60,elite:d.chestDrops.elite,boss:d.chestDrops.boss,opened:Object.values(d.chestOpened).reduce((s,x)=>s+x,0),onGround:d.onGround,tracked:d.goldTracked,session:d.goldSession,goldBySource:d.goldBySource,maxWindowDrops:Math.max(0,...Object.values(byMinute)),minGapOk:times.every((t,i)=>i===0||t-times[i-1]>=5),nextChance:d.nextEliteDropChance});}return JSON.stringify(out);})()"));
+  const model=JSON.parse(run("(()=>{const horizons=[300,600,1200,1800],out=[];for(const horizon of horizons){startNewGame();let seed=731;rng=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);const times=[];for(let sec=1;sec<=horizon;sec++){totalTime=sec;wave=1+Math.floor(sec/16);if(sec===55||sec>55&&(sec-55)%150===0){combatDirector.onBossEncounter();combatDirector.registerChestDrop('boss',player.x,player.y);}if(sec%6===0){const before=combatDirector.stats.chestDrops.elite;combatDirector.registerChestDrop('elite',player.x,player.y);if(combatDirector.stats.chestDrops.elite>before)times.push(sec);}for(const chest of lootChests){chest.x=player.x;chest.y=player.y;chest.update(.016);}lootChests.length=0;bullets=[];}const d=window.getNeonEconomySnapshot();const byMinute={};for(const time of times){const k=Math.floor(time/60);byMinute[k]=(byMinute[k]||0)+1;}out.push({minutes:horizon/60,elite:d.chestDrops.elite,boss:d.chestDrops.boss,opened:Object.values(d.chestOpened).reduce((s,x)=>s+x,0),onGround:d.onGround,tracked:d.goldTracked,session:d.goldSession,goldBySource:d.goldBySource,maxWindowDrops:Math.max(0,...Object.values(byMinute)),minGapOk:times.every((t,i)=>i===0||t-times[i-1]>=5),nextChance:d.nextEliteDropChance});}return JSON.stringify(out);})()"));
   assert.deepEqual(model.map(x=>x.minutes),[5,10,20,30]);
   for(const row of model){
     assert.ok(row.minGapOk,row.minutes+' minute spacing');
@@ -2695,7 +2695,7 @@ test('M5.3.1 first three boss encounters are solo with smooth escalation',()=>{
 
 test('M5.1.1 elite drop chance decays only on success and resets on the minute',()=>{
   const {run}=setup();
-  const data=JSON.parse(run("(()=>{startNewGame();const c=combatDirector;let roll=.64;Math.random=()=>roll;const a=[];for(const [time,r] of [[1,.64],[6,.40],[7,.37],[12,.21],[17,.11],[52,.05],[61,.64]]){totalTime=time;roll=r;const chance=c.getNextEliteChestChance();const ok=c.registerChestDrop('elite',0,0);a.push([time,chance,ok,c.getNextEliteChestChance()]);lootChests.length=0;}const d=window.getNeonEconomySnapshot();return JSON.stringify({cases:a,denied:d.chestDenied,window:d.eliteChanceWindow,count:d.eliteDropsInWindow,next:d.nextEliteDropChance});})()"));
+  const data=JSON.parse(run("(()=>{startNewGame();const c=combatDirector;let roll=.64;rng=()=>roll;const a=[];for(const [time,r] of [[1,.64],[6,.40],[7,.37],[12,.21],[17,.11],[52,.05],[61,.64]]){totalTime=time;roll=r;const chance=c.getNextEliteChestChance();const ok=c.registerChestDrop('elite',0,0);a.push([time,chance,ok,c.getNextEliteChestChance()]);lootChests.length=0;}const d=window.getNeonEconomySnapshot();return JSON.stringify({cases:a,denied:d.chestDenied,window:d.eliteChanceWindow,count:d.eliteDropsInWindow,next:d.nextEliteDropChance});})()"));
   assert.deepEqual(data.cases,[[1,.65,true,.38],[6,.38,false,.38],[7,.38,true,.22],[12,.22,true,.12],[17,.12,true,.06],[52,.06,true,.06],[61,.65,true,.38]]);
   assert.equal(data.denied.roll,1);
   assert.equal(data.window,1);
@@ -2705,7 +2705,7 @@ test('M5.1.1 elite drop chance decays only on success and resets on the minute',
 
 test('M5.1.1 60-second reset is based on game time, not boss or successful loot',()=>{
   const {run}=setup();
-  const list=JSON.parse(run("(()=>{startNewGame();const c=combatDirector;Math.random=()=>0;const result=[];for(const time of [10,16,22,61,67,120,126]){totalTime=time;const before=c.getNextEliteChestChance();const dropped=c.registerChestDrop('elite',0,0);lootChests.length=0;result.push({time,before,dropped,window:c.getEliteChanceWindow()});}return JSON.stringify(result);})()"));
+  const list=JSON.parse(run("(()=>{startNewGame();const c=combatDirector;rng=()=>0;const result=[];for(const time of [10,16,22,61,67,120,126]){totalTime=time;const before=c.getNextEliteChestChance();const dropped=c.registerChestDrop('elite',0,0);lootChests.length=0;result.push({time,before,dropped,window:c.getEliteChanceWindow()});}return JSON.stringify(result);})()"));
   assert.deepEqual(list.map(x=>x.before),[.65,.38,.22,.65,.38,.65,.38]);
   assert.ok(list.every(x=>x.dropped));
   assert.deepEqual(list.map(x=>x.window),[0,0,0,1,1,2,2]);
@@ -2713,7 +2713,7 @@ test('M5.1.1 60-second reset is based on game time, not boss or successful loot'
 
 test('M5.1.1 chest inventory still limits uncollected elites, not the earned total',()=>{
   const {run}=setup();
-  const a=JSON.parse(run("(()=>{startNewGame();Math.random=()=>0;const c=combatDirector;const results=[];for(const time of [1,7,13,19,25]){totalTime=time;results.push(c.registerChestDrop('elite',10,10));}const denied=c.stats.chestDenied.groundCap,drop=c.stats.chestDrops.elite;lootChests.length=0;totalTime=31;const restored=c.registerChestDrop('elite',10,10);return JSON.stringify({results,denied,drop,restored,window:c.eliteDropsInWindow});})()"));
+  const a=JSON.parse(run("(()=>{startNewGame();rng=()=>0;const c=combatDirector;const results=[];for(const time of [1,7,13,19,25]){totalTime=time;results.push(c.registerChestDrop('elite',10,10));}const denied=c.stats.chestDenied.groundCap,drop=c.stats.chestDrops.elite;lootChests.length=0;totalTime=31;const restored=c.registerChestDrop('elite',10,10);return JSON.stringify({results,denied,drop,restored,window:c.eliteDropsInWindow});})()"));
   assert.deepEqual(a.results,[true,true,true,true,false]);
   assert.equal(a.denied,1);
   assert.equal(a.drop,4);
@@ -2968,7 +2968,7 @@ test('M5.3.1 boss color identity and opening order are deterministic',()=>{
 
 test('M5.3.1 first three real encounters are solo, unique and immune to RNG order',()=>{
  const {run}=setup();
- const s=JSON.parse(run("(()=>{const results=[];for(const roll of [0,.5,.9999]){startNewGame();Math.random=()=>roll;const types=[],counts=[];for(let i=1;i<=3;i++){wave=i*3+1;totalTime=i*75;spawnBossEncounter();types.push(activeBosses[0].type);counts.push(activeBosses.length);for(const b of [...activeBosses]){b.hp=1;b.takeDamage(9000,0,0,false,false);}}results.push({types,counts,bossKills:combatDirector.stats.bossKills,chests:combatDirector.stats.chestDrops.boss});}return JSON.stringify(results);})()"));
+ const s=JSON.parse(run("(()=>{const results=[];for(const roll of [0,.5,.9999]){startNewGame();rng=()=>roll;const types=[],counts=[];for(let i=1;i<=3;i++){wave=i*3+1;totalTime=i*75;spawnBossEncounter();types.push(activeBosses[0].type);counts.push(activeBosses.length);for(const b of [...activeBosses]){b.hp=1;b.takeDamage(9000,0,0,false,false);}}results.push({types,counts,bossKills:combatDirector.stats.bossKills,chests:combatDirector.stats.chestDrops.boss});}return JSON.stringify(results);})()"));
  for(const x of s){
   assert.deepEqual(x.types,['BOSS_TITAN','BOSS_DESTROYER','BOSS_VOID']);
   assert.deepEqual(x.counts,[1,1,1]);
@@ -5094,14 +5094,14 @@ test('upgrade Fisher-Yates shuffle reaches all six three-item permutations', () 
   const { run } = setup();
   const result = JSON.parse(run(`(() => {
     const permutations = new Set();
-    const originalRandom = Math.random;
+    const originalRandom = rng;
     let sameReference = true;
     try {
       for (let first = 0; first < 3; first++) {
         for (let second = 0; second < 2; second++) {
           const draws = [(first + .5) / 3, (second + .5) / 2];
           let drawIndex = 0;
-          Math.random = () => draws[drawIndex++];
+          rng = () => draws[drawIndex++];
           const sample = [0, 1, 2];
           const returned = shuffleInPlace(sample);
           sameReference = sameReference && returned === sample;
@@ -5109,7 +5109,7 @@ test('upgrade Fisher-Yates shuffle reaches all six three-item permutations', () 
         }
       }
     } finally {
-      Math.random = originalRandom;
+      rng = originalRandom;
     }
     return JSON.stringify({ permutations: [...permutations].sort(), sameReference });
   })()`));
@@ -5129,12 +5129,12 @@ test('upgrade draft keeps evolution priority, unique eligible cards and original
     player.upgradeCounts.multishot = 0;
     player.upgradeCounts.vampiric = 0;
     const originalIds = UPGRADES_POOL.map(u => u.id);
-    const originalRandom = Math.random;
+    const originalRandom = rng;
     try {
-      Math.random = () => 0;
+      rng = () => 0;
       populateUpgradeCards();
     } finally {
-      Math.random = originalRandom;
+      rng = originalRandom;
     }
     return JSON.stringify({
       offered: currentUpgradeChoices.map(choice => choice.upg.id),
@@ -6355,7 +6355,7 @@ test('M5.25 combat skills expose visual readiness without modifying their mechan
 
 test('M5.26 wave-gated engineering alternates devices, offers paired reactors, and honors boss lockouts',()=>{
  const {run}=setup();
- const x=JSON.parse(run("(()=>{startNewGame();worldWidth=1000;worldHeight=800;player.x=500;player.y=400;nextBossTime=800;conduitZones=[];activeQuest.point=null;combatDirector.activeArenaEvent=null;Math.random=()=>.3;wave=4;const early=maybeSpawnFieldDevice();wave=5;const first=maybeSpawnFieldDevice(),repeat=maybeSpawnFieldDevice();const firstKinds=fieldDevices.map(d=>d.kind);wave=8;const second=maybeSpawnFieldDevice();const both=fieldDevices.map(d=>d.kind);fieldDevices=[];wave=11;const pairOk=maybeSpawnFieldDevice();const pair=fieldDevices.map(d=>({x:d.x,y:d.y,kind:d.kind}));fieldDevices=[];wave=14;activeBosses=[new Enemy(150,150,'BOSS_DESTROYER')];const blocked=maybeSpawnFieldDevice();return JSON.stringify({early,first,repeat,firstKinds,second,both,pairOk,pair,blocked});})()"));
+ const x=JSON.parse(run("(()=>{startNewGame();worldWidth=1000;worldHeight=800;player.x=500;player.y=400;nextBossTime=800;conduitZones=[];activeQuest.point=null;combatDirector.activeArenaEvent=null;rng=()=>.3;wave=4;const early=maybeSpawnFieldDevice();wave=5;const first=maybeSpawnFieldDevice(),repeat=maybeSpawnFieldDevice();const firstKinds=fieldDevices.map(d=>d.kind);wave=8;const second=maybeSpawnFieldDevice();const both=fieldDevices.map(d=>d.kind);fieldDevices=[];wave=11;const pairOk=maybeSpawnFieldDevice();const pair=fieldDevices.map(d=>({x:d.x,y:d.y,kind:d.kind}));fieldDevices=[];wave=14;activeBosses=[new Enemy(150,150,'BOSS_DESTROYER')];const blocked=maybeSpawnFieldDevice();return JSON.stringify({early,first,repeat,firstKinds,second,both,pairOk,pair,blocked});})()"));
  assert.equal(x.early,false);assert.equal(x.first,true);assert.equal(x.repeat,false);
  assert.deepEqual(x.firstKinds,['CAPACITOR']);assert.equal(x.second,true);
  assert.deepEqual(x.both,['CAPACITOR','GRAVITON']);assert.equal(x.pairOk,true);
@@ -6495,11 +6495,57 @@ test('Odak 0.2 ?wave=N starts the run at wave N with shifted clock and boss time
   assert.deepEqual(JSON.parse(run('startNewGame(); JSON.stringify([wave,totalTime,nextBossTime])')), [10, 144, 199]);
 });
 
+test('Odak 3.0 same ?seed and same input give the same first upgrades and spawns', () => {
+  const trace = (search) => {
+    const { run } = setup({}, { locationSearch: search });
+    return JSON.parse(run(`(() => {
+      startNewGame();
+      player.hp = player.maxHp = 1e6;
+      const seenEnemies = new Set(), spawns = [];
+      let upgrades = null;
+      for (let frame = 0; frame < 60 * 90 && (spawns.length < 20 || !upgrades); frame++) {
+        if (gameState === 'LEVEL_UP') {
+          upgrades = upgrades || currentUpgradeChoices.map(c => c.upg.id + ':' + c.rarity.id);
+          selectUpgradeOption(0);
+          continue;
+        }
+        updateGame(1 / 60);
+        for (const e of enemies) {
+          if (seenEnemies.has(e) || spawns.length >= 20) continue;
+          seenEnemies.add(e);
+          spawns.push([e.type, Math.round(e.x), Math.round(e.y), e.isElite ? 1 : 0]);
+        }
+      }
+      return JSON.stringify({ seed: runSeed, spawns, upgrades });
+    })()`));
+  };
+  const a = trace('?seed=2026'), b = trace('?seed=2026'), c = trace('?seed=7');
+  assert.equal(a.seed, 2026);
+  assert.equal(a.spawns.length, 20);
+  assert.equal(a.upgrades?.length, 3);
+  assert.deepEqual(b, a);
+  assert.notDeepEqual(c.spawns, a.spawns);
+});
+
+test('Odak 3.0 rng is a stable mulberry32 stream that restarts with setRunSeed', () => {
+  const { run } = setup();
+  const draws = JSON.parse(run('setRunSeed(1); const a=[rng(),rng(),rng()]; setRunSeed(1); JSON.stringify([a,[rng(),rng(),rng()]])'));
+  assert.deepEqual(draws[0], draws[1]);
+  assert.ok(draws[0].every(x => x >= 0 && x < 1));
+  assert.equal(draws[0][0].toFixed(6), '0.627074');
+  // Without ?seed each run still gets its own fresh seed.
+  const seeds = JSON.parse(run('startNewGame(); const s1=runSeed; startNewGame(); JSON.stringify([s1,runSeed])'));
+  assert.notEqual(seeds[0], seeds[1]);
+});
+
 test('Odak 0.2 ?wave and ?unlock parsing rejects malformed values', () => {
   const { run } = setup();
   const read = search => JSON.parse(run(`JSON.stringify(readPlaytestParams(${JSON.stringify(search)}))`));
-  assert.deepEqual(read(''), { wave: 1, unlockAll: false });
-  assert.deepEqual(read('?x=1&wave=7&unlock=all'), { wave: 7, unlockAll: true });
+  assert.deepEqual(read(''), { wave: 1, unlockAll: false, seed: null });
+  assert.deepEqual(read('?x=1&wave=7&unlock=all'), { wave: 7, unlockAll: true, seed: null });
+  assert.equal(read('?seed=42').seed, 42);
+  assert.equal(read('?seed=-3').seed, null);
+  assert.equal(read('?seed=12345678901').seed, null);
   assert.equal(read('?wave=0').wave, 1);
   assert.equal(read('?wave=abc').wave, 1);
   assert.equal(read('?wave=-4').wave, 1);

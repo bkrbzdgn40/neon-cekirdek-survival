@@ -1,4 +1,23 @@
 
+        // Odak 3.0 · seeded run randomness (mulberry32). Combat, spawns, loot,
+        // quests and upgrade rolls draw from rng(); purely visual effects
+        // (particles, screen shake, floating-text jitter, menu demo) keep Math.random.
+        let runSeed = 0;
+        let runRngState = 0;
+        function setRunSeed(n) {
+            runSeed = Number(n) >>> 0;
+            runRngState = runSeed;
+            return runSeed;
+        }
+        function rng() {
+            runRngState = (runRngState + 0x6D2B79F5) >>> 0;
+            let t = runRngState;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        }
+        setRunSeed(Math.random() * 4294967296);
+
         // Audio arrangement only. Game timing and collision do not depend on music.
         const ADAPTIVE_MUSIC_PROFILES = Object.freeze({
             NORMAL: Object.freeze({beat:.24,root:1,volume:.027,filter:280,accentEvery:8,accentGain:.013}),
@@ -1077,14 +1096,14 @@
             if(currentWave>=3&&hasChain) options.push('CHAIN');
             return options;
         }
-        function chooseQuestType(available,history=questHistory,roll=Math.random()){
+        function chooseQuestType(available,history=questHistory,roll=rng()){
             const fresh=available.filter(type=>!history.slice(-2).includes(type));
             const pool=fresh.length?fresh:available;
             return pool[Math.min(pool.length-1,Math.floor(Math.max(0,roll)*pool.length))];
         }
         function getQuestPoint(fromX=player?.x||worldWidth/2,fromY=player?.y||worldHeight/2){
-            const angle=Math.random()*Math.PI*2;
-            const distance=140+Math.random()*80;
+            const angle=rng()*Math.PI*2;
+            const distance=140+rng()*80;
             return {
                 x:Math.max(65,Math.min(worldWidth-65,fromX+Math.cos(angle)*distance)),
                 y:Math.max(65,Math.min(worldHeight-65,fromY+Math.sin(angle)*distance))
@@ -1624,7 +1643,7 @@
                 const startAngle = baseAngle - ((this.multishot - 1) * spread) / 2;
                 const effectiveCrit = Math.min(0.78, this.critChance +
                     (this.overdriveActive ? this.overdriveCritBonus : 0) + (this.momentum / 100) * 0.1);
-                const isCrit = Math.random() < effectiveCrit;
+                const isCrit = rng() < effectiveCrit;
                 const finalDamage = isCrit ? this.damage * 2.0 : this.damage;
 
                 for (let i = 0; i < this.multishot; i++) {
@@ -2348,8 +2367,8 @@
 
                         for (let i = 0; i < 5; i++) {
                             emitEnergyOrb(
-                                this.x + (Math.random() - 0.5) * 55,
-                                this.y + (Math.random() - 0.5) * 55,
+                                this.x + (rng() - 0.5) * 55,
+                                this.y + (rng() - 0.5) * 55,
                                 24,
                                 i === 0
                             );
@@ -2706,8 +2725,8 @@
                 this.stunTimer = 0;
                 this.orbitalHitCooldown = 0;
                 this.dead = false;
-                this.actionTimer = 1.4 + Math.random() * 1.2;
-                this.secondaryTimer = 3.0 + Math.random() * 1.5;
+                this.actionTimer = 1.4 + rng() * 1.2;
+                this.secondaryTimer = 3.0 + rng() * 1.5;
                 this.state = 'CHASE';
                 this.enraged = false;
                 this.bossPhase = 1;
@@ -2723,7 +2742,7 @@
 
                 if (type === 'SWARM') {
                     this.radius = 12;
-                    this.speed = (165 + Math.random() * 25) * spdWaveMult;
+                    this.speed = (165 + rng() * 25) * spdWaveMult;
                     this.maxHp = 25 * waveMult * eliteHpMult;
                     this.damage = Math.round(11 * dmgMult);
                     this.color = '#ff0055';
@@ -2748,7 +2767,7 @@
                     this.xpValue = 34;
                     this.scoreValue = 75;
                     this.sides = 3;
-                    this.strafePhase = Math.random() * Math.PI * 2;
+                    this.strafePhase = rng() * Math.PI * 2;
                 } else if (type === 'SPLITTER') {
                     this.radius = 18;
                     this.speed = 128 * spdWaveMult;
@@ -2926,7 +2945,7 @@
                             this.y += Math.sin(this.dashTargetAngle) * (this.speed * 3.9) * dt;
                             if (this.actionTimer <= 0) {
                                 this.state = 'CHASE';
-                                this.actionTimer = 1.7 + Math.random() * 0.8;
+                                this.actionTimer = 1.7 + rng() * 0.8;
                             }
                         }
                     } else if (this.type === 'SHOOTER') {
@@ -3059,14 +3078,14 @@
                                 enemyProjectiles.push(new EnemyProjectile(this.x, this.y, Math.cos(a) * pSpd, Math.sin(a) * pSpd, 7, Math.round(17 * enemyDmgScale), '#b000ff'));
                             }
                             if (enemies.length < 45) {
-                                enemies.push(new Enemy(this.x + (Math.random() - 0.5) * 60, this.y + (Math.random() - 0.5) * 60, 'KAMIKAZE', false));
+                                enemies.push(new Enemy(this.x + (rng() - 0.5) * 60, this.y + (rng() - 0.5) * 60, 'KAMIKAZE', false));
                             }
                         }
                         if (this.secondaryTimer <= 0 && (!combatDirector || combatDirector.canBossReposition(this))) {
                             this.secondaryTimer = this.enraged ? 3.4 : 4.8;
                             shockwaves.push(new Shockwave(this.x, this.y, 140, '#b000ff', 0.3));
-                            const blinkAngle = Math.random() * Math.PI * 2;
-                            const blinkDist = 230 + Math.random() * 90;
+                            const blinkAngle = rng() * Math.PI * 2;
+                            const blinkDist = 230 + rng() * 90;
                             this.x = Math.max(60, Math.min(worldWidth - 60, player.x + Math.cos(blinkAngle) * blinkDist));
                             this.y = Math.max(60, Math.min(worldHeight - 60, player.y + Math.sin(blinkAngle) * blinkDist));
                             shockwaves.push(new Shockwave(this.x, this.y, 160, '#00f3ff', 0.3));
@@ -3230,7 +3249,7 @@
 
                 const evolvedArc = player.evolutions.has('lightning');
                 if (triggerChain && player.chainLightning > 0 &&
-                    (forceChain || (evolvedArc && isCrit) || Math.random() < 0.35)) {
+                    (forceChain || (evolvedArc && isCrit) || rng() < 0.35)) {
                     if (evolvedArc) player.buildStats.arcSurges++;
                     let jumps = Math.min(player.chainLightning, 8);
                     let lastTarget = this;
@@ -3286,7 +3305,7 @@
                 score += Math.round(this.scoreValue * (1 + combo * 0.12) * getActiveNeonContract().scoreMultiplier);
                 player.addOverdrive(this.isBoss ? 45 : (this.isElite ? 16 : 2.8));
 
-                if (player.vampiricHeal > 0 && Math.random() < 0.14 &&
+                if (player.vampiricHeal > 0 && rng() < 0.14 &&
                     totalTime >= (player.lastVampiricHealAt || 0)) {
                     const healed = Math.min(12, player.vampiricHeal, player.maxHp - player.hp);
                     if (healed > 0) {
@@ -3368,19 +3387,19 @@
                     }
                     for (let i = 0; i < 16; i++) {
                         emitEnergyOrb(
-                            this.x + (Math.random() - 0.5) * 90,
-                            this.y + (Math.random() - 0.5) * 90,
+                            this.x + (rng() - 0.5) * 90,
+                            this.y + (rng() - 0.5) * 90,
                             35,
                             i < 8
                         );
                     }
                     showDopamineBanner(`${this.bossName} · İMHA`, '#ffe600');
                 } else {
-                    const dropGold = Math.random() < (this.type === 'TANK' ? 0.42 : 0.11);
+                    const dropGold = rng() < (this.type === 'TANK' ? 0.42 : 0.11);
                     emitEnergyOrb(this.x, this.y, this.xpValue, dropGold);
 
-                    if (!dropGold && Math.random() < 0.025) {
-                        const pType = Math.random() < 0.5 ? 'MAGNET' : 'CHRONO';
+                    if (!dropGold && rng() < 0.025) {
+                        const pType = rng() < 0.5 ? 'MAGNET' : 'CHRONO';
                         powerups.push(new PowerupOrb(this.x, this.y, pType));
                     }
                 }
@@ -3571,7 +3590,7 @@
                     const rewardColor=this.source==='boss'?'#ffe600':'#40e9bc';
                     shockwaves.push(new Shockwave(this.x,this.y,180,rewardColor,.36));
                     const profile=getChestRewardProfile(this.source,wave,player.xpToNext,player.greedBonus);
-                    const roll=Math.random();
+                    const roll=rng();
                     if(roll<.38){
                         const gold=profile.goldHeal.gold;
                         const healed=Math.min(profile.goldHeal.heal,player.maxHp-player.hp);
@@ -3754,7 +3773,7 @@
 
         function rollRarity() {
             const total = RARITIES.reduce((acc, r) => acc + r.weight, 0);
-            let rnd = Math.random() * total;
+            let rnd = rng() * total;
             for (const r of RARITIES) {
                 if (rnd < r.weight) return r;
                 rnd -= r.weight;
@@ -4131,8 +4150,8 @@
             const minX=55,maxX=Math.max(55,worldWidth-55);
             const minY=55,maxY=Math.max(55,worldHeight-55);
             for(let i=0;i<8;i++){
-                const a=Math.random()*Math.PI*2;
-                const distance=175+Math.random()*85;
+                const a=rng()*Math.PI*2;
+                const distance=175+rng()*85;
                 const x=Math.min(maxX,Math.max(minX,player.x+Math.cos(a)*distance));
                 const y=Math.min(maxY,Math.max(minY,player.y+Math.sin(a)*distance));
                 if(Math.hypot(x-player.x,y-player.y)<100 ||
@@ -4609,13 +4628,16 @@
         // Odak 0.2 · test/playtest-only launch options, read once at load.
         // ?wave=N starts runs at wave N; ?unlock=all opens every system unlock
         // through window.NEON_UNLOCK_ALL (an outer harness may set it first).
+        // ?seed=N (Odak 3.0) fixes every run's rng() seed for balance checks.
         const PLAYTEST_MAX_WAVE = 99;
         function readPlaytestParams(search = window.location?.search || '') {
             const waveMatch = /(?:^|[?&])wave=(\d{1,3})(?:&|$)/.exec(search);
             const requestedWave = waveMatch ? Number(waveMatch[1]) : 1;
+            const seedMatch = /(?:^|[?&])seed=(\d{1,10})(?:&|$)/.exec(search);
             return {
                 wave: Math.min(PLAYTEST_MAX_WAVE, Math.max(1, requestedWave)),
-                unlockAll: /(?:^|[?&])unlock=all(?:&|$)/.test(search)
+                unlockAll: /(?:^|[?&])unlock=all(?:&|$)/.test(search),
+                seed: seedMatch ? Number(seedMatch[1]) >>> 0 : null
             };
         }
         const playtestParams = readPlaytestParams();
@@ -5029,11 +5051,11 @@
         }
 
         function getRandomEdgePosition(margin = 45) {
-            const side = Math.floor(Math.random() * 4);
-            if (side === 0) return { x: Math.random() * worldWidth, y: -margin };
-            if (side === 1) return { x: worldWidth + margin, y: Math.random() * worldHeight };
-            if (side === 2) return { x: Math.random() * worldWidth, y: worldHeight + margin };
-            return { x: -margin, y: Math.random() * worldHeight };
+            const side = Math.floor(rng() * 4);
+            if (side === 0) return { x: rng() * worldWidth, y: -margin };
+            if (side === 1) return { x: worldWidth + margin, y: rng() * worldHeight };
+            if (side === 2) return { x: rng() * worldWidth, y: worldHeight + margin };
+            return { x: -margin, y: rng() * worldHeight };
         }
 
         const MAX_ACTIVE_ENEMIES = 160;
@@ -8161,8 +8183,8 @@
                 const safeMargin = 115;
                 const minX = Math.min(safeMargin, worldWidth / 3);
                 const minY = Math.min(safeMargin, worldHeight / 3);
-                const x = minX + Math.random() * Math.max(0, worldWidth - 2 * minX);
-                const y = minY + Math.random() * Math.max(0, worldHeight - 2 * minY);
+                const x = minX + rng() * Math.max(0, worldWidth - 2 * minX);
+                const y = minY + rng() * Math.max(0, worldHeight - 2 * minY);
                 const fallbackX = Math.max(minX, Math.min(worldWidth - minX, player.x + (player.x < worldWidth / 2 ? 190 : -190)));
                 const fallbackY = Math.max(minY, Math.min(worldHeight - minY, player.y + (player.y < worldHeight / 2 ? 150 : -150)));
                 const farEnough = Math.hypot(x - player.x, y - player.y) >= 160;
@@ -8262,7 +8284,7 @@
                 }
                 if (!inCombat || bossImminent || this.activeArenaEvent || wave < 3 || totalTime < this.nextEncounterAt ||
                     enemies.length > specialProfile.cap - 12 || this.tokens < 8) return;
-                const fallbackSide = Math.floor(Math.random() * 4);
+                const fallbackSide = Math.floor(rng() * 4);
                 const placement = scoreTacticalDeployment(wave, this.profile.theme,
                     this.encounterIndex, fallbackSide, this.tacticalMotion, this.lastTacticalSide);
                 const side = placement.side;
@@ -8320,9 +8342,9 @@
                 // Give a formation its full telegraph interval without extra random flanks.
                 if (this.pendingEncounter) return false;
                 if (enemies.length >= Math.min(MAX_ACTIVE_ENEMIES, this.profile.cap) || this.tokens < 1) return false;
-                const type = pickEnemyTypeForWave(wave, Math.random(), this.profile.theme, this.tokens);
+                const type = pickEnemyTypeForWave(wave, rng(), this.profile.theme, this.tokens);
                 if (!type) return false;
-                const elite = wave >= 2 && Math.random() < this.profile.eliteChance;
+                const elite = wave >= 2 && rng() < this.profile.eliteChance;
                 const spawned = spawnEnemy(false, type, elite);
                 if (!spawned) return false;
                 this.tokens -= ENEMY_THREAT_COST[type];
@@ -8377,7 +8399,7 @@
                 if(lootChests.filter(chest=>chest.source==='elite').length>=CHEST_ECONOMY.eliteGroundCap){
                     this.stats.chestDenied.groundCap++;return false;
                 }
-                if(Math.random()>=this.getNextEliteChestChance()){
+                if(rng()>=this.getNextEliteChestChance()){
                     this.stats.chestDenied.roll++;return false;
                 }
                 this.lastEliteChestAt=totalTime;
@@ -8556,10 +8578,10 @@
                 return true;
             }
             if (enemies.length >= MAX_ACTIVE_ENEMIES) return false;
-            const type = typeOverride || pickEnemyTypeForWave(wave, Math.random());
+            const type = typeOverride || pickEnemyTypeForWave(wave, rng());
             if (!type) return false;
             const isElite = eliteOverride === null
-                ? wave >= 2 && Math.random() < Math.min(0.12, 0.03 + wave * 0.002)
+                ? wave >= 2 && rng() < Math.min(0.12, 0.03 + wave * 0.002)
                 : eliteOverride;
             const pos = positionOverride || getRandomEdgePosition(45);
             enemies.push(new Enemy(pos.x, pos.y, type, isElite, tacticalMeta));
@@ -8642,8 +8664,8 @@
             } else if (conduitSpawnTimer <= 0) {
                 conduitSpawnTimer = CONDUIT_RULES.interval;
                 if (conduitZones.length < CONDUIT_RULES.maxZones) {
-                    const cx = 110 + Math.random() * Math.max(100, worldWidth - 220);
-                    const cy = 110 + Math.random() * Math.max(100, worldHeight - 220);
+                    const cx = 110 + rng() * Math.max(100, worldWidth - 220);
+                    const cy = 110 + rng() * Math.max(100, worldHeight - 220);
                     conduitZones.push(new ConduitZone(cx, cy));
                 }
             }
@@ -9836,6 +9858,7 @@
 
         function startNewGame() {
             clearGameplayInput();
+            setRunSeed(playtestParams.seed ?? Math.random() * 4294967296);
             // A button in the modal that just closed keeps focus until the browser
             // re-renders; combat keys ignore focused buttons, so drop it now.
             const focused = document.activeElement;
@@ -10064,7 +10087,7 @@
         // Callers provide a new array, so the canonical upgrade pool keeps its order.
         function shuffleInPlace(items) {
             for (let i = items.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
+                const j = Math.floor(rng() * (i + 1));
                 [items[i], items[j]] = [items[j], items[i]];
             }
             return items;

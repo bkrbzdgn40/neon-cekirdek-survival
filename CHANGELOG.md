@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 3.0 · Tohumlu rastgelelik
+- `rng()` (mulberry32) ve `setRunSeed(n)` eklendi. Savaş, spawn, ganimet, görev ve yükseltme çekilişleri `rng()` kullanıyor; parçacık, sarsıntı, hasar yazısı titremesi ve menü demosu `Math.random`'da kaldı.
+- `?seed=N` her koşunun tohumunu sabitler; parametre yoksa her koşu yeni bir tohumla başlar (`runSeed`).
+- Smoke: aynı tohum + aynı girdi → aynı ilk 3 yükseltme ve aynı ilk 20 spawn. Rastgeleliği sabitleyen eski testler artık `rng`'yi sahteliyor.
+
 ## Odak 2.7 · Cihaz turu ve karar
 - Gerçek cihaz turu TECNO CK6n üzerinde yapıldı; sonuçlar `docs/DEVICE_QA.md`'de, düzeltmeler 2.7a–2.7e.
 - Karar: masaüstü öncelikli. Mobil ileride telefona özel ekranlar, yalnızca yatay oyun ve tam ekran paketle ayrıca ele alınacak; Faz 3'te mobil tasarım işi yok.
