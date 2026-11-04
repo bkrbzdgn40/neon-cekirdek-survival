@@ -357,6 +357,142 @@ test('Odak 3.2 Toplayıcı adds 15 % XP per tier and its evolution pulls every o
   assert.deepEqual(x.far, [true, true]);
 });
 
+test('Odak 3.4 every new weapon pairs with a passive in a one-sentence synergy', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`JSON.stringify({ defs: SYNERGY_DEFS,
+    kinds: Object.fromEntries(UPGRADES_POOL.map(u => [u.id, u.kind])) })`));
+  assert.ok(x.defs.length >= 8);
+  for (const weapon of ['mine_trail', 'boomerang_disc', 'shock_ring']) {
+    assert.ok(x.defs.some(s => s.modules.includes(weapon) &&
+      s.modules.some(id => x.kinds[id] === 'passive')), 'no passive pair for ' + weapon);
+  }
+  for (const s of x.defs) {
+    assert.equal(s.modules.length, 2);
+    assert.ok(s.modules.every(id => x.kinds[id]), 'unknown module in ' + s.id);
+    assert.equal((s.desc.match(/\./g) || []).length, 1, 'one sentence: ' + s.id);
+  }
+  assert.equal(new Set(x.defs.map(s => s.id)).size, x.defs.length);
+});
+
+test('Odak 3.4 a card that completes a synergy shows it on the card', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    player.upgradeCounts = { mine_trail: 2, kinetic_magnet: 1 };
+    const box = document.getElementById('upgradeCardsContainer'), cards = [];
+    box.appendChild = c => cards.push(c);
+    const saved = shuffleInPlace;
+    shuffleInPlace = items => items.sort((a, b) => (b.id === 'kinetic_magnet') - (a.id === 'kinetic_magnet'));
+    try { populateUpgradeCards(); } finally { shuffleInPlace = saved; }
+    const kinetic = cards[currentUpgradeChoices.findIndex(c => c.upg.id === 'kinetic_magnet')];
+    gameState = 'LEVEL_UP';
+    currentUpgradeChoices = [{ upg: UPGRADES_POOL.find(u => u.id === 'kinetic_magnet'), rarity: RARITIES[0] }];
+    selectUpgradeOption(0);
+    return JSON.stringify({ markup: kinetic?.innerHTML || '', active: player.synergies.has('mine_launcher') });
+  })()`));
+  assert.match(x.markup, /YENİ SİNERJİ:<\/strong> Mayın Fırlatıcı · Atılım bittiği yere üç mayın bırakır\./);
+  assert.equal(x.active, true);
+});
+
+test('Odak 3.4 Mayın Fırlatıcı drops three mines where a dash ends', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    const dashEnd = () => { player.isDashing = true; player.dashTimer = 0.001; player.update(1 / 60); };
+    player.upgradeCounts = { mine_trail: 2, kinetic_magnet: 1 }; player.refreshBuildTraits();
+    dashEnd();
+    const without = trailMines.length;
+    player.upgradeCounts.kinetic_magnet = 2; player.refreshBuildTraits();
+    dashEnd();
+    return JSON.stringify({ without, mines: trailMines.map(m => Math.round(Math.hypot(m.x - player.x, m.y - player.y))),
+      drops: player.buildStats.launcherDrops });
+  })()`));
+  assert.equal(x.without, 0);
+  assert.deepEqual(x.mines, [34, 34, 34]);
+  assert.equal(x.drops, 3);
+});
+
+test('Odak 3.4 Sekme Disk bounces once to the nearest enemy before returning', () => {
+  const { run } = setup();
+  const trace = synergy => JSON.parse(run(`(() => {
+    startNewGame();
+    enemies = []; nextBossTime = 9999;
+    player.x = 300; player.y = 400; player.dashDir = { x: 1, y: 0 };
+    player.upgradeCounts = { boomerang_disc: 2, pierce_ricochet: ${synergy ? 2 : 1} }; player.refreshBuildTraits();
+    const side = new Enemy(600, 540, 'TANK'); side.hp = side.maxHp = 5000; enemies.push(side);
+    updateBoomerangDiscs(1 / 60);
+    let bounced = false, maxY = 400;
+    for (let f = 0; f < 240 && boomerangDiscs.length; f++) {
+      totalTime += 1 / 60; player.boomerangReadyAt = 1e9; updateBoomerangDiscs(1 / 60);
+      const d = boomerangDiscs[0]; if (d) maxY = Math.max(maxY, d.y);
+    }
+    return JSON.stringify({ hp: side.hp, maxY: Math.round(maxY), ricochets: player.buildStats.discRicochets,
+      caught: player.buildStats.discCatches });
+  })()`));
+  const off = trace(false), on = trace(true);
+  assert.equal(off.hp, 5000);
+  assert.equal(off.ricochets, 0);
+  assert.equal(on.ricochets, 1);
+  assert.ok(on.hp < 5000, 'bounce reaches the side enemy');
+  assert.ok(on.maxY > 480, 'disc leaves its straight line: ' + on.maxY);
+  assert.equal(on.caught, 1);
+});
+
+test('Odak 3.4 Şok Kalkanı fires a ring when the shield breaks', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    const breakShield = () => { player.hasShield = true; player.shieldActive = true; player.invulnTimer = 0; player.takeDamage(10); };
+    player.upgradeCounts = { shock_ring: 2, aegis_shield: 1 }; player.refreshBuildTraits();
+    player.shockReadyAt = 1e9;
+    breakShield();
+    const without = shockRings.length;
+    player.upgradeCounts.aegis_shield = 2; player.refreshBuildTraits();
+    breakShield();
+    return JSON.stringify({ without, rings: shockRings.length, stat: player.buildStats.shieldShocks,
+      hp: player.hp, max: player.maxHp });
+  })()`));
+  assert.equal(x.without, 0);
+  assert.equal(x.rings, 1);
+  assert.equal(x.stat, 1);
+  assert.equal(x.hp, x.max, 'the shield still blocks the hit');
+});
+
+test('Odak 3.4 Hasat Uyduları pull XP orbs an orbital touches, never gold', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    player.upgradeCounts = { orbital: 2, collector: 2 }; player.orbitals = 1; player.refreshBuildTraits();
+    const s = player.getOrbitalPositions()[0];
+    orbs = [new EnergyOrb(s.x + 4, s.y, 5), new EnergyOrb(s.x - 4, s.y, 5, true), new EnergyOrb(player.x + 700, player.y, 5)];
+    const pulled = harvestOrbsWithSatellites(player);
+    const flags = orbs.map(o => o.magnetized);
+    player.upgradeCounts.collector = 1; player.refreshBuildTraits();
+    orbs = [new EnergyOrb(s.x + 4, s.y, 5)];
+    return JSON.stringify({ pulled, flags, off: harvestOrbsWithSatellites(player) });
+  })()`));
+  assert.equal(x.pulled, 1);
+  assert.deepEqual(x.flags, [true, false, false]);
+  assert.equal(x.off, 0);
+});
+
+test('Odak 3.4 Buzlu Disk refunds dash cooldown on each catch', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    enemies = [];
+    player.dashDir = { x: 1, y: 0 };
+    player.upgradeCounts = { boomerang_disc: 2, coolant: 2 }; player.refreshBuildTraits();
+    updateBoomerangDiscs(1 / 60);
+    player.dashCooldown = 2;
+    let frames = 0;
+    while (boomerangDiscs.length && frames < 300) { totalTime += 1 / 60; frames++; player.boomerangReadyAt = 1e9; updateBoomerangDiscs(1 / 60); }
+    return JSON.stringify({ dash: +player.dashCooldown.toFixed(2), refunds: player.buildStats.cryoDashRefunds });
+  })()`));
+  assert.equal(x.dash, 1.5);
+  assert.equal(x.refunds, 1);
+});
+
 test('Odak 3.2 upgrade pool matches the shared id list', () => {
   const ids = JSON.parse(setup().run('JSON.stringify(UPGRADES_POOL.map(u => u.id))'));
   assert.deepEqual([...ids].sort(), [...UPGRADE_IDS].sort());
@@ -1179,7 +1315,10 @@ test('M3.1 five original evolutions remain among expanded twelve, with four reci
   for(const id of ['multishot','homing','lightning','orbital','pierce_ricochet']) {
     assert.ok(info.evolutions.includes(id));
   }
-  assert.equal(info.synergies.length,4);
+  // Odak 3.4: the four original recipes stay, five weapon/passive pairs join them.
+  assert.equal(info.synergies.length,9);
+  for(const id of ['swarm_guidance','ionic_guidance','orbital_aegis','prism_optics'])
+    assert.ok(info.synergies.some(s=>s.id===id));
   for(const id of info.evolutions) assert.ok(info.upgrades.includes(id));
   for(const s of info.synergies) {
     assert.equal(s.modules.length,2);
