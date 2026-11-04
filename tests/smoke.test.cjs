@@ -8,7 +8,7 @@ const { setup, html, pageHtml, gameCss, gameCode } = require('./harness.cjs');
 // Odak 3.2 · one list for pool-size checks; a new upgrade is added here once.
 const UPGRADE_IDS = ['circuit_weaver', 'mine_trail', 'phase_echo', 'multishot', 'firerate', 'orbital',
   'pierce_ricochet', 'homing', 'lightning', 'overdrive_boost', 'crit_mastery', 'vampiric',
-  'aegis_shield', 'kinetic_magnet', 'boomerang_disc', 'shock_ring'];
+  'aegis_shield', 'kinetic_magnet', 'boomerang_disc', 'shock_ring', 'coolant', 'collector'];
 
 test('Odak 3.2 Mayın İzi tier rules, card and evolution are wired', () => {
   const { run } = setup();
@@ -277,6 +277,84 @@ test('Odak 3.2 Şok Halkası evolution adds a delayed half-strength aftershock',
   assert.ok(Math.abs(x.hits[1] - x.hits[0] / 2) <= 1, 'aftershock is half: ' + x.hits);
   assert.equal(x.capped, 3);
   assert.equal(x.after, 1);
+});
+
+test('Odak 3.2 pool holds 8 weapons (plasma + 7 slotted) and 10 passives', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`JSON.stringify({
+    slotted: UPGRADES_POOL.filter(u => u.kind === 'weapon' && !u.upgradeOf).length,
+    passive: UPGRADES_POOL.filter(u => u.kind === 'passive').length })`));
+  assert.deepEqual(x, { slotted: 7, passive: 10 });
+});
+
+test('Odak 3.2 Soğutucu cuts ability maxima and weapon/Prism cooldowns by 10 % per tier', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    const base = { dash: player.dashMaxCooldown, nova: player.novaMaxCooldown, shield: player.shieldMaxCooldown,
+      prism: getPrismCooldown() };
+    const coolant = UPGRADES_POOL.find(u => u.id === 'coolant');
+    const tiers = [];
+    for (let i = 0; i < 3; i++) {
+      gameState = 'LEVEL_UP'; currentUpgradeChoices = [{ upg: coolant, rarity: RARITIES[3] }]; selectUpgradeOption(0);
+      tiers.push({ mult: +getCooldownMult().toFixed(4), dash: player.dashMaxCooldown, prism: getPrismCooldown() });
+    }
+    player.upgradeCounts.shock_ring = 1;
+    player.shockReadyAt = 0; updateShockRings();
+    const shockWait = player.shockReadyAt - totalTime;
+    return JSON.stringify({ base, tiers, nova: player.novaMaxCooldown, shield: player.shieldMaxCooldown,
+      shockWait: +shockWait.toFixed(4), label: getUpgradeCardPresentation(coolant, RARITIES[0], 0).label });
+  })()`));
+  assert.deepEqual(x.tiers.map(t => t.mult), [0.9, 0.81, 0.729]);
+  assert.ok(Math.abs(x.tiers[2].dash - Math.max(0.8, x.base.dash * 0.729)) < 1e-9);
+  assert.ok(Math.abs(x.tiers[2].prism - x.base.prism * 0.729) < 1e-9);
+  assert.ok(Math.abs(x.nova - Math.max(4, x.base.nova * 0.729)) < 1e-9);
+  assert.ok(Math.abs(x.shield - Math.max(4, x.base.shield * 0.729)) < 1e-9);
+  assert.equal(x.shockWait, +(3.2 * 0.729).toFixed(4));
+  assert.equal(x.label, 'SİSTEM MODÜLÜ');
+});
+
+test('Odak 3.2 Soğutucu evolution trims EMP and Prism on every dash end', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    player.upgradeCounts.coolant = 3; player.refreshBuildTraits();
+    player.novaCooldown = 5; prismGuardReadyAt = totalTime + 4;
+    player.isDashing = true; player.dashTimer = 0.001;
+    player.update(1 / 60);
+    return JSON.stringify({ evo: player.evolutions.has('coolant'), dashing: player.isDashing,
+      nova: +player.novaCooldown.toFixed(2), prism: +(prismGuardReadyAt - totalTime).toFixed(2),
+      cycles: player.buildStats.cryoCycles });
+  })()`));
+  assert.equal(x.evo, true);
+  assert.equal(x.dashing, false);
+  assert.ok(x.nova <= 4.01 && x.nova >= 3.9, 'nova ' + x.nova);
+  assert.equal(x.prism, 3);
+  assert.equal(x.cycles, 1);
+});
+
+test('Odak 3.2 Toplayıcı adds 15 % XP per tier and its evolution pulls every orb', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    const pick = () => { player.xp = 0; player.xpToNext = 1e9; const o = new EnergyOrb(player.x, player.y, 20); o.update(1 / 60); return +player.xp.toFixed(4); };
+    const gains = [pick()];
+    for (let t = 1; t <= 3; t++) { player.upgradeCounts.collector = t; gains.push(pick()); }
+    player.refreshBuildTraits();
+    orbs = [new EnergyOrb(player.x + 600, player.y, 5), new EnergyOrb(player.x - 600, player.y, 5)];
+    const pulls = [];
+    for (let i = 0; i < 80; i++) {
+      const o = new EnergyOrb(player.x, player.y, 1); o.update(1 / 60);
+      if (player.buildStats.harvestPulls > pulls.length) pulls.push(i + 1);
+    }
+    return JSON.stringify({ gains, mult: player.xpMultiplier, pulls, far: orbs.map(o => o.magnetized),
+      evo: player.evolutions.has('collector') });
+  })()`));
+  const m = x.mult;
+  assert.deepEqual(x.gains, [20, 23, 26, 29].map(v => +(v * m).toFixed(4)));
+  assert.equal(x.evo, true);
+  assert.deepEqual(x.pulls, [40, 80]);
+  assert.deepEqual(x.far, [true, true]);
 });
 
 test('Odak 3.2 upgrade pool matches the shared id list', () => {
@@ -2565,8 +2643,8 @@ test('Odak 3.1 every upgrade has a kind; plasma holds weapon slot 1 and multisho
     ['boomerang_disc', 'circuit_weaver', 'homing', 'lightning', 'mine_trail', 'multishot', 'orbital',
       'shock_ring']);
   assert.deepEqual(Object.keys(x.kinds).filter(id => x.kinds[id] === 'passive').sort(),
-    ['aegis_shield', 'crit_mastery', 'firerate', 'kinetic_magnet', 'overdrive_boost',
-      'phase_echo', 'pierce_ricochet', 'vampiric']);
+    ['aegis_shield', 'collector', 'coolant', 'crit_mastery', 'firerate', 'kinetic_magnet',
+      'overdrive_boost', 'phase_echo', 'pierce_ricochet', 'vampiric']);
   assert.deepEqual(x.limits, { weapon: 4, passive: 5 });
   assert.deepEqual(x.empty, { weapon: ['plasma'], passive: [] });
   assert.deepEqual(x.slots, { weapon: ['plasma', 'homing'], passive: ['vampiric'] });

@@ -1376,7 +1376,9 @@
                     circuitClosures: 0, circuitPulseHits: 0, circuitCrossings: 0,
                     mineDrops: 0, mineBlasts: 0, mineHits: 0, mineChains: 0,
                     discThrows: 0, discHits: 0, discCatches: 0,
-                    shockRings: 0, shockHits: 0, shockAftershocks: 0 };
+                    shockRings: 0, shockHits: 0, shockAftershocks: 0,
+                    cryoCycles: 0, harvestPulls: 0 };
+                this.collectorOrbs = 0;
                 this.shockReadyAt = 0;
                 this.shockDamageBonus = 1;
                 this.boomerangReadyAt = 0;
@@ -1488,6 +1490,7 @@
 
                     if (this.dashTimer <= 0) {
                         this.isDashing = false;
+                        applyCryoCycle(this);
                         deployPhaseEcho(this, this.phaseEchoOrigin);
                         this.phaseEchoOrigin = null;
                         if (this.evolutions.has('kinetic_magnet') && totalTime >= this.kineticVortexReadyAt) {
@@ -3546,7 +3549,8 @@
                         audio.playOrbPickup(combo, true);
                         createFloatingText(this.x, this.y - 12, `+${goldAmt} ALTIN`, '#ffe600', 14);
                     } else {
-                        player.gainXp(this.value);
+                        player.gainXp(this.value * getCollectorXpMult(player));
+                        recordCollectorOrbs(player, this.count);
                         advanceOrbQuestStacks(this.count);
                         audio.playOrbPickup(combo, false);
                     }
@@ -3817,7 +3821,9 @@
             pierce_ricochet: { name: 'Prizma Rotası', desc: 'Sekmeler güçlenir ve yakın hedefe yön değiştirebilir.' },
             mine_trail: { name: 'Zincir Mayın', desc: 'Patlayan mayın 150 px içindeki diğer mayınları da patlatır; bir ek mayın taşınır.' },
             boomerang_disc: { name: 'Ayna Disk', desc: 'Her atışta ikinci bir disk ters yöne fırlar; iki disk de dönüşte vurur.' },
-            shock_ring: { name: 'Artçı Şok', desc: 'Her halkanın ardından 0,35 sn sonra yarı hasarlı ikinci bir halka yayılır.' }
+            shock_ring: { name: 'Artçı Şok', desc: 'Her halkanın ardından 0,35 sn sonra yarı hasarlı ikinci bir halka yayılır.' },
+            coolant: { name: 'Kriyo Döngü', desc: 'Her Atılım bitişinde EMP Nova ve Prizma beklemesi 1 sn kısalır.' },
+            collector: { name: 'Hasat Dalgası', desc: 'Her 40 XP küresinde ekrandaki bütün küreler sana çekilir.' }
         });
         const SYNERGY_DEFS = Object.freeze([
             { id: 'swarm_guidance', name: 'Sürü Protokolü', modules: ['multishot', 'homing'],
@@ -3986,6 +3992,28 @@
                 getDesc: (r) => 'Çekirdekten düzenli aralıkla genişleyen bir şok halkası yayar; merkeze yakın düşmanlar çok daha fazla hasar alır. Kalabalığın içine dal.' +
                     (r.mult > 1 ? ` Halka hasarı +%${Math.round(15 * (r.mult - 1))}.` : ''),
                 apply: (p, r) => { p.shockDamageBonus *= 1 + 0.15 * (r.mult - 1); }
+            },
+            {
+                id: 'coolant',
+                kind: 'passive',
+                name: 'Soğutucu',
+                icon: 'fa-solid fa-snowflake',
+                color: '#7dd3fc',
+                getDesc: () => 'Tüm bekleme sürelerini %10 kısaltır: Atılım, EMP, kalkan, Prizma ve zamanlı silahlar (disk, halka, devre, yankı).',
+                apply: (p) => {
+                    p.dashMaxCooldown = Math.max(COOLANT_RULES.dashMin, p.dashMaxCooldown * COOLANT_RULES.perTier);
+                    p.novaMaxCooldown = Math.max(COOLANT_RULES.novaMin, p.novaMaxCooldown * COOLANT_RULES.perTier);
+                    p.shieldMaxCooldown = Math.max(COOLANT_RULES.shieldMin, p.shieldMaxCooldown * COOLANT_RULES.perTier);
+                }
+            },
+            {
+                id: 'collector',
+                kind: 'passive',
+                name: 'Toplayıcı',
+                icon: 'fa-solid fa-seedling',
+                color: '#86efac',
+                getDesc: () => 'Her XP küresi %15 daha fazla deneyim verir. Kademeler toplanır: 3. kademede +%45.',
+                apply: () => { /* XP bonus reads upgradeCounts.collector at pickup. */ }
             },
             {
                 id: 'phase_echo',
@@ -5230,7 +5258,7 @@
             }
             p.buildStats.circuitClosures++;
             p.buildStats.circuitPulseHits += impacted.length;
-            p.circuitReadyAt = totalTime + CIRCUIT_WEAVER.cooldown[tier];
+            p.circuitReadyAt = totalTime + CIRCUIT_WEAVER.cooldown[tier] * getCooldownMult(p);
             // Preserve immutable point snapshots for effects and the live wire.
             const closed = points.map(point => ({x: point.x, y: point.y}));
             circuitFlash = { points: closed, expiresAt: totalTime + .75,
@@ -5575,7 +5603,7 @@
                 const dir = player.dashDir || { x: 1, y: 0 };
                 throwBoomerangDisc(player, dir.x, dir.y);
                 if (player.evolutions.has('boomerang_disc')) throwBoomerangDisc(player, -dir.x, -dir.y);
-                player.boomerangReadyAt = totalTime + rules.cooldown[tier];
+                player.boomerangReadyAt = totalTime + rules.cooldown[tier] * getCooldownMult(player);
                 audio.playWeaponFire('disc', false);
             }
             for (const disc of boomerangDiscs) {
@@ -5663,6 +5691,41 @@
             aftershockDelay: .35, aftershockScale: .5
         });
         const MAX_SHOCK_RINGS = 3;
+
+        // Odak 3.2 · passives. Coolant (Soğutucu) shortens every cooldown by
+        // 10 % per tier (compounding); Collector (Toplayıcı) adds 15 % XP per
+        // orb per tier. Dash/EMP/shield maxima change in apply(); timed weapons,
+        // Prism and Phase Echo read getCooldownMult() when they start a cooldown.
+        const COOLANT_RULES = Object.freeze({ perTier: .9, dashMin: .8, novaMin: 4, shieldMin: 4, cryoRefund: 1 });
+        const COLLECTOR_RULES = Object.freeze({ perTier: .15, harvestEvery: 40 });
+        function getCooldownMult(p = player) {
+            return Math.pow(COOLANT_RULES.perTier, Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.coolant || 0));
+        }
+        function getPrismCooldown() {
+            return PRISM_RULES.cooldown * getCooldownMult(player);
+        }
+        function applyCryoCycle(p) {
+            if (!p.evolutions.has('coolant')) return false;
+            p.novaCooldown = Math.max(0, p.novaCooldown - COOLANT_RULES.cryoRefund);
+            if (prismGuardReadyAt > totalTime) {
+                prismGuardReadyAt = Math.max(totalTime, prismGuardReadyAt - COOLANT_RULES.cryoRefund);
+            }
+            p.buildStats.cryoCycles++;
+            return true;
+        }
+        function getCollectorXpMult(p = player) {
+            return 1 + COLLECTOR_RULES.perTier * Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.collector || 0);
+        }
+        function recordCollectorOrbs(p, count = 1) {
+            if (!p.evolutions.has('collector')) return false;
+            const before = Math.floor(p.collectorOrbs / COLLECTOR_RULES.harvestEvery);
+            p.collectorOrbs += count;
+            if (Math.floor(p.collectorOrbs / COLLECTOR_RULES.harvestEvery) === before) return false;
+            for (const orb of orbs) if (!orb.dead) orb.magnetized = true;
+            p.buildStats.harvestPulls++;
+            createFloatingText(p.x, p.y - 34, 'HASAT DALGASI', '#86efac', 14);
+            return true;
+        }
         let shockRings = [];
         function getShockRingTier(p = player) {
             return Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.shock_ring || 0);
@@ -5689,7 +5752,7 @@
             }
             const rules = SHOCK_RING_RULES;
             if (gameState === 'PLAYING' && totalTime >= player.shockReadyAt) {
-                player.shockReadyAt = totalTime + rules.interval[tier];
+                player.shockReadyAt = totalTime + rules.interval[tier] * getCooldownMult(player);
                 if (emitShockRing(player)) {
                     player.buildStats.shockRings++;
                     audio.playWeaponFire('shock', false);
@@ -5780,7 +5843,7 @@
                 .slice(0, PHASE_ECHO.maxTargets);
             // Nothing to misdirect? Do not consume a charge for an empty cast.
             if (!eligible.length) return false;
-            p.phaseEchoReadyAt = totalTime + PHASE_ECHO.cooldowns[tier];
+            p.phaseEchoReadyAt = totalTime + PHASE_ECHO.cooldowns[tier] * getCooldownMult(p);
             // 1 or 2 simultaneous echoes, depending on evolution status.
             const cap = p.evolutions.has('phase_echo') ? PHASE_ECHO.maxDecoys : 1;
             while (phaseEchoes.length >= cap) phaseEchoes.shift();
@@ -7671,7 +7734,7 @@
             prismGuardX=dir.x;prismGuardY=dir.y;
             prismGuardStartedAt=totalTime;
             prismGuardUntil=totalTime+PRISM_RULES.duration;
-            prismGuardReadyAt=totalTime+PRISM_RULES.cooldown;
+            prismGuardReadyAt=totalTime+getPrismCooldown();
             prismGuardDeflections=0;prismGuardPerfect=false;
             prismStats.activations++;
             shockwaves.push(new Shockwave(player.x,player.y,
@@ -7777,7 +7840,7 @@
             const overlay=document.getElementById('prismCooldownOverlay');
             if(!button||!status||!overlay||!player)return;
             const ready=Math.max(0,prismGuardReadyAt-totalTime);
-            setCooldownOverlay(overlay,ready/PRISM_RULES.cooldown*100);
+            setCooldownOverlay(overlay,ready/getPrismCooldown()*100);
             const active=prismActive();
             status.textContent=active?
                 'KARŞILA '+(PRISM_RULES.maxDeflections-prismGuardDeflections):
