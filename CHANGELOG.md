@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 3.3 · DPS ve hayatta kalma simülasyonu
+- Smoke testinin VM düzeneği `tests/harness.cjs`'e taşındı (görünüm boyutu ve süre sınırı seçenekleriyle); smoke testi ve simülasyon onu kullanıyor.
+- `node scripts/sim-dps.cjs [--seeds=5] [--seconds=30] [--only=id,id]`: sabit tohum, dalga 6, plazma + tek silah, 120 px dairede dönen bot. Silah × kademe için DPS, plazmaya eklenen DPS, öldürme ve alınan hasar; tablo stdout'a, ham veri `sim-results.json`'a (git dışı). CI'da çalışmaz.
+- İlk ölçüm: mevcut silahlar ±%25 bandının dışında (Plazma Uydusu K1'de medyanın ~5 katı). Yeni silahlar kademe medyanına göre ayarlanacak.
+
 ## Odak 3.1 · Silah / pasif ayrımı ve slot sınırı
 - Her yükseltmenin `kind` alanı var: 5 silah (Çatallı Plazma plazmanın yükseltmesi, yuva harcamaz), 8 pasif. Plazma 1. silah yuvasını kalıcı tutar; sınır 4 silah, 5 pasif (`BUILD_SLOT_LIMITS`). Tür doluysa yalnızca sahip olunan, kademesi < 3 kartlar gelir.
 - Yükseltme ekranında ince yuva satırı (dolu yuva ikon, boş yuva çerçeve); kart etiketi `kind`'a bağlı (Faz Yankısı artık SİSTEM MODÜLÜ).
