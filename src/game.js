@@ -1020,6 +1020,7 @@
         let slowMoTimer = 0;
         let bannerHideTimer = 0;
         let rerollCost = 15;
+        let upgradeSkipsLeft = 2; // Odak 3.1 · reset from UPGRADE_SKIP_RULES each run
         let dyingSequenceTimer = 0;
         let reviveCountUsed = 0;
         let paidRevivesUsed = 0;
@@ -3808,6 +3809,43 @@
         ]);
 
         const MAX_MODULE_TIER = 3;
+        // Odak 3.1 · build slots. Plasma permanently holds weapon slot 1; a
+        // weapon card marked upgradeOf (multishot) improves it without a slot.
+        const BUILD_SLOT_LIMITS = Object.freeze({ weapon: 4, passive: 5 });
+        const BASE_WEAPON = Object.freeze({ id: 'plasma', name: 'Plazma Topu',
+            icon: 'fa-solid fa-circle-dot', color: '#00f3ff' });
+        // Free "skip" on the level-up screen: twice per run, refunds 15 % of the next bar.
+        const UPGRADE_SKIP_RULES = Object.freeze({ usesPerRun: 2, xpRefund: 0.15 });
+        function getBuildSlots(p) {
+            const slots = { weapon: [BASE_WEAPON.id], passive: [] };
+            for (const [id, tier] of Object.entries(p?.upgradeCounts || {})) {
+                const upgrade = tier > 0 ? UPGRADES_POOL.find(u => u.id === id) : null;
+                if (upgrade && !upgrade.upgradeOf) slots[upgrade.kind].push(id);
+            }
+            return slots;
+        }
+        function isUpgradeOfferable(upgrade, p, slots = getBuildSlots(p)) {
+            const tier = p.upgradeCounts[upgrade.id] || 0;
+            if (!isUpgradeAvailable(upgrade) || tier >= MAX_MODULE_TIER) return false;
+            if (tier > 0 || upgrade.upgradeOf) return true;
+            return slots[upgrade.kind].length < BUILD_SLOT_LIMITS[upgrade.kind];
+        }
+        function renderUpgradeSlotRow(p) {
+            const slots = getBuildSlots(p);
+            const group = (kind, label) => {
+                const ids = slots[kind], limit = BUILD_SLOT_LIMITS[kind];
+                const cells = Array.from({ length: limit }, (_, i) => {
+                    const item = ids[i] === BASE_WEAPON.id ? BASE_WEAPON :
+                        UPGRADES_POOL.find(u => u.id === ids[i]);
+                    return item ?
+                        `<span class="upgrade-slot filled" title="${item.name}" style="--slot-color:${item.color}"><i class="${item.icon}" aria-hidden="true"></i></span>` :
+                        '<span class="upgrade-slot" aria-hidden="true"></span>';
+                }).join('');
+                return `<span class="upgrade-slot-group" data-kind="${kind}" aria-label="${label} yuvası ${Math.min(ids.length, limit)} / ${limit}">` +
+                    `<span class="upgrade-slot-label">${label}</span>${cells}</span>`;
+            };
+            return group('weapon', 'SİLAH') + group('passive', 'PASİF');
+        }
         function normalizePlayerBuildPower(p) {
             // Class bonuses survive, while repeated high-rarity cards cannot grow without bound.
             p.damage = Math.min(p.damage, 240);
@@ -3887,6 +3925,7 @@
         const UPGRADES_POOL = [
             {
                 id: 'circuit_weaver',
+                kind: 'weapon',
                 name: 'Devre Dokuyucu',
                 icon: 'fa-solid fa-draw-polygon',
                 color: '#ffe66d',
@@ -3895,6 +3934,7 @@
             },
             {
                 id: 'phase_echo',
+                kind: 'passive',
                 requires: 'dash',
                 name: 'Faz Yankısı',
                 icon: 'fa-solid fa-clone',
@@ -3904,6 +3944,8 @@
             },
             {
                 id: 'multishot',
+                kind: 'weapon',
+                upgradeOf: 'plasma',
                 name: 'Çatallı Plazma',
                 icon: 'fa-solid fa-burst',
                 color: '#00f3ff',
@@ -3915,6 +3957,7 @@
             },
             {
                 id: 'firerate',
+                kind: 'passive',
                 name: 'Hiper-Reaktör',
                 icon: 'fa-solid fa-gauge-high',
                 color: '#ff007f',
@@ -3926,6 +3969,7 @@
             },
             {
                 id: 'orbital',
+                kind: 'weapon',
                 name: 'Plazma Uydusu',
                 icon: 'fa-solid fa-satellite',
                 color: '#ffe600',
@@ -3937,6 +3981,7 @@
             },
             {
                 id: 'pierce_ricochet',
+                kind: 'passive',
                 name: 'Kuantum Sekme',
                 icon: 'fa-solid fa-arrows-split-up-and-left',
                 color: '#b000ff',
@@ -3949,6 +3994,7 @@
             },
             {
                 id: 'homing',
+                kind: 'weapon',
                 name: 'Güdümlü Mikro-Füze',
                 icon: 'fa-solid fa-rocket',
                 color: '#00ff66',
@@ -3959,6 +4005,7 @@
             },
             {
                 id: 'lightning',
+                kind: 'weapon',
                 name: 'Zincirleme Yıldırım',
                 icon: 'fa-solid fa-bolt-lightning',
                 color: '#ffe600',
@@ -3969,6 +4016,7 @@
             },
             {
                 id: 'overdrive_boost',
+                kind: 'passive',
                 requires: 'overdrive',
                 name: 'Siber Cinnet Çip Ekstresi',
                 icon: 'fa-solid fa-fire-flame-curved',
@@ -3982,6 +4030,7 @@
             },
             {
                 id: 'crit_mastery',
+                kind: 'passive',
                 name: 'Kuantum Optik Nişangah',
                 icon: 'fa-solid fa-crosshairs',
                 color: '#38bdf8',
@@ -3993,6 +4042,7 @@
             },
             {
                 id: 'vampiric',
+                kind: 'passive',
                 name: 'Vampirik Zırh',
                 icon: 'fa-solid fa-heart-pulse',
                 color: '#00ff88',
@@ -4006,6 +4056,7 @@
             },
             {
                 id: 'aegis_shield',
+                kind: 'passive',
                 name: 'Aegis Enerji Kalkanı',
                 icon: 'fa-solid fa-shield-halved',
                 color: '#00f3ff',
@@ -4018,6 +4069,7 @@
             },
             {
                 id: 'kinetic_magnet',
+                kind: 'passive',
                 name: 'Kinetik Türbin & Vakum',
                 icon: 'fa-solid fa-magnet',
                 color: '#38bdf8',
@@ -9925,6 +9977,7 @@
             hitStopTimer = 0;
             slowMoTimer = 0;
             rerollCost = 15;
+            upgradeSkipsLeft = UPGRADE_SKIP_RULES.usesPerRun;
             dyingSequenceTimer = 0;
             reviveCountUsed = 0;
             paidRevivesUsed = 0;
@@ -9990,7 +10043,7 @@
             const nextLvl = currentLvl + 1;
             const newlyUnlockedSynergies = newSynergiesForUpgrade(player.upgradeCounts, upg.id);
 
-            if (currentLvl >= MAX_MODULE_TIER) return;
+            if (currentLvl >= MAX_MODULE_TIER || !isUpgradeOfferable(upg, player)) return;
             upg.apply(player, rarity);
             player.upgradeCounts[upg.id] = nextLvl;
             normalizePlayerBuildPower(player);
@@ -10005,9 +10058,7 @@
                 showDopamineBanner(`★ SİNERJİ: ${newlyUnlockedSynergies.map(s => s.name.toUpperCase()).join(' + ')} ★`, '#00f3ff');
             }
 
-            document.getElementById('upgradeModal').classList.add('hidden');
-            document.getElementById('upgradeModal').classList.remove('flex');
-            gameState = 'PLAYING';
+            closeUpgradeModal();
             const isEvolutionReward = nextLvl === MAX_MODULE_TIER && !!EVOLUTION_DEFS[upg.id];
             shockwaves.push(new Shockwave(player.x, player.y, 170,
                 isEvolutionReward && rarity.id !== 'LEGENDARY' ? '#ab83ff' : rarity.border, 0.4));
@@ -10019,16 +10070,31 @@
             if (player.xp >= player.xpToNext) player.gainXp(0);
         }
 
+        function closeUpgradeModal() {
+            document.getElementById('upgradeModal').classList.add('hidden');
+            document.getElementById('upgradeModal').classList.remove('flex');
+            gameState = 'PLAYING';
+        }
+
+        // Odak 3.1 · skip the choice: no card, a small XP refund, twice per run.
+        function skipUpgradeChoice() {
+            if (gameState !== 'LEVEL_UP' || upgradeSkipsLeft <= 0) return false;
+            upgradeSkipsLeft--;
+            const refund = Math.round(player.xpToNext * UPGRADE_SKIP_RULES.xpRefund);
+            closeUpgradeModal();
+            createFloatingText(player.x, player.y - 30, `ATLANDI · +${refund} XP`, '#cbd5e1', 15);
+            updateHUD();
+            player.xp += refund;
+            if (player.xp >= player.xpToNext) player.gainXp(0);
+            return true;
+        }
+
 
         // Visual role (evolution, weapon, module) and rarity are independent axes.
-        // No extra item rolls, unlock conditions, or power calculations.
-        const WEAPON_UPGRADE_IDS = new Set([
-            'multishot','firerate','orbital','pierce_ricochet',
-            'homing','lightning','crit_mastery','phase_echo','circuit_weaver'
-        ]);
+        // Odak 3.1: the weapon/module label follows the upgrade's kind.
         function getUpgradeCardPresentation(upg, rarity, currentLvl) {
             const willEvolve=currentLvl+1===MAX_MODULE_TIER && !!EVOLUTION_DEFS[upg.id];
-            const role=willEvolve?'evolution':WEAPON_UPGRADE_IDS.has(upg.id)?'weapon':'module';
+            const role=willEvolve?'evolution':upg.kind==='weapon'?'weapon':'module';
             const labels={evolution:'EVRİM EŞİĞİ',weapon:'SİLAH MODÜLÜ',module:'SİSTEM MODÜLÜ'};
             const icons={evolution:'fa-solid fa-atom',weapon:'fa-solid fa-crosshairs',module:'fa-solid fa-microchip'};
             return {role,label:labels[role],roleIcon:icons[role],willEvolve,
@@ -10098,8 +10164,8 @@
         }
 
         function populateUpgradeCards() {
-            const shuffled = shuffleInPlace(UPGRADES_POOL.filter(u => isUpgradeAvailable(u) &&
-                (player.upgradeCounts[u.id] || 0) < MAX_MODULE_TIER));
+            const slots = getBuildSlots(player);
+            const shuffled = shuffleInPlace(UPGRADES_POOL.filter(u => isUpgradeOfferable(u, player, slots)));
             // Keep one near-evolution module visible when possible without removing choice.
             const ready = shuffled.filter(u => (player.upgradeCounts[u.id] || 0) === 2 &&
                 EVOLUTION_DEFS[u.id]);
@@ -10126,6 +10192,14 @@
             document.getElementById('rerollCostText').textContent = rerollCost;
             rerollBtn.disabled = totalGold < rerollCost;
             rerollBtn.style.opacity = totalGold < rerollCost ? '0.45' : '1';
+            const slotRow = document.getElementById('upgradeSlotRow');
+            if (slotRow) slotRow.innerHTML = renderUpgradeSlotRow(player);
+            const skipBtn = document.getElementById('skipUpgradeBtn');
+            if (skipBtn) {
+                document.getElementById('skipUpgradeText').textContent = upgradeSkipsLeft;
+                skipBtn.disabled = upgradeSkipsLeft <= 0;
+                skipBtn.style.opacity = upgradeSkipsLeft <= 0 ? '0.45' : '1';
+            }
 
             choices.forEach((upg, idx) => {
                 const rarity = rollRarity();
@@ -10150,8 +10224,7 @@
         }
 
         function triggerLevelUp() {
-            if (UPGRADES_POOL.every(u => !isUpgradeAvailable(u) ||
-                (player.upgradeCounts[u.id] || 0) >= MAX_MODULE_TIER)) {
+            if (!UPGRADES_POOL.some(u => isUpgradeOfferable(u, player))) {
                 // Endless play stays playable after all module tiers; no empty choice modal.
                 player.hp = Math.min(player.maxHp, player.hp + 20);
                 player.addOverdrive(20);
@@ -10175,6 +10248,7 @@
             populateUpgradeCards();
             updateHUD();
         });
+        document.getElementById('skipUpgradeBtn').addEventListener('click', () => skipUpgradeChoice());
 
         function togglePause() {
             if (gameState === 'PLAYING') {
@@ -10980,6 +11054,9 @@
                 else if (e.code === 'KeyR') {
                     e.preventDefault();
                     document.getElementById('rerollUpgradesBtn').click();
+                } else if (e.code === 'KeyX') {
+                    e.preventDefault();
+                    document.getElementById('skipUpgradeBtn').click();
                 }
             } else if (gameState === 'REVIVE_PROMPT') {
                 if (e.code === 'Space' || e.code === 'Enter') {

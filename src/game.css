@@ -1124,11 +1124,19 @@
     font-size:13px;
     line-height:1.5;
 }
-#upgradeModal #rerollUpgradesBtn {
+#upgradeModal #rerollUpgradesBtn,
+#upgradeModal #skipUpgradeBtn {
     min-height:44px;
     font-size:13px;
     line-height:1.5;
 }
+/* Odak 3.1 · thin slot row: filled slots show the icon, empty ones a frame. */
+.upgrade-slot-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px 14px;}
+.upgrade-slot-group{display:inline-flex;align-items:center;gap:4px;}
+.upgrade-slot-label{font:700 11px/1 'Orbitron',sans-serif;letter-spacing:.06em;color:#94a3b8;margin-right:2px;}
+.upgrade-slot{width:24px;height:24px;border-radius:7px;border:1px dashed rgba(148,163,184,.55);display:inline-flex;align-items:center;justify-content:center;font-size:12px;}
+.upgrade-slot.filled{border:1px solid var(--slot-color,#67e8f9);color:var(--slot-color,#67e8f9);background:rgba(15,23,42,.9);box-shadow:0 0 6px color-mix(in srgb,var(--slot-color,#67e8f9) 45%,transparent);}
+.upgrade-slot-group[data-kind="weapon"] .upgrade-slot{border-radius:50%;}
 #upgradeCardsContainer .upgrade-card {
     display:flex;
     flex-direction:column;

@@ -343,7 +343,7 @@ adına göre yap ve listeyi PR açıklamasına yaz.
 dizisi → aynı ilk 3 yükseltme seçeneği ve aynı ilk 20 spawn.
 ```
 
-### - [ ] 3.1 Silah / pasif ayrımı ve slot sınırı
+### - [x] 3.1 Silah / pasif ayrımı ve slot sınırı
 
 ```
 UPGRADES_POOL öğelerine kind:'weapon'|'passive' alanı ekle.

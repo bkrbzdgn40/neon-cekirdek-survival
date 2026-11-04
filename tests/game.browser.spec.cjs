@@ -1405,3 +1405,36 @@ test('Odak 2.7e touch screens get touch wording instead of keyboard hints',async
  else expect(revive).toMatch(/BOŞLUK/);
  expect(errors).toEqual([]);
 });
+
+// Odak 3.1 · slot row and ATLA sit with the reroll button on every layout.
+test('Odak 3.1 slot row and skip button fit the upgrade screen and ATLA resumes play',async({page,isMobile})=>{
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await gotoGame(page,'/index.html');
+ await page.locator('#startBtn').click();
+ await page.evaluate(()=>{player.upgradeCounts={homing:1,firerate:1};triggerLevelUp();});
+ await expect(page.locator('#upgradeCardsContainer .upgrade-card')).toHaveCount(3);
+ const sizes=isMobile?[[412,839]]:[[1280,800],[1024,768],[360,740]];
+ for(const [width,height] of sizes){
+   if(!isMobile) await page.setViewportSize({width,height});
+   const m=await page.evaluate(()=>{
+     const modal=document.getElementById('upgradeModal');
+     const row=document.getElementById('upgradeSlotRow').getBoundingClientRect();
+     const skip=document.getElementById('skipUpgradeBtn').getBoundingClientRect();
+     return {overflow:modal.scrollWidth-modal.clientWidth,rowH:row.height,rowW:row.width,
+       slots:document.querySelectorAll('#upgradeSlotRow .upgrade-slot').length,
+       filled:document.querySelectorAll('#upgradeSlotRow .upgrade-slot.filled').length,
+       skipH:skip.height,skipW:skip.width};
+   });
+   expect(m.overflow,'overflow at '+width).toBeLessThanOrEqual(3);
+   expect(m.slots).toBe(9);
+   expect(m.filled).toBe(3);
+   expect(m.rowH,'slot row stays thin at '+width).toBeLessThanOrEqual(64);
+   expect(m.skipH).toBeGreaterThanOrEqual(44);
+   expect(m.skipW).toBeGreaterThanOrEqual(44);
+ }
+ await expect(page.locator('#skipUpgradeText')).toHaveText('2');
+ await page.locator('#skipUpgradeBtn').click();
+ await expect(page.locator('#upgradeModal')).toBeHidden();
+ await expect.poll(()=>page.evaluate(()=>[gameState,upgradeSkipsLeft])).toEqual(['PLAYING',1]);
+ expect(errors).toEqual([]);
+});

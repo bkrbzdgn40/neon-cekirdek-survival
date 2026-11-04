@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 3.1 · Silah / pasif ayrımı ve slot sınırı
+- Her yükseltmenin `kind` alanı var: 5 silah (Çatallı Plazma plazmanın yükseltmesi, yuva harcamaz), 8 pasif. Plazma 1. silah yuvasını kalıcı tutar; sınır 4 silah, 5 pasif (`BUILD_SLOT_LIMITS`). Tür doluysa yalnızca sahip olunan, kademesi < 3 kartlar gelir.
+- Yükseltme ekranında ince yuva satırı (dolu yuva ikon, boş yuva çerçeve); kart etiketi `kind`'a bağlı (Faz Yankısı artık SİSTEM MODÜLÜ).
+- ATLA: koşuda 2 kez, seçmeden devam ve sonraki barın %15'i kadar XP iadesi (`X` tuşu). Tuş akışını kaynak regex'iyle bakan testler davranış testine çevrildi.
+
 ## Odak 3.0 · Tohumlu rastgelelik
 - `rng()` (mulberry32) ve `setRunSeed(n)` eklendi. Savaş, spawn, ganimet, görev ve yükseltme çekilişleri `rng()` kullanıyor; parçacık, sarsıntı, hasar yazısı titremesi ve menü demosu `Math.random`'da kaldı.
 - `?seed=N` her koşunun tohumunu sabitler; parametre yoksa her koşu yeni bir tohumla başlar (`runSeed`).

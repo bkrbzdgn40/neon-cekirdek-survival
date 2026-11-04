@@ -527,10 +527,14 @@
                 <!-- Populated dynamically -->
             </div>
 
-            <!-- Reroll Button -->
-            <div class="mb-5 flex justify-center">
+            <!-- Odak 3.1 · slot row, reroll and skip -->
+            <div class="mb-5 flex flex-wrap items-center justify-center gap-3">
+                <div id="upgradeSlotRow" class="upgrade-slot-row" role="group" aria-label="Silah ve pasif yuvaları"></div>
                 <button id="rerollUpgradesBtn" type="button" class="cyber-btn px-4 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-cyan-400/65 font-cyber text-xs font-bold text-cyan-100 flex items-center gap-2 cursor-pointer">
                     <i class="fa-solid fa-dice text-cyan-300"></i> YENİDEN SEÇ<span class="key-hint"> · R</span> <span id="rerollCostText">15</span> <i class="fa-solid fa-coins"></i>
+                </button>
+                <button id="skipUpgradeBtn" type="button" class="cyber-btn px-4 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-slate-400/60 font-cyber text-xs font-bold text-slate-100 flex items-center gap-2 cursor-pointer" aria-label="Seçmeden devam et, yüzde 15 XP iadesi">
+                    <i class="fa-solid fa-forward text-slate-300" aria-hidden="true"></i> ATLA<span class="key-hint"> · X</span> <span id="skipUpgradeText">2</span> · +%15 XP
                 </button>
             </div>
 
