@@ -10781,7 +10781,10 @@
         function resizeCanvas() {
             canvasRenderInvalidated = true;
             const w = document.documentElement.clientWidth || window.innerWidth;
-            const h = document.documentElement.clientHeight || window.innerHeight;
+            // Odak 2.7c · Android Chrome keeps clientHeight at the size with the
+            // address bar shown; innerHeight grows when the bar hides (landscape:
+            // 280 vs 336 px). The taller one is the real visible area.
+            const h = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
             currentDpr = getRenderDpr(w, h, window.devicePixelRatio || 1);
 
             const diag = Math.hypot(w, h);

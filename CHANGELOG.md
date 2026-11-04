@@ -1,5 +1,9 @@
 # Değişiklik Günlüğü
 
+## Odak 2.7c · Mobil adres çubuğu gizlenince canvas tam ekran
+- Gerçek cihazda (TECNO CK6n, Android 14, Chrome) bulundu: menü kaydırılınca adres çubuğu gizleniyor; `clientHeight` eski boyda kaldığı için canvas ekranın altını boş bırakıyordu (yatay 280/336 px, dikey 668/724 px). Atılım butonu oyun alanının dışında kalıyordu.
+- `resizeCanvas` artık `clientHeight` ile `innerHeight`'ın büyüğünü kullanıyor; yatay dünya 965×373 → 965×448. Smoke testi eklendi.
+
 ## Odak 2.7b · Masaüstü HUD daha az seyrek
 - Cihaz turu bulgusu: masaüstü fazla boştu. Masaüstünde (≥ 1024 px, fareli) skor (yeni üst satır çipi), altın, görev ve kombo artık hep görünür; kombo x5'in altında soluk.
 - Momentum, Cinnet ve bölüm çipi bağlamsal kaldı; telefon düzeni değişmedi (testle doğrulanıyor). Üst satır 38 px, 1024–1440 px'te taşma yok; oynanacak alan ≥ %80 korunuyor.
