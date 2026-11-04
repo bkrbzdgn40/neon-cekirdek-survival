@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 3.2b · Yeni silah: Bumerang Disk
+- Hareket yönüne delici bir disk fırlatır (2,2/1,9/1,8 sn'de bir, 260/290/320 px); disk oyuncuya geri döner ve dönüşte aynı düşmana bir kez daha vurur. Kendi dizisi ve sınırı var (`MAX_BOOMERANG_DISCS = 4`), 4 sn'de dönemeyen disk kaybolur.
+- 3. kademe evrimi Ayna Disk: her atışta ikinci disk ters yöne fırlar. Yeni ses ailesi ve görsel; DÜŞÜK grafikte iz ve parıltı yok.
+- DPS (dalga 6, 5 tohum): K1 +21,3 · K2 +31,1 · K3 +65,1; üç kademe de ±%25 bandında.
+
 ## Odak 3.2a · Yeni silah: Mayın İzi
 - Hareket ettikçe arkada mayın bırakır (kademeye göre 3/4/5, her 300/260/220 px'te bir). Kurulduktan sonra yaklaşan düşman patlatır; iz dolunca en eski mayın yenilenir. Kendi dizisi ve sınırı var (`MAX_TRAIL_MINES = 6`); mermi havuzunu kullanmaz.
 - 3. kademe evrimi Zincir Mayın: patlayan mayın 150 px içindeki diğerlerini de patlatır, bir ek mayın taşınır. Yeni ses ailesi ve görsel; DÜŞÜK grafikte parıltı ve tetik halkası çizilmez.

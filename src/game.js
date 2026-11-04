@@ -42,7 +42,8 @@
             missile:{wave:'sawtooth',start:205,end:100,length:.135,gain:.05,lowpass:480},
             cluster:{wave:'triangle',start:340,end:160,length:.1,gain:.037,lowpass:650},
             arc:{wave:'triangle',start:670,end:370,length:.08,gain:.032,lowpass:970},
-            mine:{wave:'square',start:210,end:140,length:.05,gain:.022,lowpass:620}
+            mine:{wave:'square',start:210,end:140,length:.05,gain:.022,lowpass:620},
+            disc:{wave:'sine',start:520,end:880,length:.12,gain:.03,lowpass:990}
         });
         const HIT_SFX=Object.freeze({
             plasma:{wave:'triangle',start:310,end:110,length:.06,gain:.031,lowpass:750},
@@ -52,7 +53,8 @@
             missile:{wave:'sawtooth',start:160,end:65,length:.14,gain:.048,lowpass:460},
             cluster:{wave:'triangle',start:380,end:135,length:.085,gain:.031,lowpass:680},
             arc:{wave:'triangle',start:810,end:420,length:.09,gain:.036,lowpass:980},
-            mine:{wave:'sawtooth',start:150,end:48,length:.2,gain:.05,lowpass:430}
+            mine:{wave:'sawtooth',start:150,end:48,length:.2,gain:.05,lowpass:430},
+            disc:{wave:'triangle',start:700,end:460,length:.06,gain:.028,lowpass:960}
         });
         const BOSS_DEATH_SFX=Object.freeze({
             BOSS_DESTROYER:{wave:'sawtooth',start:265,end:65,length:.48,gain:.076,lowpass:630},
@@ -1370,7 +1372,10 @@
                     bloodReactorHeals: 0, aegisDeflections: 0, kineticVortices: 0,
                     phaseEchoes: 0, phaseEchoTargets: 0,
                     circuitClosures: 0, circuitPulseHits: 0, circuitCrossings: 0,
-                    mineDrops: 0, mineBlasts: 0, mineHits: 0, mineChains: 0 };
+                    mineDrops: 0, mineBlasts: 0, mineHits: 0, mineChains: 0,
+                    discThrows: 0, discHits: 0, discCatches: 0 };
+                this.boomerangReadyAt = 0;
+                this.discDamageBonus = 1;
                 this.mineTrailDistance = 0;
                 this.mineDamageBonus = 1;
                 this.bloodReactorKills = 0;
@@ -2183,7 +2188,8 @@
             missile: { type:'missile', color:'#30ec83', core:'#e2ffec', trail:32, width:4, glow:9 },
             critical: { type:'critical', color:'#ffe070', core:'#ffffff', trail:26, width:4, glow:12 },
             plasma: { type:'plasma', color:'#15d7ed', core:'#e3ffff', trail:18, width:3, glow:7 },
-            mine: { type:'mine', color:'#ff9f1c', core:'#fff3d6', trail:0, width:3, glow:10 }
+            mine: { type:'mine', color:'#ff9f1c', core:'#fff3d6', trail:0, width:3, glow:10 },
+            disc: { type:'disc', color:'#c084fc', core:'#f5e8ff', trail:22, width:3, glow:12 }
         });
         function getProjectileVisualStyle(b) {
             if (b.evoRail) return PROJECTILE_VISUAL_STYLES.rail;
@@ -3803,7 +3809,8 @@
             kinetic_magnet: { name: 'Kinetik Girdap', desc: 'Dash bitince 4 sn aralıkla yakındaki en fazla 8 düşmana darbe uygular ve küreleri çeker.' },
             orbital: { name: 'Darbe Uyduları', desc: '6 saniyede bir çevrendeki düşmanlara alan darbesi uygular.' },
             pierce_ricochet: { name: 'Prizma Rotası', desc: 'Sekmeler güçlenir ve yakın hedefe yön değiştirebilir.' },
-            mine_trail: { name: 'Zincir Mayın', desc: 'Patlayan mayın 150 px içindeki diğer mayınları da patlatır; bir ek mayın taşınır.' }
+            mine_trail: { name: 'Zincir Mayın', desc: 'Patlayan mayın 150 px içindeki diğer mayınları da patlatır; bir ek mayın taşınır.' },
+            boomerang_disc: { name: 'Ayna Disk', desc: 'Her atışta ikinci bir disk ters yöne fırlar; iki disk de dönüşte vurur.' }
         });
         const SYNERGY_DEFS = Object.freeze([
             { id: 'swarm_guidance', name: 'Sürü Protokolü', modules: ['multishot', 'homing'],
@@ -3872,6 +3879,7 @@
             p.magnetRadius = Math.min(p.magnetRadius, 280);
             p.speed = Math.min(p.speed, 470);
             p.mineDamageBonus = Math.min(p.mineDamageBonus, 1.6);
+            p.discDamageBonus = Math.min(p.discDamageBonus, 1.6);
         }
 
         function getBuildGuideModel(p) {
@@ -3950,6 +3958,16 @@
                 getDesc: (r) => 'Hareket ettikçe arkana mayın bırakırsın (kademeye göre 3/4/5); yaklaşan düşman onu patlatır. Peşindeki sürüyü mayınların üstünden geçir.' +
                     (r.mult > 1 ? ` Mayın hasarı +%${Math.round(15 * (r.mult - 1))}.` : ''),
                 apply: (p, r) => { p.mineDamageBonus *= 1 + 0.15 * (r.mult - 1); }
+            },
+            {
+                id: 'boomerang_disc',
+                kind: 'weapon',
+                name: 'Bumerang Disk',
+                icon: 'fa-solid fa-compact-disc',
+                color: '#c084fc',
+                getDesc: (r) => 'Hareket yönüne delici bir disk fırlatır; disk sana geri döner ve dönüşte yine vurur. Dönüş yolunda düşmanları toplayacak yerde dur.' +
+                    (r.mult > 1 ? ` Disk hasarı +%${Math.round(15 * (r.mult - 1))}.` : ''),
+                apply: (p, r) => { p.discDamageBonus *= 1 + 0.15 * (r.mult - 1); }
             },
             {
                 id: 'phase_echo',
@@ -5482,6 +5500,135 @@
                     ctx.arc(mine.x, mine.y, MINE_TRAIL_RULES.triggerRadius, 0, Math.PI * 2);
                     ctx.stroke();
                 }
+            }
+            ctx.restore();
+        }
+
+        // Odak 3.2 · BOOMERANG DISC (Bumerang Disk). A disc flies along the
+        // movement direction, pierces, then homes back to the player and hits
+        // again on the way back. Rewards standing on the return path.
+        const BOOMERANG_RULES = Object.freeze({
+            cooldown: [0, 2.2, 1.9, 1.8],
+            range: [0, 260, 290, 320],
+            damageMult: [0, 0.3, 0.3, 0.3],
+            flatDamage: [0, 2, 2, 2],
+            radius: [0, 14, 16, 18],
+            outSpeed: 560, returnSpeed: 640, catchRadius: 22,
+            maxHitsPerLeg: 12, maxLifetime: 4, maxDamage: 200
+        });
+        const MAX_BOOMERANG_DISCS = 4;
+        let boomerangDiscs = [];
+        function getBoomerangTier(p = player) {
+            return Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.boomerang_disc || 0);
+        }
+        function throwBoomerangDisc(p, dirX, dirY) {
+            const tier = getBoomerangTier(p);
+            const len = Math.hypot(dirX, dirY);
+            if (!tier || !len || boomerangDiscs.length >= MAX_BOOMERANG_DISCS) return false;
+            boomerangDiscs.push({ x: p.x, y: p.y, dx: dirX / len, dy: dirY / len,
+                travelled: 0, returning: false, bornAt: totalTime, spin: 0,
+                hitIds: new Set(), dead: false });
+            p.buildStats.discThrows++;
+            return true;
+        }
+        function hitWithBoomerangDisc(disc, p, tier) {
+            const rules = BOOMERANG_RULES;
+            const damage = Math.min(rules.maxDamage,
+                p.damage * rules.damageMult[tier] * p.discDamageBonus + rules.flatDamage[tier]);
+            for (const target of enemies) {
+                if (disc.hitIds.size >= rules.maxHitsPerLeg) return;
+                if (target.dead || disc.hitIds.has(target.id)) continue;
+                if (Math.hypot(target.x - disc.x, target.y - disc.y) > rules.radius[tier] + target.radius) continue;
+                disc.hitIds.add(target.id);
+                target.takeDamage(damage, disc.dx * 160, disc.dy * 160, false, false);
+                p.buildStats.discHits++;
+                audio.playWeaponHit('disc', false, target.isBoss);
+            }
+        }
+        function updateBoomerangDiscs(dt) {
+            const tier = getBoomerangTier(player);
+            if (!tier) {
+                if (boomerangDiscs.length) boomerangDiscs = [];
+                return;
+            }
+            const rules = BOOMERANG_RULES;
+            if (gameState === 'PLAYING' && totalTime >= player.boomerangReadyAt &&
+                !boomerangDiscs.length) {
+                const dir = player.dashDir || { x: 1, y: 0 };
+                throwBoomerangDisc(player, dir.x, dir.y);
+                if (player.evolutions.has('boomerang_disc')) throwBoomerangDisc(player, -dir.x, -dir.y);
+                player.boomerangReadyAt = totalTime + rules.cooldown[tier];
+                audio.playWeaponFire('disc', false);
+            }
+            for (const disc of boomerangDiscs) {
+                disc.spin += dt * 18;
+                if (!disc.returning) {
+                    // Eases out near the far end so the turn reads clearly.
+                    const ease = 1 - .55 * Math.min(1, disc.travelled / rules.range[tier]);
+                    const step = rules.outSpeed * ease * dt;
+                    disc.x += disc.dx * step;
+                    disc.y += disc.dy * step;
+                    disc.travelled += step;
+                    if (disc.travelled >= rules.range[tier]) {
+                        disc.returning = true;
+                        disc.hitIds.clear();
+                    }
+                } else {
+                    const tx = player.x - disc.x, ty = player.y - disc.y;
+                    const dist = Math.hypot(tx, ty);
+                    if (dist <= rules.catchRadius) {
+                        disc.dead = true;
+                        player.buildStats.discCatches++;
+                        continue;
+                    }
+                    disc.dx = tx / dist;
+                    disc.dy = ty / dist;
+                    const step = Math.min(dist, rules.returnSpeed * dt);
+                    disc.x += disc.dx * step;
+                    disc.y += disc.dy * step;
+                }
+                if (totalTime - disc.bornAt > rules.maxLifetime) {
+                    disc.dead = true;
+                    continue;
+                }
+                hitWithBoomerangDisc(disc, player, tier);
+            }
+            if (boomerangDiscs.some(disc => disc.dead)) {
+                boomerangDiscs = boomerangDiscs.filter(disc => !disc.dead);
+            }
+        }
+        function drawBoomerangDiscs(ctx) {
+            if (!boomerangDiscs.length) return;
+            const style = PROJECTILE_VISUAL_STYLES.disc;
+            const low = graphicsQuality === 'low';
+            const r = BOOMERANG_RULES.radius[getBoomerangTier(player)] || 14;
+            ctx.save();
+            for (const disc of boomerangDiscs) {
+                if (!low) {
+                    ctx.globalAlpha = .35;
+                    ctx.strokeStyle = style.color;
+                    ctx.lineWidth = style.width;
+                    ctx.beginPath();
+                    ctx.moveTo(disc.x, disc.y);
+                    ctx.lineTo(disc.x - disc.dx * style.trail, disc.y - disc.dy * style.trail);
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = 1;
+                ctx.shadowBlur = low ? 0 : getGraphicsBlur(style.glow);
+                ctx.shadowColor = style.color;
+                ctx.strokeStyle = style.color;
+                ctx.lineWidth = style.width;
+                ctx.beginPath();
+                ctx.arc(disc.x, disc.y, r * .75, disc.spin, disc.spin + Math.PI * .7);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(disc.x, disc.y, r * .75, disc.spin + Math.PI, disc.spin + Math.PI * 1.7);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = style.core;
+                ctx.beginPath();
+                ctx.arc(disc.x, disc.y, 3, 0, Math.PI * 2);
+                ctx.fill();
             }
             ctx.restore();
         }
@@ -8810,6 +8957,7 @@
             updatePhaseEchoes();
             updateCircuitField();
             updateTrailMines();
+            updateBoomerangDiscs(dt);
 
             if (bannerHideTimer > 0) {
                 bannerHideTimer -= dt;
@@ -9501,6 +9649,7 @@
             drawPhaseEchoes(ctx);
             drawCircuitWeaver(ctx);
             drawTrailMines(ctx);
+            drawBoomerangDiscs(ctx);
             drawBastion(ctx);
             drawBossAttackTelegraphs(ctx);
 
@@ -10080,6 +10229,7 @@
             resetPrismGuard();
             phaseEchoes = [];
             trailMines = [];
+            boomerangDiscs = [];
             circuitField = null;
             circuitFlash = null;
             bastion = null;
