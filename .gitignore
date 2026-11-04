@@ -3,3 +3,4 @@ press-capture/
 playwright-report/
 test-results/
 node_modules/
+sim-results.json

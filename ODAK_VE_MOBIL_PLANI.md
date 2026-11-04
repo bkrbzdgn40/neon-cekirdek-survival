@@ -392,7 +392,7 @@ Tanım: <AŞAĞIDAN BİRİNİ YAPIŞTIR>
 
 Pasif hedefi: mevcut 8'e 2 yeni pasif (ör. **Soğutucu**: tüm cooldown'lar −%10/kademe; **Toplayıcı**: XP küresi değeri +%15/kademe).
 
-### - [ ] 3.3 DPS ve hayatta kalma simülasyonu
+### - [x] 3.3 DPS ve hayatta kalma simülasyonu
 
 ```
 scripts/sim-dps.cjs yaz: smoke testindeki VM düzeneğini (setup) bir modüle taşı

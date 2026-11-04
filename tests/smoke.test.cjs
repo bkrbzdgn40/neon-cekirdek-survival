@@ -3,79 +3,18 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { setup, html, pageHtml, gameCss, gameCode } = require('./harness.cjs');
 
-// The browser uses separate static sources. Reconstruct the former inline view for
-// existing markup/CSS/source assertions while executing the identical game script.
-const pageHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-const gameCss = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.css'), 'utf8');
-const gameCode = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
-const html = pageHtml
-  .replace('<link rel="stylesheet" href="./src/game.css">', `<style>\n${gameCss}</style>`)
-  .replace('<script src="./src/game.js"></script>', `<script>\n${gameCode}</script>`);
-
-function setup(stored = {}, options = {}) {
-  const nodes = new Map();
-  const noop = () => {};
-  const windowListeners = new Map();
-  const documentListeners = new Map();
-  const on = (map, type, fn) => {
-    if (!map.has(type)) map.set(type, []);
-    map.get(type).push(fn);
-  };
-  const emit = (map, type, event = {}) => {
-    for (const fn of map.get(type) || []) fn({ preventDefault: noop, ...event });
-  };
-  function element() {
-    const elementListeners = new Map();
-    return {
-      classList: { add: noop, remove: noop, toggle: noop },
-      style: {}, dataset: {}, textContent: '', innerHTML: '',
-      addEventListener(type, fn) { on(elementListeners, type, fn); },
-      dispatch(type, event = {}) { emit(elementListeners, type, event); },
-      click() { emit(elementListeners, 'click', { target: this }); },
-      appendChild: noop,
-       _attrs: {}, setAttribute(key, value) { this._attrs[key] = value; },
-      getContext: () => options.canvasContext || new Proxy({}, { get: () => noop }),
-      querySelector: () => element(),
-      getAttribute(key) { return this._attrs[key] || ''; },
-    };
-  }
-  const document = {
-    documentElement: { clientWidth: 1280, clientHeight: 720, dataset: {} },
-    getElementById: (id) => {
-      if (!nodes.has(id)) nodes.set(id, element());
-      return nodes.get(id);
-    },
-    querySelectorAll: () => [],
-    createElement: element,
-    addEventListener(type, fn) { on(documentListeners, type, fn); },
-  };
-  const window = { innerWidth: 1280, innerHeight: 720, devicePixelRatio: 1,
-    location: { search: options.locationSearch || '' },
-    addEventListener(type, fn) { on(windowListeners, type, fn); } };
-  const storage = {
-    getItem: (key) => stored[key] ?? null,
-    setItem: (key, value) => { stored[key] = value; },
-    removeItem: (key) => { delete stored[key]; },
-  };
-  const sandbox = {
-    window, document, localStorage: storage, console: { warn: noop, log: console.log },
-    Math: Object.create(Math), Set, Date, performance: { now: () => 0 },
-    requestAnimationFrame: noop, setTimeout: noop,
-  };
-  // Odak 1.2: existing tests exercise every system; locked tests pass unlockAll:false.
-  if (options.unlockAll !== false) sandbox.window.NEON_UNLOCK_ALL = true;
-  vm.createContext(sandbox);
-  vm.runInContext(gameCode, sandbox, { timeout: 4000 });
-  sandbox.window.onload();
-  const run = (script) => vm.runInContext(script, sandbox, { timeout: 4000 });
-  return {
-    run, stored,
-    windowEvent: (type, event) => emit(windowListeners, type, event),
-    documentEvent: (type, event) => emit(documentListeners, type, event),
-    canvasEvent: (type, event) => nodes.get('gameCanvas').dispatch(type, event),
-  };
-}
+test('Odak 3.3 shared harness honours viewport size and a longer run timeout', () => {
+  const small = setup({}, { unlockAll: false });
+  const wide = setup({}, { unlockAll: false, width: 1366, height: 768, timeout: 20000 });
+  const size = s => JSON.parse(s.run('JSON.stringify([window.innerWidth, document.documentElement.clientHeight])'));
+  assert.deepEqual(size(small), [1280, 720]);
+  assert.deepEqual(size(wide), [1366, 768]);
+  assert.equal(wide.run('isSystemUnlocked("emp")'), false);
+  // A 10 s simulated run fits in one call with the longer timeout.
+  assert.equal(wide.run('startNewGame(); for (let f = 0; f < 600; f++) updateGame(1 / 60); Math.round(totalTime)'), 10);
+});
 
 test('single-file game JavaScript is syntactically valid', () => {
   assert.ok(gameCode?.includes('class Player'));
