@@ -6998,3 +6998,43 @@ test('Odak 2.7c canvas fills the screen when the mobile address bar hides', () =
   assert.equal(x.css, '336px');
   assert.equal(x.world, Math.round(336 / x.scale));
 });
+
+// Odak 2.7d · automatic graphics step-down for slow devices.
+test('Odak 2.7d slow play steps graphics down once per window and remembers it', () => {
+  const store = {};
+  const { run } = setup(store);
+  const x = JSON.parse(run(`(()=>{let now=10000;const play=(ms,seconds,playing=true)=>{const out=[];
+      for(let t=0;t<seconds*1000;t+=ms){now+=ms;const r=observeGraphicsFrame(ms,now,playing);if(r)out.push(r);}return out;};
+    const start=graphicsQuality;
+    const smooth=play(16.7,8);                 // 60 fps: nothing changes
+    const menu=play(55,8,false);               // slow menus never count
+    const slow=play(33,8);                     // ~30 fps: one step, then cooldown
+    const afterSlow=graphicsQuality;
+    const verySlow=play(55,12);                // ~18 fps: straight to low
+    const end=graphicsQuality;const stepsAtLow=graphicsAuto.steps;
+    play(55,10);                               // already low: no more steps
+    return JSON.stringify({start,smooth,menu,slow,afterSlow,verySlow,end,stepsAtLow,steps:graphicsAuto.steps,
+      saved:localStorage.getItem(GRAPHICS_AUTO_SAVE_KEY),explicit:localStorage.getItem(GRAPHICS_SAVE_KEY)});})()`));
+  assert.equal(x.start, 'high');
+  assert.deepEqual(x.smooth, []);
+  assert.deepEqual(x.menu, []);
+  assert.deepEqual(x.slow, ['medium']);
+  assert.equal(x.afterSlow, 'medium');
+  assert.deepEqual(x.verySlow, ['low']);
+  assert.equal(x.end, 'low');
+  assert.equal(x.steps, x.stepsAtLow);
+  assert.equal(x.saved, 'low');
+  // The automatic result is not a hand-picked choice.
+  assert.equal(x.explicit, null);
+  const reloaded = setup(store);
+  assert.equal(reloaded.run('graphicsQuality'), 'low');
+  assert.equal(reloaded.run('graphicsAuto.enabled'), true);
+});
+
+test('Odak 2.7d a hand-picked graphics quality is never changed automatically', () => {
+  const { run } = setup({ 'neonCekirdek.graphics.v1': 'high', 'neonCekirdek.graphicsAuto.v1': 'low' });
+  const x = JSON.parse(run(`(()=>{let now=0;const out=[];
+    for(let t=0;t<20000;t+=55){now+=55;const r=observeGraphicsFrame(55,now,true);if(r)out.push(r);}
+    return JSON.stringify({quality:graphicsQuality,auto:graphicsAuto.enabled,out});})()`));
+  assert.deepEqual(x, { quality: 'high', auto: false, out: [] });
+});

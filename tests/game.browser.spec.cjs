@@ -1356,3 +1356,22 @@ test('Odak 2.5 a phone held upright gets the turn-sideways tip once',async({brow
  await expect(page.locator('#rotateHint')).toBeHidden();
  }finally{await context.close();}
 });
+
+// Odak 2.7d · a really slow game loop lowers graphics by itself.
+test('Odak 2.7d a slow device drops graphics to low during play and keeps it next launch',async({page})=>{
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await gotoGame(page,'/index.html',{autoGraphics:true});
+ await expect.poll(()=>page.evaluate(()=>graphicsQuality)).toBe('high');
+ await page.locator('#startBtn').click();
+ // Fixture: burn ~50 ms in every frame, like the 18 fps measured on a phone.
+ await page.evaluate(()=>{player.hp=player.maxHp=1e9;
+   const burn=()=>{const t=performance.now();while(performance.now()-t<50){}requestAnimationFrame(burn);};
+   requestAnimationFrame(burn);});
+ await expect.poll(()=>page.evaluate(()=>graphicsQuality),{timeout:15000}).toBe('low');
+ expect(await page.evaluate(()=>[localStorage.getItem(GRAPHICS_AUTO_SAVE_KEY),
+   localStorage.getItem(GRAPHICS_SAVE_KEY),document.getElementById('pauseGraphicsQuality').value]))
+   .toEqual(['low',null,'low']);
+ await page.reload();
+ await expect.poll(()=>page.evaluate(()=>graphicsQuality)).toBe('low');
+ expect(errors).toEqual([]);
+});
