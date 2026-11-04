@@ -1116,7 +1116,7 @@ test('Odak 2.2 desktop HUD at '+width+'x'+height+' keeps one thin top row and 48
  await page.locator('#startBtn').click();
  // Fixture: a calm moment; combo pinned as in the geometry note from Odak 0.1.
  const calm=await page.evaluate(()=>{
-   nextBossTime=5000;combo=1;comboTimer=0;resetContextualHud();updateHUD();
+   nextBossTime=5000;combo=1;comboTimer=0;score=12345;resetContextualHud();updateHUD();
    const r=el=>el.getBoundingClientRect();
    const row=r(document.querySelector('.hud-status-row'));
    const bay=r(document.querySelector('.hud-action-bay'));
@@ -1128,7 +1128,9 @@ test('Odak 2.2 desktop HUD at '+width+'x'+height+' keeps one thin top row and 48
    });
    const shown=sel=>document.querySelector(sel).checkVisibility({opacityProperty:true});
    return {rowHeight:row.height,rowBottom:row.bottom,bayTop:bay.top,skills,
-     context:['#goldHudChip','#questHudBox','#comboContainer','#momentumMeter','#overdriveMeter','#arenaChapterChip'].map(shown),
+     context:['#hudScoreChip','#goldHudChip','#questHudBox','#comboContainer','#momentumMeter','#overdriveMeter','#arenaChapterChip'].map(shown),
+     score:document.getElementById('hudScoreText').textContent,
+     comboLow:document.getElementById('comboContainer').dataset.low,
      removed:['#directorPhaseText','#arenaChapterMobile','#questMobileText'].map(sel=>!!document.querySelector(sel)),
      inHud:['#scoreText','#ctrlToggleBtn','#musicToggleBtn','#soundToggleBtn','#fullscreenBtn','#buildGuidePanel','#activeContractBadge']
        .map(sel=>!!document.querySelector('#hud '+sel)),
@@ -1139,7 +1141,11 @@ test('Odak 2.2 desktop HUD at '+width+'x'+height+' keeps one thin top row and 48
  expect(calm.skills.map(s=>[s.w,s.h])).toEqual([[48,48],[48,48],[48,48],[48,48]]);
  expect(calm.skills.map(s=>s.key)).toEqual(['Q','E','C','␣']);
  expect(calm.skills.every(s=>s.keyVisible&&!s.text)).toBe(true);
- expect(calm.context).toEqual([false,false,false,false,false,false]);
+ // Odak 2.7b · desktop keeps score, gold, quest and combo on screen; the
+ // gauges and the chapter chip stay contextual. A low combo is dimmed.
+ expect(calm.context).toEqual([true,true,true,true,false,false,false]);
+ expect(calm.score).toBe((12345).toLocaleString('tr-TR'));
+ expect(calm.comboLow).toBe('true');
  expect(calm.removed).toEqual([false,false,false]);
  expect(calm.inHud).toEqual([false,false,false,false,false,false,false]);
  expect(calm.progress).toEqual(['progressbar','progressbar','progressbar','progressbar']);
@@ -1224,6 +1230,7 @@ test('Odak 2.4 phone portrait HUD at '+width+'x'+height+' keeps one top row and 
      keysShown:[...document.querySelectorAll('#hud .skill-key,#hud .skill-text')].some(vis)||
        [...document.querySelectorAll('#hud .skill-status')].some(el=>box(el).width>1),
      momentum:vis(document.getElementById('momentumMeter')),
+     phoneHidden:['hudScoreChip','goldHudChip','comboContainer'].map(id=>vis(document.getElementById(id))),
      cinnet:vis(document.getElementById('overdriveMeter')),
      cinnetBar:vis(document.getElementById('overdriveBar')),
      cinnetGlow:getComputedStyle(document.getElementById('overdriveMeter')).animationName,
@@ -1242,6 +1249,7 @@ test('Odak 2.4 phone portrait HUD at '+width+'x'+height+' keeps one top row and 
  expect(Number(r.xpRing)).toBeCloseTo(50,0);
  // Momentum is gone; Cinnet is a glowing chip without a bar.
  expect(r.momentum).toBe(false);
+ expect(r.phoneHidden).toEqual([false,false,false]);
  expect([r.cinnet,r.cinnetBar]).toEqual([true,false]);
  expect(['cinnet-ready','none']).toContain(r.cinnetGlow);
  // Round 56-64 px abilities on an arc that rises toward the right edge.

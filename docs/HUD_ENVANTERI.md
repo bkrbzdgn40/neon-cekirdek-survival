@@ -139,3 +139,7 @@ Tablo, ★ işaretli öneriler dahil olduğu gibi onaylandı. Açık kalan dört
 2. **Skor:** Savaş sırasında gizlenir. Yalnızca duraklatma menüsünde ve oyun sonu raporunda görünür.
 3. **Diriliş hakkı:** Can barının yanında metinsiz ikon olarak kalır.
 4. **Bölüm durum metni:** Yalnızca tehlike anında görünür; geri kalan zamanda yalnızca bölüm ikonu kalır.
+
+## Cihaz turu sonrası değişiklik (4 Kasım 2026)
+
+Masaüstü fazla seyrek bulundu. Karar 2 masaüstü için geri alındı: **skor, altın, görev ve kombo masaüstünde (≥ 1024 px, fareli) her zaman üst satırda görünür.** Kombo x5'in altındayken soluk durur. Momentum, Cinnet ve bölüm çipi bağlamsal kalır. Telefon düzeni değişmedi.

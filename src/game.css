@@ -1327,6 +1327,8 @@
 #hud [data-context="on"]{opacity:1;}
 #hud .hud-chip[data-context="off"]{display:none;opacity:0;}
 @starting-style{#hud [data-context="on"]{opacity:0;}}
+/* Odak 2.7b · the score chip lives in the desktop top row only. */
+#hud .hud-chip.hud-score-chip{display:none;}
 
 #hud .hud-meter {
     position:relative;
@@ -1536,6 +1538,16 @@
    cooldown and a one-letter key hint; names and long key text in tooltips. */
 @media (min-width:1024px) and (hover:hover){
     #hud.combat-cockpit{padding:10px 14px 12px;}
+    /* Odak 2.7b · desktop keeps score, gold, quest and combo on screen; only
+       Momentum, Cinnet and the chapter chip stay contextual. */
+    #hud .hud-chip.hud-score-chip,
+    #hud #goldHudChip[data-context="off"],
+    #hud #questHudBox[data-context="off"],
+    #hud #comboContainer[data-context="off"]{display:flex;opacity:1;}
+    #hud .hud-score-chip{color:#f5fcff;}
+    #hud .hud-score-chip i{color:#fde68a;font-size:11px;}
+    #hud #hudScoreText{font:800 12px/1 'Orbitron','Segoe UI',system-ui,sans-serif;}
+    #hud #comboContainer[data-low="true"]{opacity:.55;}
     #hud .hud-status-row{
         grid-template-columns:minmax(0,auto) minmax(160px,1fr) minmax(0,auto);
         gap:12px;

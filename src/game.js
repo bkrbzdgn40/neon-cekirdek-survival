@@ -9541,7 +9541,7 @@
             'overdriveMeter', 'overdriveBar', 'overdriveText', 'hpBar', 'hpText', 'lowHpOverlay',
             'reviveIndicator', 'reviveCountText', 'goldHudChip', 'goldHudText',
             'bastionBtn', 'novaBtn', 'prismBtn', 'dashBtn', 'shieldIndicator', 'shieldText',
-            'waveText', 'timeText', 'scoreText', 'activeContractBadge',
+            'waveText', 'timeText', 'scoreText', 'hudScoreText', 'activeContractBadge',
             'comboContainer', 'comboText', 'comboRankText', 'comboTimerBar',
             'bossHudContainer', 'bossHpBar', 'bossHpText', 'bossNameText', 'bossPhaseText',
             'bossIdentityStrip', 'dashCooldownOverlay', 'dashStatus', 'novaCooldownOverlay', 'novaStatus'
@@ -9642,7 +9642,10 @@
 
             h.waveText.textContent = wave;
             h.timeText.textContent = formatTime(totalTime);
-            h.scoreText.textContent = score.toLocaleString('tr-TR');
+            const scoreLabel = score.toLocaleString('tr-TR');
+            h.scoreText.textContent = scoreLabel;
+            // Odak 2.7b · desktop keeps score in the top row (CSS hides it on phones).
+            h.hudScoreText.textContent = scoreLabel;
             for (const [bar, value] of [
                 [h.xpBar, xpPct], [h.momentumBar, momPct],
                 [h.overdriveBar, odPct], [h.hpBar, hpPct]
@@ -9652,15 +9655,18 @@
                     bar.setAttribute('aria-valuenow', next);
             }
 
-            if (combo >= HUD_CONTEXT_RULES.comboMin) {
-                showContextual(h.comboContainer, HUD_CONTEXT_RULES.holdMs);
-                h.comboText.textContent = `x${combo}`;
-                const rankInfo = getComboRank(combo);
-                h.comboRankText.textContent = rankInfo.label;
-                h.comboRankText.style.color = rankInfo.col;
-                const timerPct = Math.max(0, (comboTimer / COMBO_MAX_TIME) * 100);
-                h.comboTimerBar.style.width = `${timerPct}%`;
-            }
+            // Phones show the combo only from comboMin; desktop always shows it
+            // (Odak 2.7b) and dims it below comboMin through data-low.
+            const comboLive = combo >= HUD_CONTEXT_RULES.comboMin;
+            if (comboLive) showContextual(h.comboContainer, HUD_CONTEXT_RULES.holdMs);
+            const comboLow = comboLive ? 'false' : 'true';
+            if (h.comboContainer.dataset.low !== comboLow) h.comboContainer.dataset.low = comboLow;
+            h.comboText.textContent = `x${combo}`;
+            const rankInfo = getComboRank(combo);
+            h.comboRankText.textContent = rankInfo.label;
+            h.comboRankText.style.color = rankInfo.col;
+            const timerPct = Math.max(0, (comboTimer / COMBO_MAX_TIME) * 100);
+            h.comboTimerBar.style.width = `${timerPct}%`;
 
             if (activeBosses.length > 0) {
                 let totalHp = 0;
