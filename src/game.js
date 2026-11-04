@@ -41,7 +41,8 @@
             rail:{wave:'sawtooth',start:260,end:85,length:.16,gain:.054,lowpass:550},
             missile:{wave:'sawtooth',start:205,end:100,length:.135,gain:.05,lowpass:480},
             cluster:{wave:'triangle',start:340,end:160,length:.1,gain:.037,lowpass:650},
-            arc:{wave:'triangle',start:670,end:370,length:.08,gain:.032,lowpass:970}
+            arc:{wave:'triangle',start:670,end:370,length:.08,gain:.032,lowpass:970},
+            mine:{wave:'square',start:210,end:140,length:.05,gain:.022,lowpass:620}
         });
         const HIT_SFX=Object.freeze({
             plasma:{wave:'triangle',start:310,end:110,length:.06,gain:.031,lowpass:750},
@@ -50,7 +51,8 @@
             rail:{wave:'sawtooth',start:190,end:75,length:.14,gain:.047,lowpass:490},
             missile:{wave:'sawtooth',start:160,end:65,length:.14,gain:.048,lowpass:460},
             cluster:{wave:'triangle',start:380,end:135,length:.085,gain:.031,lowpass:680},
-            arc:{wave:'triangle',start:810,end:420,length:.09,gain:.036,lowpass:980}
+            arc:{wave:'triangle',start:810,end:420,length:.09,gain:.036,lowpass:980},
+            mine:{wave:'sawtooth',start:150,end:48,length:.2,gain:.05,lowpass:430}
         });
         const BOSS_DEATH_SFX=Object.freeze({
             BOSS_DESTROYER:{wave:'sawtooth',start:265,end:65,length:.48,gain:.076,lowpass:630},
@@ -1367,7 +1369,10 @@
                     reactorBursts: 0, overdriveDischarges: 0, weakpointMarks: 0,
                     bloodReactorHeals: 0, aegisDeflections: 0, kineticVortices: 0,
                     phaseEchoes: 0, phaseEchoTargets: 0,
-                    circuitClosures: 0, circuitPulseHits: 0, circuitCrossings: 0 };
+                    circuitClosures: 0, circuitPulseHits: 0, circuitCrossings: 0,
+                    mineDrops: 0, mineBlasts: 0, mineHits: 0, mineChains: 0 };
+                this.mineTrailDistance = 0;
+                this.mineDamageBonus = 1;
                 this.bloodReactorKills = 0;
                 this.bloodReactorReadyAt = 0;
                 this.kineticVortexReadyAt = 0;
@@ -1551,6 +1556,7 @@
                 this.lastPos.x = this.x;
                 this.lastPos.y = this.y;
                 recordCircuitWeaverMotion(this, movedDist, circuitWasDashing);
+                recordMineTrailMotion(this, movedDist);
 
                 if (!isSystemUnlocked('momentum')) this.momentum = 0;
                 else if (moveRatio > 0.25 || this.isDashing) {
@@ -2176,7 +2182,8 @@
             cluster: { type:'missile', color:'#7dffba', core:'#e2ffec', trail:32, width:4, glow:9 },
             missile: { type:'missile', color:'#30ec83', core:'#e2ffec', trail:32, width:4, glow:9 },
             critical: { type:'critical', color:'#ffe070', core:'#ffffff', trail:26, width:4, glow:12 },
-            plasma: { type:'plasma', color:'#15d7ed', core:'#e3ffff', trail:18, width:3, glow:7 }
+            plasma: { type:'plasma', color:'#15d7ed', core:'#e3ffff', trail:18, width:3, glow:7 },
+            mine: { type:'mine', color:'#ff9f1c', core:'#fff3d6', trail:0, width:3, glow:10 }
         });
         function getProjectileVisualStyle(b) {
             if (b.evoRail) return PROJECTILE_VISUAL_STYLES.rail;
@@ -3795,7 +3802,8 @@
             aegis_shield: { name: 'Aegis Karşı Ateşi', desc: 'Kalkan kırılınca en fazla 3 kısa menzilli takip mermisi ateşler.' },
             kinetic_magnet: { name: 'Kinetik Girdap', desc: 'Dash bitince 4 sn aralıkla yakındaki en fazla 8 düşmana darbe uygular ve küreleri çeker.' },
             orbital: { name: 'Darbe Uyduları', desc: '6 saniyede bir çevrendeki düşmanlara alan darbesi uygular.' },
-            pierce_ricochet: { name: 'Prizma Rotası', desc: 'Sekmeler güçlenir ve yakın hedefe yön değiştirebilir.' }
+            pierce_ricochet: { name: 'Prizma Rotası', desc: 'Sekmeler güçlenir ve yakın hedefe yön değiştirebilir.' },
+            mine_trail: { name: 'Zincir Mayın', desc: 'Patlayan mayın 150 px içindeki diğer mayınları da patlatır; bir ek mayın taşınır.' }
         });
         const SYNERGY_DEFS = Object.freeze([
             { id: 'swarm_guidance', name: 'Sürü Protokolü', modules: ['multishot', 'homing'],
@@ -3863,6 +3871,7 @@
             p.vampiricHeal = Math.min(p.vampiricHeal, 12);
             p.magnetRadius = Math.min(p.magnetRadius, 280);
             p.speed = Math.min(p.speed, 470);
+            p.mineDamageBonus = Math.min(p.mineDamageBonus, 1.6);
         }
 
         function getBuildGuideModel(p) {
@@ -3931,6 +3940,16 @@
                 color: '#ffe66d',
                 getDesc: () => 'Hareketinle kapalı bir devre çiz: içindeki en fazla 16 düşmanı vur. Dash devreyi sıfırlar. 3. kademede sınırı elektrikli bırak.',
                 apply: () => { /* Drawn movement path supplies the attack, not a weapon stat. */ }
+            },
+            {
+                id: 'mine_trail',
+                kind: 'weapon',
+                name: 'Mayın İzi',
+                icon: 'fa-solid fa-bomb',
+                color: '#ff9f1c',
+                getDesc: (r) => 'Hareket ettikçe arkana mayın bırakırsın (kademeye göre 3/4/5); yaklaşan düşman onu patlatır. Peşindeki sürüyü mayınların üstünden geçir.' +
+                    (r.mult > 1 ? ` Mayın hasarı +%${Math.round(15 * (r.mult - 1))}.` : ''),
+                apply: (p, r) => { p.mineDamageBonus *= 1 + 0.15 * (r.mult - 1); }
             },
             {
                 id: 'phase_echo',
@@ -5330,6 +5349,141 @@
                     (circuitField.expiresAt-totalTime)/CIRCUIT_WEAVER.fieldSeconds);
                 renderPath(circuitField.points,true,'#ff58d2',.8*alpha,4);
             }
+        }
+
+        // Odak 3.2 · MINE TRAIL (Mayın İzi). Moving drops mines behind the
+        // player; an enemy stepping close sets one off. Rewards kiting a crowd
+        // over your own path. Own array and cap, not the bullet pool.
+        const MINE_TRAIL_RULES = Object.freeze({
+            dropDistance: [0, 300, 260, 220],
+            maxMines: [0, 3, 4, 5],
+            damageMult: [0, 0.35, 0.5, 0.75],
+            flatDamage: [0, 2, 3, 4],
+            blastRadius: [0, 52, 58, 64],
+            triggerRadius: 30, armDelay: .45, lifetime: 8,
+            maxTargets: 5, maxDamage: 240, chainRadius: 150, evolvedExtraMines: 1
+        });
+        const MAX_TRAIL_MINES = 6;
+        let trailMines = [];
+        function getMineTrailTier(p = player) {
+            return Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.mine_trail || 0);
+        }
+        function getMineTrailLimit(p = player) {
+            const tier = getMineTrailTier(p);
+            if (!tier) return 0;
+            return Math.min(MAX_TRAIL_MINES, MINE_TRAIL_RULES.maxMines[tier] +
+                (p.evolutions.has('mine_trail') ? MINE_TRAIL_RULES.evolvedExtraMines : 0));
+        }
+        function dropTrailMine(p, x, y) {
+            const limit = getMineTrailLimit(p);
+            if (!limit) return false;
+            // A full trail recycles its oldest mine so the trail follows the player.
+            while (trailMines.length >= limit) trailMines.shift();
+            trailMines.push({ x, y, armedAt: totalTime + MINE_TRAIL_RULES.armDelay,
+                expiresAt: totalTime + MINE_TRAIL_RULES.lifetime, dead: false });
+            p.buildStats.mineDrops++;
+            audio.playWeaponFire('mine', false);
+            return true;
+        }
+        function recordMineTrailMotion(p, movedDist = 0) {
+            const tier = getMineTrailTier(p);
+            if (!tier || gameState !== 'PLAYING' || p.isDashing) return false;
+            p.mineTrailDistance += movedDist;
+            if (p.mineTrailDistance < MINE_TRAIL_RULES.dropDistance[tier]) return false;
+            p.mineTrailDistance = 0;
+            return dropTrailMine(p, p.x, p.y);
+        }
+        function detonateTrailMine(mine, p, chained = false) {
+            if (mine.dead) return 0;
+            mine.dead = true;
+            const tier = getMineTrailTier(p);
+            const rules = MINE_TRAIL_RULES;
+            const radius = rules.blastRadius[tier];
+            const damage = Math.min(rules.maxDamage,
+                p.damage * rules.damageMult[tier] * p.mineDamageBonus + rules.flatDamage[tier]);
+            let hits = 0;
+            for (const target of enemies) {
+                if (hits >= rules.maxTargets) break;
+                if (target.dead) continue;
+                const dx = target.x - mine.x, dy = target.y - mine.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist > radius + target.radius) continue;
+                const push = 220 / Math.max(1, dist);
+                target.takeDamage(damage, dx * push, dy * push, false, false);
+                hits++;
+            }
+            p.buildStats.mineBlasts++;
+            p.buildStats.mineHits += hits;
+            if (!chained || graphicsQuality !== 'low') {
+                shockwaves.push(new Shockwave(mine.x, mine.y, radius,
+                    PROJECTILE_VISUAL_STYLES.mine.color, .3));
+            }
+            audio.playWeaponHit('mine', false, false);
+            if (!chained && p.evolutions.has('mine_trail')) {
+                for (const other of trailMines) {
+                    if (other.dead || Math.hypot(other.x - mine.x, other.y - mine.y) >
+                        rules.chainRadius) continue;
+                    p.buildStats.mineChains++;
+                    hits += detonateTrailMine(other, p, true);
+                }
+            }
+            return hits;
+        }
+        function updateTrailMines() {
+            if (!trailMines.length) return;
+            if (!player || !getMineTrailTier(player)) {
+                trailMines = [];
+                return;
+            }
+            for (const mine of trailMines) {
+                if (mine.dead) continue;
+                if (totalTime >= mine.expiresAt) {
+                    mine.dead = true;
+                    continue;
+                }
+                if (totalTime < mine.armedAt) continue;
+                for (const target of enemies) {
+                    if (target.dead) continue;
+                    if (Math.hypot(target.x - mine.x, target.y - mine.y) <=
+                        MINE_TRAIL_RULES.triggerRadius + target.radius) {
+                        detonateTrailMine(mine, player);
+                        break;
+                    }
+                }
+            }
+            if (trailMines.some(mine => mine.dead)) trailMines = trailMines.filter(mine => !mine.dead);
+        }
+        function drawTrailMines(ctx) {
+            if (!trailMines.length) return;
+            const style = PROJECTILE_VISUAL_STYLES.mine;
+            const low = graphicsQuality === 'low';
+            ctx.save();
+            for (const mine of trailMines) {
+                if (mine.dead) continue;
+                const armed = totalTime >= mine.armedAt;
+                const fade = .35 + .65 * Math.min(1, (mine.expiresAt - totalTime) / 1.2);
+                ctx.globalAlpha = fade;
+                ctx.shadowBlur = low ? 0 : getGraphicsBlur(style.glow);
+                ctx.shadowColor = style.color;
+                ctx.fillStyle = armed ? style.color : '#7a5a2e';
+                ctx.beginPath();
+                ctx.arc(mine.x, mine.y, 7, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = style.core;
+                ctx.beginPath();
+                ctx.arc(mine.x, mine.y, 2.6, 0, Math.PI * 2);
+                ctx.fill();
+                if (armed && !low) {
+                    ctx.globalAlpha = fade * (.35 + .25 * Math.sin(totalTime * 9));
+                    ctx.strokeStyle = style.color;
+                    ctx.lineWidth = style.width * .5;
+                    ctx.beginPath();
+                    ctx.arc(mine.x, mine.y, MINE_TRAIL_RULES.triggerRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            }
+            ctx.restore();
         }
 
         // M5.15: card-only tactical decoy. No gold consumption, no new
@@ -8655,6 +8809,7 @@
             updateBastion();
             updatePhaseEchoes();
             updateCircuitField();
+            updateTrailMines();
 
             if (bannerHideTimer > 0) {
                 bannerHideTimer -= dt;
@@ -9345,6 +9500,7 @@
             drawTacticalLinks();
             drawPhaseEchoes(ctx);
             drawCircuitWeaver(ctx);
+            drawTrailMines(ctx);
             drawBastion(ctx);
             drawBossAttackTelegraphs(ctx);
 
@@ -9923,6 +10079,7 @@
             resetNemesis();
             resetPrismGuard();
             phaseEchoes = [];
+            trailMines = [];
             circuitField = null;
             circuitFlash = null;
             bastion = null;

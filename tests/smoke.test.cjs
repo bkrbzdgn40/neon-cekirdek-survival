@@ -5,6 +5,123 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { setup, html, pageHtml, gameCss, gameCode } = require('./harness.cjs');
 
+// Odak 3.2 · one list for pool-size checks; a new upgrade is added here once.
+const UPGRADE_IDS = ['circuit_weaver', 'mine_trail', 'phase_echo', 'multishot', 'firerate', 'orbital',
+  'pierce_ricochet', 'homing', 'lightning', 'overdrive_boost', 'crit_mastery', 'vampiric',
+  'aegis_shield', 'kinetic_magnet'];
+
+test('Odak 3.2 Mayın İzi tier rules, card and evolution are wired', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    const u = UPGRADES_POOL.find(u => u.id === 'mine_trail');
+    return JSON.stringify({ rules: MINE_TRAIL_RULES, max: MAX_TRAIL_MINES, kind: u.kind,
+      evo: EVOLUTION_DEFS.mine_trail.name, fire: !!WEAPON_SFX.mine, hit: !!HIT_SFX.mine,
+      style: PROJECTILE_VISUAL_STYLES.mine.type,
+      label: getUpgradeCardPresentation(u, RARITIES[0], 0).label,
+      desc: [u.getDesc(RARITIES[0]), u.getDesc(RARITIES[3])] });
+  })()`));
+  assert.equal(x.kind, 'weapon');
+  assert.equal(x.label, 'SİLAH MODÜLÜ');
+  assert.deepEqual(x.rules.maxMines, [0, 3, 4, 5]);
+  assert.deepEqual(x.rules.dropDistance, [0, 300, 260, 220]);
+  assert.deepEqual(x.rules.damageMult, [0, 0.35, 0.5, 0.75]);
+  assert.ok(x.rules.blastRadius[1] < x.rules.blastRadius[3]);
+  assert.equal(x.max, 6);
+  assert.ok(x.rules.maxMines.every(n => n + x.rules.evolvedExtraMines <= x.max));
+  assert.equal(x.evo, 'Zincir Mayın');
+  assert.ok(x.fire && x.hit);
+  assert.equal(x.style, 'mine');
+  assert.doesNotMatch(x.desc[0], /Mayın hasarı/);
+  assert.match(x.desc[1], /Mayın hasarı \+%19/);
+});
+
+test('Odak 3.2 Mayın İzi drops mines only while moving and keeps the tier cap', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    const none = recordMineTrailMotion(player, 9999);
+    gameState = 'LEVEL_UP';
+    currentUpgradeChoices = [{ upg: UPGRADES_POOL.find(u => u.id === 'mine_trail'), rarity: RARITIES[0] }];
+    selectUpgradeOption(0);
+    const counts = [];
+    const step = d => { player.x += d; recordMineTrailMotion(player, d); counts.push(trailMines.length); };
+    for (let i = 0; i < 2; i++) step(100);          // 200 px < 300: nothing yet
+    const beforeFirst = trailMines.length;
+    step(100);                                       // 300 px: first mine
+    for (let i = 0; i < 30; i++) step(100);
+    const capped = trailMines.length;
+    player.isDashing = true; const dashDrop = recordMineTrailMotion(player, 9999); player.isDashing = false;
+    player.upgradeCounts.mine_trail = 3; player.refreshBuildTraits();
+    for (let i = 0; i < 40; i++) step(100);
+    return JSON.stringify({ none, beforeFirst, capped, dashDrop, evolvedCap: trailMines.length,
+      drops: player.buildStats.mineDrops, xs: trailMines.map(m => Math.round(m.x)) });
+  })()`));
+  assert.equal(x.none, false);
+  assert.equal(x.beforeFirst, 0);
+  assert.equal(x.capped, 3);
+  assert.equal(x.dashDrop, false);
+  assert.equal(x.evolvedCap, 6);
+  assert.ok(x.drops >= 20);
+  // The oldest mine is recycled: the trail stays just behind the player.
+  assert.deepEqual(x.xs, [...x.xs].sort((a, b) => a - b));
+});
+
+test('Odak 3.2 Mayın İzi arms, detonates near an enemy and chains at tier 3', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    enemies = []; nextBossTime = 9999;
+    player.upgradeCounts.mine_trail = 1; player.refreshBuildTraits();
+    dropTrailMine(player, 300, 300);
+    const foe = new Enemy(310, 300, 'TANK'); foe.hp = foe.maxHp = 5000; enemies.push(foe);
+    updateTrailMines();
+    const unarmed = { mines: trailMines.length, hp: foe.hp };
+    totalTime += MINE_TRAIL_RULES.armDelay + 0.01;
+    updateTrailMines();
+    const blast = { mines: trailMines.length, lost: 5000 - foe.hp, blasts: player.buildStats.mineBlasts };
+    // Expired mines vanish without a blast.
+    dropTrailMine(player, 900, 900);
+    totalTime += MINE_TRAIL_RULES.lifetime + 1;
+    updateTrailMines();
+    const expired = { mines: trailMines.length, blasts: player.buildStats.mineBlasts };
+    // Tier 3 evolution: one triggered mine sets off neighbours within 150 px.
+    player.upgradeCounts.mine_trail = 3; player.refreshBuildTraits();
+    foe.x = 500; foe.y = 500; foe.hp = 5000;
+    dropTrailMine(player, 505, 500); dropTrailMine(player, 620, 500); dropTrailMine(player, 900, 500);
+    totalTime += 1;
+    updateTrailMines();
+    return JSON.stringify({ unarmed, blast, expired, evo: player.evolutions.has('mine_trail'),
+      left: trailMines.map(m => m.x), chains: player.buildStats.mineChains });
+  })()`));
+  assert.deepEqual(x.unarmed, { mines: 1, hp: 5000 });
+  assert.equal(x.blast.mines, 0);
+  assert.equal(x.blast.blasts, 1);
+  assert.ok(x.blast.lost > 0);
+  assert.deepEqual(x.expired, { mines: 0, blasts: 1 });
+  assert.equal(x.evo, true);
+  assert.deepEqual(x.left, [900]);
+  assert.equal(x.chains, 1);
+});
+
+test('Odak 3.2 Mayın İzi draws without glow on low graphics', () => {
+  const blurs = [];
+  const ctx = new Proxy({}, { get: () => () => {},
+    set: (_, k, v) => { if (k === 'shadowBlur') blurs.push(v); return true; } });
+  const { run } = setup({}, { canvasContext: ctx });
+  run(`startNewGame(); player.upgradeCounts.mine_trail = 2; dropTrailMine(player, 100, 100);
+    totalTime += 1; graphicsQuality = 'high'`);
+  run('drawTrailMines(ctx)');
+  const high = blurs.splice(0);
+  run(`graphicsQuality = 'low'; drawTrailMines(ctx)`);
+  assert.ok(high.some(v => v > 0));
+  assert.ok(blurs.length > 0 && blurs.every(v => v === 0));
+});
+
+test('Odak 3.2 upgrade pool matches the shared id list', () => {
+  const ids = JSON.parse(setup().run('JSON.stringify(UPGRADES_POOL.map(u => u.id))'));
+  assert.deepEqual([...ids].sort(), [...UPGRADE_IDS].sort());
+});
+
 test('Odak 3.3 shared harness honours viewport size and a longer run timeout', () => {
   const small = setup({}, { unlockAll: false });
   const wide = setup({}, { unlockAll: false, width: 1366, height: 768, timeout: 20000 });
@@ -1095,7 +1212,7 @@ test('M3.2 all thirteen modules have unique third-tier evolutions', () => {
     names:UPGRADES_POOL.map(u=>u.id),evolutions:Object.keys(EVOLUTION_DEFS),
     missing:UPGRADES_POOL.filter(u=>!EVOLUTION_DEFS[u.id]).map(u=>u.id)
   }))()`));
-  assert.equal(x.names.length,13);
+  assert.equal(x.names.length,UPGRADE_IDS.length);
   assert.equal(x.evolutions.length,x.names.length);
   assert.deepEqual(x.missing,[]);
 });
@@ -1267,7 +1384,7 @@ test('M3.2 fully completed 39-tier run does not open an empty choice dialog', ()
   })()`));
   assert.equal(x.state,'PLAYING');
   assert.equal(x.hp,x.max-20);
-  assert.equal(x.evolutions,13);
+  assert.equal(x.evolutions,UPGRADE_IDS.length);
 });
 
 test('M3.2 build guide reports active traits, near goals and correct counts', () => {
@@ -2204,7 +2321,7 @@ test('M4.3.3 separates equipment, utility and third-tier evolution independently
   assert.equal(x.evo.isLegendary,false);
   assert.equal(x.legendaryEvo.role,'evolution');
   assert.equal(x.legendaryEvo.isLegendary,true);
-  assert.equal(x.all.length,13);
+  assert.equal(x.all.length,UPGRADE_IDS.length);
 });
 
 test('M4.3.3 reserves gold styling for legendary while orbital icon stays neutral on all other rarities', () => {
@@ -2283,7 +2400,7 @@ test('Odak 3.1 every upgrade has a kind; plasma holds weapon slot 1 and multisho
     return JSON.stringify({ kinds, limits: BUILD_SLOT_LIMITS, empty, slots: getBuildSlots(player) });
   })()`));
   assert.deepEqual(Object.keys(x.kinds).filter(id => x.kinds[id] === 'weapon').sort(),
-    ['circuit_weaver', 'homing', 'lightning', 'multishot', 'orbital']);
+    ['circuit_weaver', 'homing', 'lightning', 'mine_trail', 'multishot', 'orbital']);
   assert.deepEqual(Object.keys(x.kinds).filter(id => x.kinds[id] === 'passive').sort(),
     ['aegis_shield', 'crit_mastery', 'firerate', 'kinetic_magnet', 'overdrive_boost',
       'phase_echo', 'pierce_ricochet', 'vampiric']);
@@ -2438,8 +2555,8 @@ test('M4.3.3.1 legacy rarity odds and module power remain unchanged', () => {
   const {run}=setup();
   const data=JSON.parse(run("(()=>{startNewGame();return JSON.stringify({rarities:RARITIES.map(r=>[r.id,r.weight,r.mult]),modules:UPGRADES_POOL.length,evolutions:Object.keys(EVOLUTION_DEFS).length,tier:MAX_MODULE_TIER});})()"));
   assert.deepEqual(data.rarities,[['COMMON',48,1],['RARE',30,1.35],['EPIC',15,1.75],['LEGENDARY',7,2.3]]);
-  assert.equal(data.modules,13);
-  assert.equal(data.evolutions,13);
+  assert.equal(data.modules,UPGRADE_IDS.length);
+  assert.equal(data.evolutions,UPGRADE_IDS.length);
   assert.equal(data.tier,3);
 });
 
@@ -2583,7 +2700,7 @@ test('M4.4.2 audio family is derived from real projectile flags', () => {
 test('M4.4.2 unique firing, impact and boss envelopes have bounded frequencies and amplitude', () => {
   const {run}=setup();
   const data=JSON.parse(run("JSON.stringify({fire:WEAPON_SFX,hit:HIT_SFX,boss:BOSS_DEATH_SFX})"));
-  assert.deepEqual(Object.keys(data.fire),['plasma','prism','reactor','rail','missile','cluster','arc']);
+  assert.deepEqual(Object.keys(data.fire),['plasma','prism','reactor','rail','missile','cluster','arc','mine']);
   assert.deepEqual(Object.keys(data.boss),['BOSS_DESTROYER','BOSS_TITAN','BOSS_VOID','BOSS_PRISM']);
   assert.equal(new Set(Object.values(data.boss).map(x=>x.start)).size,4);
   for(const channel of Object.values(data)){
@@ -5624,7 +5741,7 @@ test('M5.14 bastion draw is graphics-only and HUD provides independent button st
 test('M5.15 Phase Echo stays selectable after 13th card and build guide reflects dynamic tiers',()=>{
  const {run}=setup();
  const d=JSON.parse(run("(()=>{startNewGame();const card=UPGRADES_POOL.find(u=>u.id==='phase_echo');const pool=UPGRADES_POOL.length;const guide=getBuildGuideModel(player);return JSON.stringify({pool,cardName:card.name,role:getUpgradeCardPresentation(card,RARITIES[0],0).role,evo:EVOLUTION_DEFS.phase_echo.name,guide:guide.totalTiers});})()"));
- assert.equal(d.pool,13);
+ assert.equal(d.pool,UPGRADE_IDS.length);
  assert.equal(d.cardName,'Faz Yankısı');
  assert.equal(d.role,'module');
  assert.equal(d.evo,'Çift Yankı');
@@ -5709,7 +5826,7 @@ test('M5.15 high and low graphics draw echo without adding simulation entities',
 test('M5.16 Circuit Weaver card extends pool to 13 without changing gold or existing rarity',()=>{
  const {run}=setup();
  const s=JSON.parse(run("(()=>{startNewGame();const a=UPGRADES_POOL.find(u=>u.id==='circuit_weaver');return JSON.stringify({pool:UPGRADES_POOL.length,name:a.name,evo:EVOLUTION_DEFS.circuit_weaver.name,role:getUpgradeCardPresentation(a,RARITIES[0],0).role,stats:player.buildStats.circuitClosures,initialGold:totalGold});})()"));
- assert.equal(s.pool,13);
+ assert.equal(s.pool,UPGRADE_IDS.length);
  assert.equal(s.name,'Devre Dokuyucu');
  assert.equal(s.evo,'Yanan Çember');
  assert.equal(s.role,'weapon');
@@ -5889,7 +6006,7 @@ test('M5.17 new run resets all three chapters and metrics and keeps legacy progr
  assert.equal(s.now.riftWarps,0);
  assert.equal(s.gold,s.afterGold);
  assert.equal(s.choices,s.afterChoices);
- assert.equal(s.choices,13);
+ assert.equal(s.choices,UPGRADE_IDS.length);
 });
 
 test('M5.17 arena chapters render distinct canvas geometry at low graphics without new enemies',()=>{
@@ -6104,7 +6221,7 @@ test('M5.21 Echo Hunter promotes one existing eligible foe on scheduled waves, n
  assert.equal(x.later.active,true);
  assert.equal(x.later.stats.started,2);
  assert.equal(x.gold,50);
- assert.equal(x.upgradeCount,13);
+ assert.equal(x.upgradeCount,UPGRADE_IDS.length);
 });
 
 test('M5.21 stationary player receives a 1.45s warning and only one bounded hit',()=>{
@@ -6273,8 +6390,8 @@ test('M5.22 HUD and low-VFX prism sector are accessible with no artificial movem
 test('M5.23 readable upgrade cards preserve every original description and selection semantics',()=>{
  const {run}=setup();
  const x=JSON.parse(run("(()=>{startNewGame();const variants=[];for(const u of UPGRADES_POOL){for(const r of RARITIES){const currentLvl=u.id==='circuit_weaver'?2:0;const p=getUpgradeCardPresentation(u,r,currentLvl);const markup=renderUpgradeCardMarkup(u,r,currentLvl,0,p,[]);variants.push({id:u.id,rarity:r.id,description:u.getDesc(r),markup,role:p.role});}}const gold=totalGold;triggerLevelUp();return JSON.stringify({variants,count:UPGRADES_POOL.length,choiceCount:currentUpgradeChoices.length,gold,afterGold:totalGold});})()"));
- assert.equal(x.count,13);
- assert.equal(x.variants.length,52);
+ assert.equal(x.count,UPGRADE_IDS.length);
+ assert.equal(x.variants.length,UPGRADE_IDS.length*4);
  assert.equal(x.choiceCount,3);
  assert.equal(x.gold,x.afterGold);
  for(const card of x.variants){
