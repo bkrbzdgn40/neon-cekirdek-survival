@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 3.2a · Yeni silah: Mayın İzi
+- Hareket ettikçe arkada mayın bırakır (kademeye göre 3/4/5, her 300/260/220 px'te bir). Kurulduktan sonra yaklaşan düşman patlatır; iz dolunca en eski mayın yenilenir. Kendi dizisi ve sınırı var (`MAX_TRAIL_MINES = 6`); mermi havuzunu kullanmaz.
+- 3. kademe evrimi Zincir Mayın: patlayan mayın 150 px içindeki diğerlerini de patlatır, bir ek mayın taşınır. Yeni ses ailesi ve görsel; DÜŞÜK grafikte parıltı ve tetik halkası çizilmez.
+- DPS (dalga 6, 5 tohum): K1 +20,1 · K2 +37,7 · K3 +63,0; üç kademe de ±%25 bandında. Havuz boyutunu sabit yazan testler tek bir `UPGRADE_IDS` listesine bağlandı.
+
 ## Odak 3.3 · DPS ve hayatta kalma simülasyonu
 - Smoke testinin VM düzeneği `tests/harness.cjs`'e taşındı (görünüm boyutu ve süre sınırı seçenekleriyle); smoke testi ve simülasyon onu kullanıyor.
 - `node scripts/sim-dps.cjs [--seeds=5] [--seconds=30] [--only=id,id]`: sabit tohum, dalga 6, plazma + tek silah, 120 px dairede dönen bot. Silah × kademe için DPS, plazmaya eklenen DPS, öldürme ve alınan hasar; tablo stdout'a, ham veri `sim-results.json`'a (git dışı). CI'da çalışmaz.

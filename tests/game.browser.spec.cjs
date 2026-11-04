@@ -522,6 +522,7 @@ test('M5.21 Echo Hunter visibly announces stationary, moving and dashing player 
  await gotoGame(page,'/index.html');
  await page.locator('#startBtn').click();
  const result=await page.evaluate(()=>{
+   const poolBefore=UPGRADES_POOL.map(u=>u.id).join();
    const setupHunter=()=>{
      startNewGame();
      wave=10;waveTimer=2;nextBossTime=5000;totalTime=100;
@@ -546,7 +547,7 @@ test('M5.21 Echo Hunter visibly announces stationary, moving and dashing player 
    updateNemesisHud();
    const cross={kind:getNemesisSnapshot().attack?.kind,
      label:document.getElementById('nemesisBanner').textContent};
-   return {initial,lock,trail,cross,gold:totalGold,modules:UPGRADES_POOL.length};
+   return {initial,lock,trail,cross,gold:totalGold,poolSame:UPGRADES_POOL.map(u=>u.id).join()===poolBefore};
  });
  expect(result.initial.hidden).toBe(false);
  expect(result.initial.label).toContain('YANKI AVCISI');
@@ -554,7 +555,7 @@ test('M5.21 Echo Hunter visibly announces stationary, moving and dashing player 
  expect(result.trail).toMatchObject({kind:'TRAIL',label:expect.stringContaining('HAREKET İZİ')});
  expect(result.cross).toMatchObject({kind:'CROSS',label:expect.stringContaining('ÇAPRAZ KİLİT')});
  expect(result.gold).toBe(50);
- expect(result.modules).toBe(13);
+ expect(result.poolSame).toBe(true);
  await expect(page.locator('#nemesisBanner')).toBeVisible();
  expect(errors).toEqual([]);
 });
@@ -1438,3 +1439,31 @@ test('Odak 3.1 slot row and skip button fit the upgrade screen and ATLA resumes 
  await expect.poll(()=>page.evaluate(()=>[gameState,upgradeSkipsLeft])).toEqual(['PLAYING',1]);
  expect(errors).toEqual([]);
 });
+
+// Odak 3.2 · new weapons run in the real loop without page errors.
+for(const weapon of ['mine_trail']){
+ test(`Odak 3.2 ${weapon} fires in a real run without page errors`,async({page,isMobile})=>{
+   test.skip(isMobile,'weapon loop is checked once on desktop');
+   const errors=[];page.on('pageerror',error=>errors.push(error.message));
+   await gotoGame(page,'/index.html?seed=7');
+   await page.locator('#startBtn').click();
+   await page.evaluate(id=>{
+     const upg=UPGRADES_POOL.find(u=>u.id===id);
+     for(let i=0;i<3;i++){gameState='LEVEL_UP';currentUpgradeChoices=[{upg,rarity:RARITIES[0]}];selectUpgradeOption(0);}
+     player.maxHp=player.hp=1e6;
+   },weapon);
+   await page.keyboard.down('KeyD');
+   await page.waitForTimeout(900);
+   await page.keyboard.up('KeyD');
+   await page.keyboard.down('KeyS');
+   await page.waitForTimeout(900);
+   await page.keyboard.up('KeyS');
+   const stats=await page.evaluate(()=>({tier:player.upgradeCounts.mine_trail,evo:player.evolutions.has('mine_trail'),
+     drops:player.buildStats.mineDrops,state:gameState}));
+   expect(stats.tier).toBe(3);
+   expect(stats.evo).toBe(true);
+   expect(stats.drops).toBeGreaterThan(0);
+   expect(stats.state).toBe('PLAYING');
+   expect(errors).toEqual([]);
+ });
+}
