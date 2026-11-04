@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 3.2d · Yeni pasifler: Soğutucu ve Toplayıcı
+- Soğutucu: kademe başına tüm beklemeler −%10 (bileşik; 3. kademede ×0,73): Atılım, EMP, kalkan, Prizma, Faz Yankısı ve zamanlı silahlar (disk, halka, devre). Evrim Kriyo Döngü: her Atılım bitişinde EMP ve Prizma 1 sn erken hazır.
+- Toplayıcı: XP küresi değeri kademe başına +%15. Evrim Hasat Dalgası: her 40 kürede ekrandaki bütün küreler oyuncuya çekilir.
+- Havuz: 8 silah (plazma + 7 yuvalı) ve 10 pasif.
+
 ## Odak 3.2c · Yeni silah: Şok Halkası
 - Çekirdekten 3,2/2,9/2,6 sn'de bir genişleyen halka (130/145/160 px); her düşmana halka başına bir kez vurur. Hasar merkezde tam, kenarda %30'a iner: kalabalığın içine dalmak ödüllenir. Kendi dizisi ve sınırı var (`MAX_SHOCK_RINGS = 3`).
 - 3. kademe evrimi Artçı Şok: her halkadan 0,35 sn sonra yarı hasarlı ikinci halka. Yeni ses ailesi ve görsel; DÜŞÜK grafikte parıltı ve iç halka yok.

@@ -360,7 +360,7 @@ Seviye atlama ekranına bir koşuda 2 kez kullanılabilen ücretsiz "ATLA" seçe
 (seçmeden devam, +%15 XP iadesi).
 ```
 
-### - [ ] 3.2 Silah ekleme şablonu
+### - [x] 3.2 Silah ekleme şablonu
 
 Faz 3'teki her yeni silah **ayrı bir PR**'dır ve şu komutla eklenir:
 
