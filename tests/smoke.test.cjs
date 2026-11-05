@@ -6450,8 +6450,14 @@ test('M5.18 mobile status and honest cooldown arcs expose terrain mechanics',()=
  assert.equal(s.contestedUrgent,'true');
  assert.match(s.rift,/YARIK.*GEÇİT/);
  assert.equal(s.riftUrgent,'false');
- assert.match(gameCode,/const readyIn=Math.max\(0,chapterGardenReady\[index\]-totalTime\)/);
- assert.match(gameCode,/const remaining=chapterRiftReadyAt-totalTime/);
+ // Odak 4.10 · the cooldown arcs are drawn from the real remaining time (half spent = half circle).
+ const arcs=[];
+ const ctx=new Proxy({},{get:(_,key)=>(...args)=>{if(key==='arc')arcs.push(args);}});
+ const drawn=setup({},{canvasContext:ctx});
+ const half=(code)=>{arcs.length=0;drawn.run(code);return arcs.some(a=>Math.abs(a[3]+Math.PI/2)<1e-6&&Math.abs(a[4]-Math.PI/2)<1e-3);};
+ const base="startNewGame();nextBossTime=1e6;gameState='PLAYING';totalTime=40;";
+ assert.ok(half(base+"wave=9;chapterShowcaseAttemptedWave=9;updateArenaChapter(.02);chapterGardenReady[0]=totalTime+CHAPTER_RULES.gardenCooldown/2;drawArenaChapter(ctx)"),'garden arc is half full');
+ assert.ok(half(base+"wave=12;chapterShowcaseAttemptedWave=12;updateArenaChapter(.02);chapterRiftReadyAt=totalTime+CHAPTER_RULES.riftCooldown/2;drawArenaChapter(ctx)"),'rift arc is half full');
 });
 
  
@@ -8029,4 +8035,39 @@ test('Odak 4.7 phase pincer records who landed or who was escaped, and low graph
   const draw = (low) => { const before = calls; run(`drawRiftPincer(ctx,chapterShowcase,1,${low})`); return calls - before; };
   const high = draw(false), low = draw(true);
   assert.ok(low > 0 && low < high, `low ${low} high ${high}`);
+});
+
+// Odak 4.10 · both floors move with the clock, simplify on low graphics, and the two
+// showcases leave particles behind: gold petals on harmony, shards on a flank, a ring on an escape.
+test('Odak 4.10 garden and rift floors animate, draw less on low, and showcases burst', () => {
+  const trace = [];
+  const ctx = new Proxy({}, { get: (_, key) => (...args) => { trace.push([String(key), args]); } });
+  const { run } = setup({}, { canvasContext: ctx });
+  const frame = (wave, quality, time) => {
+    run(`startNewGame();nextBossTime=1e6;wave=${wave};chapterShowcaseAttemptedWave=${wave};totalTime=${time};
+      gameState='PLAYING';updateArenaChapter(.02);graphicsQuality='${quality}'`);
+    trace.length = 0;
+    run('drawArenaChapter(ctx)');
+    return JSON.stringify(trace.filter(([k]) => k === 'arc' || k === 'lineTo' || k === 'ellipse'));
+  };
+  for (const wave of [9, 12]) {
+    const a = frame(wave, 'high', 50), b = frame(wave, 'high', 50.4), low = frame(wave, 'low', 50);
+    assert.notEqual(a, b, `wave ${wave} floor moves over time`);
+    assert.ok(JSON.parse(low).length > 0 && JSON.parse(low).length < JSON.parse(a).length,
+      `wave ${wave} low draws less`);
+  }
+  const burst = JSON.parse(run(`(()=>{startNewGame();wave=10;waveTimer=2;nextBossTime=1e6;totalTime=300;graphicsQuality='high';
+    enemies=[];updateArenaChapter(.02);particles=[];recordShowcaseIonFlower(0);recordShowcaseIonFlower(1);
+    const petals=particles.filter(p=>p.color==='#fff5b2').length;
+    startNewGame();nextBossTime=1e6;wave=13;waveTimer=2;totalTime=500;player.x=640;player.y=420;
+    enemies=[new Enemy(900,250,'SHOOTER'),new Enemy(420,620,'SHOOTER')];for(const e of enemies)e.speed=0;
+    updateArenaChapter(.02);particles=[];totalTime+=RIFT_PINCER.resolveAt+.01;updateArenaChapter(.02);
+    const shards=particles.filter(p=>p.color==='#e3a6ff').length;
+    startNewGame();nextBossTime=1e6;wave=13;waveTimer=2;totalTime=700;player.x=640;player.y=420;
+    enemies=[new Enemy(900,250,'SHOOTER'),new Enemy(420,620,'SHOOTER')];for(const e of enemies)e.speed=0;
+    updateArenaChapter(.02);shockwaves=[];player.x+=RIFT_PINCER.escapeRadius+20;totalTime+=RIFT_PINCER.resolveAt+.01;updateArenaChapter(.02);
+    return JSON.stringify({petals,shards,escapeRing:shockwaves.some(w=>w.color==='#7dffb0')});})()`));
+  assert.ok(burst.petals >= 7, `petals ${burst.petals}`);
+  assert.ok(burst.shards >= 8, `shards ${burst.shards}`);
+  assert.equal(burst.escapeRing, true);
 });

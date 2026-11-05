@@ -488,8 +488,8 @@ Laboratuvar raporun üstünde açılır; menüye dönünce açık kalan laboratu
 ### - [x] 4.9 Kızıl Makas yatay raylar ve rastgele çeneler
 Biyomun yatay ısı rayları da dişli çenelerle canlanır; olayda preslerin yönü ve yeri rastgele seçilir, uyarı süresi aynı kalır.
 
-### - [ ] 4.10 İyon Korosu ve Faz Kıskacı ikinci tur
-İki olayın sahnesi daha zengin animasyon alır; kural aynı, düşük grafikte sadeleşir.
+### - [x] 4.10 İyon Korosu ve Faz Kıskacı ikinci tur
+İki biyomun zemini ve iki olayın sahnesi daha zengin animasyon alır; kural aynı, düşük grafikte sadeleşir.
 
 ## Özet takvim
 
