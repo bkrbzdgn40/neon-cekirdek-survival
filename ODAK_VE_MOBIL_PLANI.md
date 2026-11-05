@@ -497,7 +497,7 @@ Kaynak: eklenebilirler.txt. Kostümler sadece görünüşü değiştirir, güç 
 ### - [x] 5.1 Düşman sözlüğü
 TEHDİTLER sekmesi sözlük olur: karşılaşılan düşman (ve elit) kaydedilir, adı, ne yaptığı, nasıl yenileceği ve imha sayısı görünür; görülmeyenler siluet olarak durur.
 
-### - [ ] 5.2 Kostümler
+### - [x] 5.2 Kostümler
 4 kategoride 16 kostüm: çekirdek rengi, iz efekti, çekirdek şekli, arena paleti. Laboratuvarda doğrudan satılır.
 
 ### - [ ] 5.3 Veri Kapsülü

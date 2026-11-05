@@ -2202,3 +2202,21 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
 .codex-counter { font-size: 11px; line-height: 1.5; color: #a9c4da; margin-top: 4px; }
 .codex-counter b { color: #e6f7ff; font-weight: 700; }
 .codex-kills { display: inline-block; margin-top: 6px; font: 700 9px 'Orbitron', sans-serif; color: #8ea6bd; letter-spacing: .06em; }
+
+/* Odak 5.2 · wardrobe in the lab */
+#shopCosmeticContainer { display: grid; gap: 12px; }
+.wardrobe-slot-title { display: block; font: 700 10px 'Orbitron', sans-serif; color: #9fb9c7; letter-spacing: .12em; margin-bottom: 6px; }
+.wardrobe-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 640px) { .wardrobe-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.wardrobe-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 8px; border-radius: 12px;
+    background: #0e1828; border: 1px solid #22324a; color: #e6f7ff; cursor: pointer; transition: border-color .15s, background .15s; }
+.wardrobe-item:hover { border-color: #3d5878; background: #12203a; }
+.wardrobe-item:focus-visible { outline: 2px solid #defbff; outline-offset: 2px; }
+.wardrobe-item[data-state="worn"] { border-color: #34d399; background: #0b2420; box-shadow: inset 0 0 0 1px #34d39955; }
+.wardrobe-item[data-state="locked"] { cursor: not-allowed; opacity: .62; }
+.wardrobe-swatch svg { width: 40px; height: 40px; display: block; }
+.wardrobe-name { font: 700 10px 'Orbitron', sans-serif; text-align: center; line-height: 1.3; }
+.wardrobe-action { font: 800 10px 'Orbitron', sans-serif; color: #ffd166; }
+.wardrobe-item[data-state="owned"] .wardrobe-action { color: #67e8f9; }
+.wardrobe-item[data-state="worn"] .wardrobe-action { color: #6ee7b7; }
+.wardrobe-item[data-state="locked"] .wardrobe-action { color: #8ea6bd; }

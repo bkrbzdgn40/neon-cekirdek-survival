@@ -1658,3 +1658,28 @@ test('Odak 5.1 the threats tab is a codex: silhouettes until met, then the foe a
   await expect(page.locator('#codexCount')).toHaveText('2/15');
   expect(errors).toEqual([]);
 });
+
+test('Odak 5.2 the lab wardrobe sells looks that show in the hangar and the run', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await gotoGame(page, '/index.html', { unlockAll: false });
+  await page.evaluate(() => { totalGold = 1500; updateMenuCounters(); });
+  await page.locator('#openShopFromMenuBtn').click();
+  await expect(page.locator('#shopModal')).toBeVisible();
+  await expect(page.locator('.wardrobe-item')).toHaveCount(16);
+  const lava = page.locator('.wardrobe-item[data-cosmetic="core_lava"]');
+  await lava.click();
+  await expect(lava).toHaveAttribute('data-state', 'worn');
+  await expect(page.locator('#shopGoldBalance')).toHaveText('1.050');
+  await expect(page.locator('#shopCosmeticCount')).toHaveText('1/16');
+  // Too expensive now: nothing happens.
+  const glacier = page.locator('.wardrobe-item[data-cosmetic="arena_glacier"]');
+  await expect(glacier).toHaveAttribute('data-state', 'locked');
+  await glacier.click({ force: true });
+  await expect(glacier).toHaveAttribute('data-state', 'locked');
+  await page.locator('#closeShopBtn').click();
+  await page.locator('#startBtn').click();
+  await expect.poll(() => page.evaluate(() => gameState)).toBe('PLAYING');
+  expect(await page.evaluate(() => equippedCosmetic('core').color)).toBe('#ff6a3d');
+  expect(errors).toEqual([]);
+});
