@@ -287,7 +287,8 @@ test('Odak 3.2 pool holds 8 weapons (plasma + 7 slotted) and 10 passives', () =>
   assert.deepEqual(x, { slotted: 7, passive: 10 });
 });
 
-test('Odak 3.2 Soğutucu cuts ability maxima and weapon/Prism cooldowns by 10 % per tier', () => {
+// Odak 4.3 · an EFSANEVİ pick cuts 16 % per tier (NADİR keeps the old 10 %).
+test('Odak 3.2 Soğutucu cuts ability maxima and weapon/Prism cooldowns per tier by its rarity', () => {
   const { run } = setup();
   const x = JSON.parse(run(`(() => {
     startNewGame();
@@ -305,12 +306,13 @@ test('Odak 3.2 Soğutucu cuts ability maxima and weapon/Prism cooldowns by 10 % 
     return JSON.stringify({ base, tiers, nova: player.novaMaxCooldown, shield: player.shieldMaxCooldown,
       shockWait: +shockWait.toFixed(4), label: getUpgradeCardPresentation(coolant, RARITIES[0], 0).label });
   })()`));
-  assert.deepEqual(x.tiers.map(t => t.mult), [0.9, 0.81, 0.729]);
-  assert.ok(Math.abs(x.tiers[2].dash - Math.max(0.8, x.base.dash * 0.729)) < 1e-9);
-  assert.ok(Math.abs(x.tiers[2].prism - x.base.prism * 0.729) < 1e-9);
-  assert.ok(Math.abs(x.nova - Math.max(4, x.base.nova * 0.729)) < 1e-9);
-  assert.ok(Math.abs(x.shield - Math.max(4, x.base.shield * 0.729)) < 1e-9);
-  assert.equal(x.shockWait, +(3.2 * 0.729).toFixed(4));
+  const k = 0.84 ** 3;
+  assert.deepEqual(x.tiers.map(t => t.mult), [0.84, 0.7056, +k.toFixed(4)]);
+  assert.ok(Math.abs(x.tiers[2].dash - Math.max(0.8, x.base.dash * k)) < 1e-9);
+  assert.ok(Math.abs(x.tiers[2].prism - x.base.prism * k) < 1e-9);
+  assert.ok(Math.abs(x.nova - Math.max(4, x.base.nova * k)) < 1e-9);
+  assert.ok(Math.abs(x.shield - Math.max(4, x.base.shield * k)) < 1e-9);
+  assert.equal(x.shockWait, +(3.2 * k).toFixed(4));
   assert.equal(x.label, 'SİSTEM MODÜLÜ');
 });
 
@@ -7853,4 +7855,48 @@ test('Odak 4.2 conduits, field devices, quests and the circuit pick queue their 
     currentUpgradeChoices=[{upg,rarity:RARITIES[0]}];selectUpgradeOption(0);
     return guideQueue.map(g=>g.id).join(',');})()`);
   assert.equal(circuit, 'circuit');
+});
+
+test('Odak 4.3 every card is stronger at a higher rarity, and the card says by how much', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(()=>{
+    // Pick one card at a rarity through the real level-up flow, then read the player.
+    const pickAt = (id, r) => { startNewGame(); const upg = UPGRADES_POOL.find(u => u.id === id);
+      gameState = 'LEVEL_UP'; currentUpgradeChoices = [{ upg, rarity: RARITIES[r] }]; selectUpgradeOption(0); return upg; };
+    const read = {
+      coolant: () => 1 - getCooldownMult(player),
+      collector: () => getCollectorXpMult(player) - 1,
+      circuit_weaver: () => cardTierCap(player, 'circuit_weaver'),
+      phase_echo: () => cardTierCap(player, 'phase_echo'),
+    };
+    const flat = {};
+    for (const [id, f] of Object.entries(read)) flat[id] = [0, 1, 2, 3].map(r => { pickAt(id, r); return +f().toFixed(4); });
+    const descs = {};
+    for (const id of Object.keys(read)) { const upg = UPGRADES_POOL.find(u => u.id === id); descs[id] = [0, 3].map(r => upg.getDesc(RARITIES[r])); }
+    // Every card: no two rarities print the same description, so no card hides its rarity.
+    const sameText = UPGRADES_POOL.filter(u => u.getDesc(RARITIES[0]) === u.getDesc(RARITIES[3])).map(u => u.id);
+    // Mixed picks: each tier keeps its own rarity, caps use the rarest.
+    startNewGame(); const c = UPGRADES_POOL.find(u => u.id === 'circuit_weaver');
+    for (const r of [0, 3, 1]) { gameState = 'LEVEL_UP'; currentUpgradeChoices = [{ upg: c, rarity: RARITIES[r] }]; selectUpgradeOption(0); }
+    const mixed = cardTierValues(player, 'circuit_weaver'), cap = cardTierCap(player, 'circuit_weaver');
+    // Phase echo really lures more enemies when rarer.
+    const lured = [0, 3].map(r => { pickAt('phase_echo', r); player.x = 300; player.y = 300; phaseEchoes = []; player.phaseEchoReadyAt = 0;
+      enemies = Array.from({ length: 14 }, (_, i) => new Enemy(310 + i * 4, 300, 'SWARM'));
+      deployPhaseEcho(player, { x: 300, y: 300 }); return phaseEchoes[0].targets.length; });
+    return JSON.stringify({ flat, descs, sameText, mixed, cap, lured });
+  })()`));
+  assert.deepEqual(x.flat, {
+    coolant: [0.08, 0.1, 0.13, 0.16],
+    collector: [0.12, 0.15, 0.19, 0.24],
+    circuit_weaver: [12, 16, 20, 24],
+    phase_echo: [5, 6, 8, 10],
+  });
+  assert.deepEqual(x.descs.coolant.map(d => d.match(/%(\d+)/)[1]), ['8', '16']);
+  assert.deepEqual(x.descs.collector.map(d => d.match(/%(\d+)/)[1]), ['12', '24']);
+  assert.match(x.descs.circuit_weaver[1], /en fazla 24 düşmanı/);
+  assert.match(x.descs.phase_echo[1], /en fazla 10 sıradan/);
+  assert.deepEqual(x.sameText, []);
+  assert.deepEqual(x.mixed, [12, 24, 16]);
+  assert.equal(x.cap, 24);
+  assert.deepEqual(x.lured, [5, 10]);
 });

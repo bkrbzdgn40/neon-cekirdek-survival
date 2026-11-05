@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 4.3 · Kart enderliği her kartta güç farkı
+- Enderlikten etkilenmeyen dört kart artık büyür (YAYGIN / NADİR / DESTANSI / EFSANEVİ): Soğutucu %8/10/13/16 bekleme kısaltması, Toplayıcı %12/15/19/24 XP, Devre Örücü 12/16/20/24 hedef, Faz Yankısı 5/6/8/10 düşman.
+- Her kademe kendi enderliğini saklar; hedef sınırında en ender kademe geçerli. NADİR eski sabit değere eşit, kaydı olmayan kademe NADİR sayılır.
+- Kart açıklamaları gerçek sayıyı yazar; hiçbir kartın yaygın ve efsanevi açıklaması aynı değil (testle korunur).
+
 ## Odak 4.2 · Tek seferlik görev rehberi
 - Görev, ikmal halkası, saha cihazı, 6 arena olayı ve Devre Örücü ilk göründüğünde oyun durur: gerçek nesne ekranda halkayla vurgulanır, yanında döngülü canlı mini demo ve NE / NASIL / KAZANÇ satırları çıkar.
 - Video yok: demo oyunun kendi çizimi, metin canlı kuralları okur (süreler değişince rehber de değişir). Her rehber bir kez çıkar, kayıtta `guides` olarak tutulur; Nasıl Oynanır ekranında "Rehberleri yeniden göster" var.
