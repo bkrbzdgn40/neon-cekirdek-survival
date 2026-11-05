@@ -414,7 +414,7 @@
                                 KONTROLLER
                             </button>
                             <button id="tabCodexBtn" type="button" class="px-4 py-2 rounded-lg font-cyber text-xs font-bold tracking-wider border border-transparent text-gray-400 hover:text-white hover:bg-gray-900 transition cursor-pointer">
-                                TEHDİTLER
+                                TEHDİTLER <span id="codexCount" class="codex-count">0/15</span>
                             </button>
                         </div>
 
@@ -464,29 +464,8 @@
 <div class="bg-gray-900/70 rounded-lg p-2.5 border border-gray-700/50 flex items-start gap-2.5"><div class="font-cyber text-cyan-300 border border-cyan-500/50 rounded-md px-2 py-1 text-xs">3</div><div><div class="text-[11px] font-cyber font-bold text-white">BOSS GELİYOR</div><p class="text-[11px] text-gray-400 mt-1 leading-snug">Uyarı çizgisinden çık; Atılım, EMP ve Cinnet zamanlamanı koru.</p></div></div>
                       </div>
                     </div>
-                    <!-- TAB 2: Enemy Threat Codex -->
-                    <div id="tabCodexContent" class="hidden grid-cols-1 sm:grid-cols-2 gap-3 xl:gap-4 text-left items-stretch">
-                        <div class="bg-gray-900/80 border-l-4 border-red-500 p-3.5 xl:p-4 rounded-r-xl flex flex-col justify-center">
-                            <div class="font-cyber text-xs sm:text-sm font-bold text-red-400 mb-1">KAMİKAZE & HAYALET SUİKASTÇI</div>
-                            <p class="text-xs text-gray-300 leading-relaxed">Kamikazeler temas anında patlar; Dalga 5+ sonrası gelen Suikastçılar ise zikzak çizerek yüksek hızda saldırır.</p>
-                        </div>
-                        <div class="bg-gray-900/80 border-l-4 border-pink-500 p-3.5 xl:p-4 rounded-r-xl flex flex-col justify-center">
-                            <div class="font-cyber text-xs sm:text-sm font-bold text-pink-400 mb-1">KESKİN NİŞANCI</div>
-                            <p class="text-xs text-gray-300 leading-relaxed">Uzaktan lazer kilidi açar ve yüksek hızlı delici mermi ateşler. Lazer çizgisini gördüğünde Siber Atılım kullan!</p>
-                        </div>
-                        <div class="bg-gray-900/80 border-l-4 border-purple-500 p-3.5 xl:p-4 rounded-r-xl flex flex-col justify-center">
-                            <div class="font-cyber text-xs sm:text-sm font-bold text-purple-400 mb-1">KARA DELİK ANOMALİSİ</div>
-                            <p class="text-xs text-gray-300 leading-relaxed">Çekirdeğini kendisine doğru çeken tehlikeli bir yerçekimi kuyusu oluşturur; sürülerin arasına çekilmemeye dikkat et.</p>
-                        </div>
-                        <div class="bg-gray-900/80 border-l-4 border-sky-400 p-3.5 xl:p-4 rounded-r-xl flex flex-col justify-center">
-                            <div class="font-cyber text-xs sm:text-sm font-bold text-sky-400 mb-1">AEGIS MUHAFIZI & ELİTLER</div>
-                            <p class="text-xs text-gray-300 leading-relaxed">Kritik olmayan mermilere karşı %45 hasار sönümler. Altın haleli Elitler kontrollü oranlarla sandık bırakabilir.</p>
-                        </div>
-                        <div class="bg-gray-900/80 border-l-4 border-yellow-400 p-3.5 xl:p-4 rounded-r-xl sm:col-span-2 flex flex-col justify-center">
-                            <div class="font-cyber text-xs sm:text-sm font-bold text-yellow-300 mb-1">4 FARKLI BOSS SINIFI & ÇOKLU BOSS BASKINLARI</div>
-                            <p class="text-xs text-gray-300 leading-relaxed"><b>Mega-Yıkıcı</b>, <b>Zırhlı Behemot</b>, <b>Hiçlik Örümceği</b> ve <b>Omega Prizma</b>! İleri safhalarda arenaya <b>aynı anda 2 veya 3 Boss</b> birden iner!</p>
-                        </div>
-                    </div>
+                    <!-- Odak 5.1: Düşman sözlüğü, filled from what the player has met -->
+                    <div id="tabCodexContent" class="hidden text-left" aria-live="polite"></div>
 
             <div class="flex flex-wrap items-center justify-end gap-3">
                 <span id="guideResetNote" class="text-[11px] text-cyan-200/80" role="status"></span>

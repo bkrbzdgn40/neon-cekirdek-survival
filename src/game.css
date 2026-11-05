@@ -2174,3 +2174,31 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
     .report-actions { padding-block: 12px; }
     .report-actions button { min-height: 42px; padding-block: 10px; }
 }
+
+/* Odak 5.1 · Düşman sözlüğü: met foes in colour, the rest as silhouettes. */
+#tabCodexContent { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; align-content: start; }
+.codex-count { margin-left: 6px; font-size: 10px; color: #9fb9c7; }
+.codex-summary { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 10px; font-size: 12px; color: #b7cce2; padding: 2px 2px 6px; }
+.codex-summary b { font: 800 11px 'Orbitron', sans-serif; color: #e6f7ff; margin-right: 8px; letter-spacing: .05em; }
+.codex-meter { flex: 0 0 160px; height: 6px; border-radius: 9px; background: #1d2b3d; overflow: hidden; }
+.codex-meter > span { display: block; height: 100%; background: linear-gradient(90deg, #2dd4bf, #38bdf8); }
+.codex-card { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px;
+    background: #0e1828; border: 1px solid #22324a; border-left: 3px solid var(--codex-color); }
+.codex-card[data-seen="false"] { border-left-color: #2b3a50; background: #0a111d; }
+.codex-shape { flex: none; width: 46px; height: 46px; }
+.codex-shape polygon { fill: color-mix(in srgb, var(--codex-color) 18%, transparent); stroke: var(--codex-color); stroke-width: 3; }
+.codex-shape .codex-shape-ring { fill: none; stroke: var(--codex-color); stroke-width: 2; stroke-dasharray: 5 4; opacity: .7; }
+.codex-card[data-seen="true"] .codex-shape { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--codex-color) 55%, transparent)); }
+.codex-card[data-seen="false"] .codex-shape polygon { fill: #1a2434; stroke: #2e3d53; }
+.codex-card[data-seen="false"] .codex-shape .codex-shape-ring { stroke: #2e3d53; }
+.codex-body { min-width: 0; flex: 1; }
+.codex-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.codex-head h3 { font: 800 12px 'Orbitron', sans-serif; color: var(--codex-color); letter-spacing: .03em; }
+.codex-card[data-seen="false"] .codex-head h3 { color: #5d6f87; }
+.codex-tag { flex: none; font: 700 9px 'Orbitron', sans-serif; color: #8ea6bd; letter-spacing: .06em; }
+.codex-what { font-size: 12px; line-height: 1.5; color: #d2e2f2; margin-top: 4px; }
+.codex-card[data-seen="false"] .codex-what { color: #7f93aa; }
+.codex-counter { font-size: 11px; line-height: 1.5; color: #a9c4da; margin-top: 4px; }
+.codex-counter b { color: #e6f7ff; font-weight: 700; }
+.codex-kills { display: inline-block; margin-top: 6px; font: 700 9px 'Orbitron', sans-serif; color: #8ea6bd; letter-spacing: .06em; }

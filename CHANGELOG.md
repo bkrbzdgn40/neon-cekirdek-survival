@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 5.1 · Düşman sözlüğü
+- Nasıl Oynanır › TEHDİTLER artık bir sözlük: 10 düşman, elit ve 4 boss. Bir koşuda karşılaştığın düşman kalıcı olarak kaydedilir; adı, ne yaptığı, nasıl yenileceği ve kaç tane imha ettiğin görünür.
+- Görmediğin düşmanlar adı gizli bir siluet olarak durur ve hangi dalga civarında çıktığını söyler. Yeni bir düşman görünce koşu sırasında "SÖZLÜĞE EKLENDİ" yazar.
+- Sözlük kayıtla ve yedekle birlikte saklanır; bozuk kayıt satırları atlanır.
+
 ## Odak 4.10 · İyon Bahçesi ve Yarık Geçidi canlanır
 - İyon Bahçesi: polenler yukarı süzülür, çiçekleri yumuşak kökler bağlar ve hazır çiçekten köke ışık akar. Çiçekler nefes alır; hazırken açık durur ve dalga yayar, dolarken iyice açılıp iyonları çekirdeğine çeker, harcanınca tomurcuk olur, patlarken parlar.
 - Yarık Geçidi: geçitler içe kıvrılan kollarıyla dönen birer girdap olur ve toz yutar. Hazır geçit nefes verir, ışınlanmada iki geçit birden parlar, bağlantı çizgisinde enerji paketleri akar.

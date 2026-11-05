@@ -697,6 +697,137 @@
             saveMetaProgress();
             return true;
         }
+        // Odak 5.1 · Düşman sözlüğü. A foe met in a run is recorded for good; the rest wait
+        // as silhouettes. No lock: enemies already arrive by wave.
+        const ENEMY_CODEX = Object.freeze([
+            { id: 'SWARM', name: 'SÜRÜ', color: '#ff0055', sides: 3,
+              what: 'Küçük, hızlı ve kalabalık gelir. Tek başına zayıftır, topluca seni sıkıştırır.',
+              counter: 'Geri çekilirken ateş et; alan hasarı veren modüller sürüyü hızla eritir.' },
+            { id: 'SPLITTER', name: 'BÖLÜNEN', color: '#b000ff', sides: 4,
+              what: 'Ölünce iki hızlı mini parçaya ayrılır.',
+              counter: 'Yakınında öldürme; parçalar sana ulaşmadan mesafe aç.' },
+            { id: 'KAMIKAZE', name: 'KAMİKAZE', color: '#ff3300', sides: 3,
+              what: 'Çok hızlı koşar ve temas anında patlar.',
+              counter: 'Düz gelir: son anda yana atıl ya da yolda vur.' },
+            { id: 'DASHER', name: 'HÜCUMCU', color: '#ff8800', sides: 4,
+              what: 'Bir an durup nişan alır, sonra düz bir çizgide hücum eder.',
+              counter: 'Durduğunu görünce hücum çizgisinden çık.' },
+            { id: 'SHOOTER', name: 'TOPÇU', color: '#00ff88', sides: 5,
+              what: 'Mesafesini koruyup sana mermi atar.',
+              counter: 'Mermilerin arasından yaklaş; EMP Nova mermileri siler.' },
+            { id: 'TANK', name: 'TANK', color: '#ffaa00', sides: 6,
+              what: 'Yavaş ama çok canlıdır, değdiğinde sert vurur.',
+              counter: 'Etrafında tur atarak vur; arkana takılmasına izin verme.' },
+            { id: 'SHIELD_BEARER', name: 'AEGIS MUHAFIZI', color: '#38bdf8', sides: 6,
+              what: 'Kritik olmayan mermilerin %45 hasarını söndürür, sürüyü korur.',
+              counter: 'Kritik vuruşlar zırhı deler; önce muhafızı indir.' },
+            { id: 'SNIPER', name: 'KESKİN NİŞANCI', color: '#ff00aa', sides: 4,
+              what: 'Uzaktan lazerle kilitlenir ve delici, hızlı bir mermi atar.',
+              counter: 'Lazer çizgisini görünce atıl ya da çizgiden çık.' },
+            { id: 'ASSASSIN', name: 'HAYALET SUİKASTÇI', color: '#00f3ff', sides: 3,
+              what: 'Zikzak çizerek çok hızlı yaklaşır.',
+              counter: 'Kaçma, yerinde kalıp ateş et; zikzakta hız keser.' },
+            { id: 'GRAV_WELL', name: 'KARA DELİK ANOMALİSİ', color: '#9933ff', sides: 8,
+              what: 'Seni kendine çeken bir yerçekimi kuyusu açar.',
+              counter: 'Çekime karşı yürü ve sürünün içine çekilme; uzaktan erit.' },
+            { id: 'ELITE', name: 'ELİT', color: '#ffd166', sides: 7, tag: 'ELİT',
+              what: 'Altın haleli, güçlendirilmiş düşman: daha çok can ve hasar.',
+              counter: 'Öldürünce sandık bırakabilir; odaklan ama çevreni kolla.' },
+            { id: 'BOSS_DESTROYER', name: 'MEGA-ÇEKİRDEK YIKICI', color: '#ff0055', sides: 8, tag: 'BOSS',
+              what: 'Çevresine halka halinde mermi yaylımları saçar.',
+              counter: 'Halkaların boşluğunu bul ve oradan geç.' },
+            { id: 'BOSS_TITAN', name: 'ZIRHLI SİBER BEHEMOT', color: '#ff8800', sides: 6, tag: 'BOSS',
+              what: 'Ağır zırhlıdır; kamikaze çağırır ve yoğun ateş açar.',
+              counter: 'Önce çağırdığı kamikazeleri temizle, sonra bossa dön.' },
+            { id: 'BOSS_VOID', name: 'KUANTUM HİÇLİK ÖRÜMCEĞİ', color: '#b000ff', sides: 10, tag: 'BOSS',
+              what: 'Seni kendine çeker ve çekerken mermi yağdırır.',
+              counter: 'Çekime karşı hareket et; atılımı çekim anına sakla.' },
+            { id: 'BOSS_PRISM', name: 'OMEGA PRİZMA HÜKÜMDARI', color: '#00f3ff', sides: 4, tag: 'BOSS',
+              what: 'Keskin nişancı gibi kilitlenip hızlı ışın mermileri atar.',
+              counter: 'Kilit çizgisini izle ve tam ateş anında yana atıl.' }
+        ]);
+        const CODEX_KILL_CAP = 1000000000;
+        let codexSeen = new Set();
+        let codexKills = {};
+        function parseCodex(data) {
+            const known = new Set(ENEMY_CODEX.map(e => e.id));
+            const seen = Array.isArray(data?.seen) ? data.seen.filter(id => known.has(id)) : [];
+            const kills = {};
+            if (data?.kills && typeof data.kills === 'object') {
+                for (const id of known) {
+                    const n = data.kills[id];
+                    if (Number.isSafeInteger(n) && n > 0) kills[id] = Math.min(n, CODEX_KILL_CAP);
+                }
+            }
+            return { seen: new Set(seen), kills };
+        }
+        function codexSaveDataFrom(codex) {
+            return { seen: [...codex.seen], kills: { ...codex.kills } };
+        }
+        function codexSaveData() {
+            return codexSaveDataFrom({ seen: codexSeen, kills: codexKills });
+        }
+        function codexEntryIdsFor(enemy) {
+            const ids = [];
+            if (ENEMY_CODEX.some(e => e.id === enemy.type)) ids.push(enemy.type);
+            if (enemy.isElite) ids.push('ELITE');
+            return ids;
+        }
+        // Called as a foe is created; only real runs count.
+        function recordCodexEncounter(enemy) {
+            if (gameState !== 'PLAYING' || !player) return;
+            let added = false;
+            for (const id of codexEntryIdsFor(enemy)) {
+                if (codexSeen.has(id)) continue;
+                codexSeen.add(id);
+                added = true;
+                const entry = ENEMY_CODEX.find(e => e.id === id);
+                createFloatingText(player.x, player.y - 92, 'SÖZLÜĞE EKLENDİ · ' + entry.name, entry.color, 13);
+            }
+            if (added) saveMetaProgress();
+        }
+        function recordCodexKill(enemy) {
+            for (const id of codexEntryIdsFor(enemy)) {
+                codexKills[id] = Math.min(CODEX_KILL_CAP, (codexKills[id] || 0) + 1);
+            }
+        }
+        function codexFirstWave(id) {
+            return ENEMY_SPAWN_WEIGHTS.find(e => e.type === id)?.from ?? null;
+        }
+        function codexShapePoints(sides, radius) {
+            const pts = [];
+            for (let i = 0; i < sides; i++) {
+                const a = -Math.PI / 2 + i * Math.PI * 2 / sides;
+                pts.push((Math.cos(a) * radius).toFixed(1) + ',' + (Math.sin(a) * radius).toFixed(1));
+            }
+            return pts.join(' ');
+        }
+        function renderEnemyCodex() {
+            const host = document.getElementById('tabCodexContent');
+            if (!host || typeof document.createElement !== 'function') return;
+            const total = ENEMY_CODEX.length, seen = ENEMY_CODEX.filter(e => codexSeen.has(e.id)).length;
+            const count = document.getElementById('codexCount');
+            if (count) count.textContent = seen + '/' + total;
+            const cards = ENEMY_CODEX.map(e => {
+                const known = codexSeen.has(e.id);
+                const from = codexFirstWave(e.id);
+                const tag = e.tag || ('DALGA ' + from + '+');
+                const hint = e.tag === 'BOSS' ? 'Boss dalgalarında çıkar.' : e.tag === 'ELİT' ?
+                    'Dalga ilerledikçe altın haleli düşmanlar çıkar.' : 'Dalga ' + from + ' civarında çıkar.';
+                const shape = '<svg class="codex-shape" viewBox="-32 -32 64 64" aria-hidden="true">' +
+                    (e.tag === 'BOSS' ? '<circle r="29" class="codex-shape-ring"/>' : '') +
+                    '<polygon points="' + codexShapePoints(e.sides, e.tag === 'BOSS' ? 24 : 21) + '"/></svg>';
+                return '<article class="codex-card" data-codex="' + e.id + '" data-seen="' + known + '" style="--codex-color:' + e.color + '">' +
+                    shape + '<div class="codex-body"><div class="codex-head"><h3>' + (known ? e.name : '???') + '</h3>' +
+                    '<span class="codex-tag">' + tag + '</span></div>' +
+                    (known ? '<p class="codex-what">' + e.what + '</p><p class="codex-counter"><b>KARŞI:</b> ' + e.counter + '</p>' +
+                        '<span class="codex-kills">İMHA · ' + (codexKills[e.id] || 0).toLocaleString('tr-TR') + '</span>' :
+                        '<p class="codex-what">Henüz karşılaşmadın. ' + hint + '</p>') +
+                    '</div></article>';
+            }).join('');
+            host.innerHTML = '<div class="codex-summary"><span><b>SÖZLÜK · ' + seen + '/' + total + '</b> Karşılaştığın düşmanlar buraya kendiliğinden eklenir.</span>' +
+                '<span class="codex-meter"><span style="width:' + Math.round(seen / total * 100) + '%"></span></span></div>' + cards;
+        }
         // Odak 4.4 · the lab sells one revive tier now; saves may still hold the old three.
         const META_UPGRADE_LIMITS = { baseDamage: 10, maxHp: 10, speedDash: 8, greed: 8, defibrillator: 1 };
         const LEGACY_DEFIBRILLATOR_MAX = 3;
@@ -742,6 +873,7 @@
                 ownedContent = new Set(parseOwnedContent(data.owned) || []);
                 lastRunSummary = parseLastRunSummary(data.lastRun);
                 guidesSeen = new Set(parseGuidesSeen(data.guides));
+                ({ seen: codexSeen, kills: codexKills } = parseCodex(data.codex));
                 if (data.upgrades && typeof data.upgrades === 'object') {
                     const rawDefib = data.upgrades.defibrillator;
                     const legacyDefib = Number.isSafeInteger(rawDefib) && rawDefib >= 0 &&
@@ -774,6 +906,7 @@
                     owned: [...ownedContent],
                     lastRun: lastRunSummary,
                     guides: [...guidesSeen],
+                    codex: codexSaveData(),
                     upgrades: { ...metaUpgrades }
                 }));
             } catch (error) {
@@ -802,6 +935,7 @@
                     unlockLevel,
                     unlockFailedRuns,
                     owned: [...ownedContent],
+                    codex: codexSaveData(),
                     upgrades: { ...metaUpgrades }
                 },
                 graphics: graphicsQuality
@@ -854,6 +988,8 @@
                         unlockLevel: restoredUnlockLevel,
                         unlockFailedRuns: restoredFailedRuns,
                         owned: restoredOwned,
+                        // Odak 5.1 · older backups simply have an empty codex.
+                        codex: codexSaveDataFrom(parseCodex(data.codex)),
                         upgrades
                     },
                     graphics: backup.graphics
@@ -899,6 +1035,7 @@
             unlockSpotlightPending = false;
             metaUpgrades = { ...backup.progress.upgrades };
             ownedContent = new Set(backup.progress.owned);
+            ({ seen: codexSeen, kills: codexKills } = parseCodex(backup.progress.codex));
             applyGraphicsQuality(backup.graphics, false);
             updateMenuCounters();
             return true;
@@ -2836,6 +2973,7 @@
                 this.type = type;
                 this.isBoss = type.startsWith('BOSS');
                 this.isElite = isElite && !this.isBoss;
+                recordCodexEncounter(this);
                 this.formationId = tacticalMeta?.formationId || null;
                 this.tacticalRole = tacticalMeta?.role || null;
                 this.tacticalSide = Number.isFinite(tacticalMeta?.side) ? tacticalMeta.side : null;
@@ -3413,6 +3551,7 @@
                 this.dead = true;
                 combatDirector?.intensityObserver.recordKill(this, player);
                 kills++;
+                recordCodexKill(this);
                 advanceQuest('KILLS',1);
                 if(this.isElite) advanceQuest('ELITE_HUNT',1);
 
@@ -13209,6 +13348,7 @@
         function openHowTo() {
             const modal = document.getElementById('howToModal');
             if (!modal) return;
+            renderEnemyCodex();
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             document.getElementById('closeHowToBtn')?.focus?.();

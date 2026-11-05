@@ -8071,3 +8071,46 @@ test('Odak 4.10 garden and rift floors animate, draw less on low, and showcases 
   assert.ok(burst.shards >= 8, `shards ${burst.shards}`);
   assert.equal(burst.escapeRing, true);
 });
+
+// Odak 5.1 · Düşman sözlüğü: met foes (and elites) are recorded once, kills are counted,
+// both survive a reload and a backup; corrupt entries are dropped; menu spawns do not count.
+test('Odak 5.1 enemy codex records encounters and kills and keeps them', () => {
+  const key = 'neonCekirdek.meta.v1';
+  const store = {};
+  const first = setup(store);
+  const x = JSON.parse(first.run(`(()=>{
+    gameState='MENU';new Enemy(10,10,'TANK');const menu=codexSeen.size;
+    startNewGame();gameState='PLAYING';
+    const a=new Enemy(100,100,'SWARM');new Enemy(120,100,'SWARM');const e=new Enemy(140,100,'DASHER',true);
+    const texts=floatingTexts.filter(t=>String(t.text).startsWith('SÖZLÜĞE EKLENDİ')).length;
+    a.die();e.die();
+    renderEnemyCodex();
+    const html=document.getElementById('tabCodexContent').innerHTML;
+    saveMetaProgress();
+    return JSON.stringify({menu,seen:[...codexSeen].sort(),kills:codexKills,texts,
+      known:(html.match(/data-seen="true"/g)||[]).length,unknown:(html.match(/data-seen="false"/g)||[]).length,
+      swarmName:html.includes('SÜRÜ'),tankName:html.includes('>TANK<'),
+      backup:JSON.stringify(createProgressBackup())});})()`));
+  assert.equal(x.menu, 0, 'menu demo enemies do not count');
+  assert.deepEqual(x.seen, ['DASHER', 'ELITE', 'SWARM']);
+  assert.deepEqual(x.kills, { SWARM: 1, DASHER: 1, ELITE: 1 });
+  assert.equal(x.texts, 3, 'one note per new entry');
+  assert.equal(x.known, 3);
+  assert.equal(x.unknown, 12, 'the rest wait as silhouettes');
+  assert.equal(x.swarmName, true);
+  assert.equal(x.tankName, false, 'unmet foes keep their name hidden');
+  // Reload.
+  const again = JSON.parse(setup(store).run('JSON.stringify({seen:[...codexSeen].sort(),kills:codexKills})'));
+  assert.deepEqual(again, { seen: ['DASHER', 'ELITE', 'SWARM'], kills: { SWARM: 1, DASHER: 1, ELITE: 1 } });
+  // Corrupt codex data is filtered, the rest of the save still loads.
+  const bad = { [key]: JSON.stringify({ version: 2, gold: 77, highScore: 0, maxWave: 3,
+    codex: { seen: ['SWARM', 'NOPE', 5], kills: { SWARM: -3, TANK: 2.5, SNIPER: 4, NOPE: 9 } },
+    upgrades: { baseDamage: 0, maxHp: 0, speedDash: 0, greed: 0, defibrillator: 0 } }) };
+  const c = JSON.parse(setup(bad).run('JSON.stringify({seen:[...codexSeen],kills:codexKills,gold:totalGold})'));
+  assert.deepEqual(c, { seen: ['SWARM'], kills: { SNIPER: 4 }, gold: 77 });
+  // Backup round trip into a fresh profile.
+  const fresh = setup({});
+  const r = JSON.parse(fresh.run(`(()=>{gameState='MENU';const ok=restoreProgressBackup(${JSON.stringify(x.backup)});
+    return JSON.stringify({ok,seen:[...codexSeen].sort(),kills:codexKills});})()`));
+  assert.deepEqual(r, { ok: true, seen: ['DASHER', 'ELITE', 'SWARM'], kills: { SWARM: 1, DASHER: 1, ELITE: 1 } });
+});
