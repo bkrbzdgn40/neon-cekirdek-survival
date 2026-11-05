@@ -477,7 +477,7 @@ Soğutucu, Toplayıcı, Devre Örücü ve Faz Yankısı enderlikle büyür (NAD�
 ### - [x] 4.4 Dirilme ekonomisi
 En fazla 3 ücretsiz hak, koşu başına 1 altınlı dirilme (fiyat dalgayla artar), azalan dirilme canı, +50 Cinnet kalkar; fazla Laboratuvar kademesi iade edilir.
 
-### - [ ] 4.5 Kızıl Makas görseli ve tehlikesi
+### - [x] 4.5 Kızıl Makas görseli ve tehlikesi
 ### - [ ] 4.6 İyon Korosu görseli
 ### - [ ] 4.7 Faz Kıskacı görseli
 Biyom olayları animasyonlu tuval çizimi olur; dosya eklenmez, düşük grafikte sadeleşir.

@@ -6526,18 +6526,30 @@ test('M5.20 signature operations start on each middle wave, once per wave',()=>{
  assert.equal(x[11].started,4);
 });
 
+// Odak 4.5 · presses hit for 20, and the second one aims where the player stood
+// when the first slammed: walking away dodges it, standing still does not.
 test('M5.20 giant presses telegraph before bounded once-only hits',()=>{
  const {run}=setup();
- const x=JSON.parse(run("(()=>{startNewGame();wave=7;waveTimer=2;nextBossTime=1000;totalTime=100;updateArenaChapter(.02);const x0=worldWidth*.28,x1=worldWidth*.72;enemies=Array.from({length:15},()=>new Enemy(x0,worldHeight*.5,'TANK'));for(const e of enemies)e.hp=e.maxHp=5000;player.x=x0;const hp=player.hp;totalTime=101.4;updateArenaChapter(.02);const before={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits};totalTime=101.9;updateArenaChapter(.02);const first={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits,mask:chapterShowcase.pulseMask};updateArenaChapter(.02);const repeated={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits};player.invulnTimer=0;player.x=x1;totalTime=103.9;updateArenaChapter(.02);const after={hp:player.hp,mask:chapterShowcase.pulseMask};return JSON.stringify({hp,before,first,repeated,after});})()"));
+ const press=(moveAway)=>JSON.parse(run(`(()=>{startNewGame();wave=7;waveTimer=2;nextBossTime=1000;totalTime=100;updateArenaChapter(.02);
+   const x0=worldWidth*.28;enemies=Array.from({length:15},()=>new Enemy(x0,worldHeight*.5,'TANK'));for(const e of enemies)e.hp=e.maxHp=5000;
+   player.x=x0;const hp=player.hp;totalTime=101.4;updateArenaChapter(.02);const before={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits};
+   totalTime=101.9;updateArenaChapter(.02);const first={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits,mask:chapterShowcase.pulseMask,aim:chapterShowcase.pressX[1]===x0};
+   updateArenaChapter(.02);const repeated={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits};
+   player.invulnTimer=0;if(${moveAway})player.x=x0+200;totalTime=103.9;updateArenaChapter(.02);
+   const after={hp:player.hp,mask:chapterShowcase.pulseMask};return JSON.stringify({hp,before,first,repeated,after});})()`));
+ const x=press(true);
  assert.equal(x.before.hp,x.hp);
  assert.equal(x.before.hits,0);
- assert.equal(x.first.hp,x.hp-8);
+ assert.equal(x.first.hp,x.hp-20);
  assert.equal(x.first.hits,10);
  assert.equal(x.first.mask,1);
+ assert.equal(x.first.aim,true);
  assert.equal(x.repeated.hp,x.first.hp);
  assert.equal(x.repeated.hits,10);
  assert.equal(x.after.mask,3);
- assert.equal(x.after.hp,x.hp-16);
+ assert.equal(x.after.hp,x.hp-20);
+ const stay=press(false);
+ assert.equal(stay.after.hp,stay.hp-40);
 });
 
 test('M5.20 ion chorus needs two distinct flowers and keeps bosses immune',()=>{

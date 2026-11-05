@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 4.5 · Kızıl Makas görseli ve tehlikesi
+- Presler artık dişli çelik çeneler: uyarı boyunca kapanır, zemin ısınır ve kenarlarda akan tehlike şeritleri var; çarpmada kapanır, ekran sarsılır, iki yandan kıvılcım saçılır. Sütunun üstünde geri sayım.
+- Pres hasarı 8 → 20 (her pres oyuncuya bir kez). İkinci pres ilkinin çarptığı anda oyuncunun durduğu yere kilitlenir ("SENİ İZLİYOR"), 2 sn uyarır: uzaklaşan kurtulur.
+- Düşük grafikte şerit ve parlama yok, daha az diş ve kıvılcım. Olay sürerken bölüm duyurusu aynı adı ikinci kez yazmaz.
+
 ## Odak 4.4 · Dirilme ekonomisi
 - En fazla 3 ücretsiz diriliş (1 temel, 1 Laboratuvar kademesi, 1 Öncü); koşu başına 1 altınlı diriliş, fiyatı 60 + 10 × dalga (eskiden 2 hak, 30 ve 65 altın).
 - Dirilme canı her seferinde azalır: %60, %45, sonra %30. Dirilişteki +50 Cinnet kalktı; koruma ve EMP patlaması aynı. Dirilme ekranı o dirilişin canını yazar.
