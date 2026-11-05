@@ -416,6 +416,24 @@ Yükseltme kartı bir sinerjiyi tamamlıyorsa bunu kartta göster (newSynergiesF
 
 ---
 
+## Faz 3.6 · Ekonomi ve ilk izlenim (oyuncu testinden önce)
+
+Kullanıcı kararı (2026-11-05): Laboratuvar bitince 40.000 altın boşta kalıyordu, menü de ilk izlenim için zayıftı. Seçilen yol: gelir ayarı (E1) + altınla içerik açma (E2) + Hangar menüsü (M2). Kural 1'in istisnası: yeni sistem eklenmez, mevcut şasi ve silahlar altına bağlanır.
+
+### - [x] 3.6 Altın geliri ayarı
+
+Ölçüm (ölümsüz bot, 20 dk, 2 tohum): Açgözlülük 8'de koşu başına 4.300–5.500 altın, Laboratuvarın tamamı ≈15.600. Altın küresi ve sandık altını dalga 20'den sonra büyümez; Açgözlülük kademe başına +%10 altın verir, XP'ye etkisi kalkar. Sonuç: koşu başına ≈350–700 altın.
+
+### - [ ] 3.7 Altınla içerik açma
+
+Hayalet ve Titan şasileri ile Faz 3'te eklenen silah ve pasifler Laboratuvarda altınla açılır. Dalgayla açılan sistemler (Faz 1) değişmez. `?unlock=all` hepsini açar.
+
+### - [ ] 3.8 Hangar ana menüsü
+
+Ortada seçili şasi canlı ve büyük, solda şasi seçimi, sağda "sıradaki hedef" ve son koşu özeti. Kontroller ayrı bir sekmeye taşınır. 1280×800 ve 1920×1080'de boş bant kalmaz.
+
+---
+
 ## Faz 4 · Kapalı test kapısı (oyunculara sunmadan önce)
 
 Plan bittiğinde, oyunu herkese açmadan önce **3–5 tanıdığa** oynat. Onları izle ama yardım etme.

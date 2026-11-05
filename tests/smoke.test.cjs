@@ -7706,3 +7706,23 @@ test('Odak 2.7d a hand-picked graphics quality is never changed automatically', 
     return JSON.stringify({quality:graphicsQuality,auto:graphicsAuto.enabled,out});})()`));
   assert.deepEqual(x, { quality: 'high', auto: false, out: [] });
 });
+
+test('Odak 3.6 gold stops growing past wave 20 and greed no longer boosts XP', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(()=>{
+    const pickup=(w)=>{startNewGame();wave=w;const before=totalGold;
+      const o=new EnergyOrb(player.x,player.y,1,true);o.update(1/60);return totalGold-before;};
+    const orb={w5:pickup(5),w20:pickup(20),w40:pickup(40)};
+    const chest={w20:getChestRewardProfile('elite',20,100,1).goldHeal.gold,w60:getChestRewardProfile('elite',60,100,1).goldHeal.gold};
+    metaUpgrades.greed=8;startNewGame();
+    const greedy={gold:player.greedBonus,xpMult:player.xpMultiplier,orb:pickup(20)};
+    const xp0=player.xp;player.gainXp(10);
+    return JSON.stringify({orb,chest,greedy,xpGain:player.xp-xp0});})()`));
+  assert.ok(x.orb.w5 < x.orb.w20, 'gold still grows in early waves');
+  assert.equal(x.orb.w40, x.orb.w20);
+  assert.equal(x.chest.w60, x.chest.w20);
+  assert.equal(x.greedy.xpMult, 1);
+  assert.equal(x.xpGain, 10);
+  assert.ok(Math.abs(x.greedy.gold - 1.8) < 1e-9);
+  assert.equal(x.greedy.orb, Math.round(x.orb.w20 * 1.8));
+});

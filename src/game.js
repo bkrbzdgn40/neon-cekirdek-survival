@@ -649,6 +649,9 @@
         function updateUnlockSpotlight() {
             if (unlockSpotlightIds.length && totalTime >= unlockSpotlightUntil) clearUnlockSpotlight();
         }
+        // Odak 3.6 · gold stops scaling past wave 20; greed only boosts gold.
+        const GOLD_ECONOMY = Object.freeze({ waveCap: 20, greedPerLevel: 0.10 });
+        function goldWave(currentWave) { return Math.min(GOLD_ECONOMY.waveCap, Math.max(1, currentWave || 1)); }
         const META_UPGRADE_LIMITS = { baseDamage: 10, maxHp: 10, speedDash: 8, greed: 8, defibrillator: 3 };
 
         function safeSaveInteger(value, fallback, max = 1000000000) {
@@ -848,7 +851,7 @@
                 name: 'Altın & XP Çarpanı',
                 icon: 'fa-solid fa-coins',
                 color: '#ffe600',
-                desc: 'Her kademe kazanılan XP ve Altın Çekirdek miktarını +%12 artırır.',
+                desc: 'Her kademe kazanılan Altın Çekirdek miktarını +%10 artırır.',
                 baseCost: 35,
                 costScale: 1.75,
                 maxLevel: 8
@@ -1280,7 +1283,7 @@
                 const hpBonus = metaUpgrades.maxHp * 18;
                 const spdBonus = 1 + metaUpgrades.speedDash * 0.04;
                 const dashCdReduction = 1 - metaUpgrades.speedDash * 0.04;
-                this.greedBonus = 1 + metaUpgrades.greed * 0.12;
+                this.greedBonus = 1 + metaUpgrades.greed * GOLD_ECONOMY.greedPerLevel;
 
                 this.speed = 285 * spdBonus;
 
@@ -1343,7 +1346,7 @@
                 this.level = 1;
                 this.xp = 0;
                 this.xpToNext = 125;
-                this.xpMultiplier = this.greedBonus;
+                this.xpMultiplier = 1;
                 this.magnetRadius = 85;
 
                 if (this.chassis === 'VANGUARD') {
@@ -3545,7 +3548,7 @@
                 if (dist < player.radius + this.radius + 5) {
                     this.dead = true;
                     if (this.isGold) {
-                        const goldAmt = Math.max(1, Math.round((2 + Math.floor(wave / 2)) * player.greedBonus)) * this.count;
+                        const goldAmt = Math.max(1, Math.round((2 + Math.floor(goldWave(wave) / 2)) * player.greedBonus)) * this.count;
                         totalGold += goldAmt;
                         sessionGold += goldAmt;
                         if(combatDirector) combatDirector.onGoldGranted('orbs',goldAmt);
@@ -3590,8 +3593,9 @@
         });
         function getChestRewardProfile(source,currentWave,xpNext,greed=1){
             const boss=source==='boss';
+            const gw=goldWave(currentWave);
             return {
-                goldHeal:{gold:Math.round((boss?22+currentWave*6:14+currentWave*3)*greed),
+                goldHeal:{gold:Math.round((boss?22+gw*6:14+gw*3)*greed),
                     heal:boss?30:18},
                 overdriveXp:{charge:boss?55:32,xp:xpNext*(boss?.45:.28)},
                 bulletNova:{shots:boss?24:12,charge:boss?30:18}

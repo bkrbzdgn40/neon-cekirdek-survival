@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 3.6 · Altın geliri ayarı
+- Altın küresi ve sandık altını dalga 20'den sonra büyümüyor (`GOLD_ECONOMY.waveCap`). Önceden dalga 75'te küre başına 39 altın düşüyordu, şimdi en fazla 12.
+- Açgözlülük kademe başına +%10 altın veriyor; XP artışı kalktı (kendini besleyen döngüydü). Açgözlülük 8'de 20 dk'lık koşu 4.300–5.500 altından ≈650'ye indi.
+- Kayıtlı altına dokunulmadı; birikmiş altın 3.7'de açılacak içeriklerde harcanacak.
+
 ## Odak 3.5 · Eski silahlar ±%25 bandında
 - Çatallı Plazma, Plazma Uydusu, Güdümlü Füze ve Zincirleme Yıldırım artık kademe başına hasar tablosu kullanıyor (`LEGACY_WEAPON_RULES`), değerler `sim-dps` ile ayarlandı.
 - Uydu en çok zayıfladı: temas hasarı oyuncu hasarının 0,96 katından 0,13 / 0,105 / 0,06 katına, evrim darbesi 0,62'den 0,35'e indi. TITAN şasisinin başlangıç uydusu da K1 gibi vurur.
