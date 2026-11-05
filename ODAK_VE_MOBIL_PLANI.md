@@ -515,6 +515,9 @@ Test bağımlılığı `package.json` + kilit dosyasında tek yerde; CI `npm ci`
 ### - [x] 5.7 Ana menü tek ekran
 Masaüstünde ana menü 540 px yüksekliğe kadar kaydırmasız sığar: sözleşmeler ortadaki boşluğa taşınır, kısa pencerede ikincil açıklamalar gizlenir. Mobilde sözleşmeler artık başlat düğmelerinin hemen üstünde.
 
+### - [x] 5.8 Geç oyun gücü
+Düşman XP'si dalgayla büyür (dalga başına +%8, en çok ×3,5). Koşuda toplanan her 100 altın o koşu için +%3 hasar verir (Altın Rezonansı, en çok +%60, HUD'da). Build dolunca seviye atlamak birikimli Aşırı Yük kartları sunar.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

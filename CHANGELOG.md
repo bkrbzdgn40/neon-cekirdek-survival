@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 5.8 · Geç oyun gücü
+- Düşmanların verdiği XP dalgayla büyür (dalga başına +%8, en çok ×3,5): ileri dalgalarda seviye atlamak yavaşlamaz.
+- Altın Rezonansı: koşuda toplanan her 100 altın o koşu için +%3 hasar (en çok +%60). Laboratuvar bakiyesinden bir şey harcanmaz; bonus HUD'da altının yanında görünür.
+- Aşırı Yük kartları: build dolduğunda (veya 3'ten az modül kaldığında) seviye atlamak birikimli kartlar sunar: +%5 hasar, +10 maks can, +%3 kritik.
+
 ## Odak 5.7 · Ana menü tek ekran
 - Masaüstünde ana menü artık kaydırılmaz: 1280×600 ile 1920×1080 arası her pencerede, ilerlemesi dolu oyuncuda bile tek ekrana sığar (540 px altı kaydırmaya döner).
 - Neon Sözleşmesi sağ sütundan ortadaki sahnenin altına taşındı; kısa pencerelerde ikincil açıklamalar gizlenir, sözleşme açıklaması kartın ipucunda kalır.

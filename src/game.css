@@ -326,6 +326,10 @@
             background:repeating-linear-gradient(135deg,transparent 0 22px,rgba(77,204,234,.06) 22px 23px,transparent 23px 43px),
                 linear-gradient(180deg,transparent 50%,rgba(57,188,223,.1));
         }
+        .upgrade-card[data-role="overload"]{
+            --card-accent:#ff9a5c;--card-glow:rgba(255,122,61,.26);
+            background:linear-gradient(155deg,rgba(52,22,10,.96),rgba(10,8,18,.99) 72%);
+        }
         .upgrade-card[data-role="evolution"]{
             --card-accent:#b78cff;--card-glow:rgba(147,89,233,.30);
             background:linear-gradient(150deg,rgba(34,17,68,.98),rgba(7,10,28,.98) 73%);
@@ -2318,3 +2322,7 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
   .hangar-left > div:first-child > .grid-cols-3 > div { padding-left: .55rem; padding-right: .45rem; min-width: 0; }
   .hangar-left #menuHighScore { font-size: clamp(.85rem, 1.05vw, 1.25rem); white-space: nowrap; }
 }
+
+/* Odak 5.8 · gold resonance next to the gold counter */
+#hud .hud-resonance{margin-left:6px;padding:1px 5px;border-radius:6px;font:800 10px/1.2 'Orbitron','Segoe UI',system-ui,sans-serif;color:#1a1204;background:#fcd34d;}
+#hud .hud-resonance[hidden]{display:none;}

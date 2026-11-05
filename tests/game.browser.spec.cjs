@@ -1779,3 +1779,28 @@ test('Odak 5.7 the hangar fits one desktop screen for new and veteran players', 
   await expect.poll(() => page.evaluate(() => gameState)).toBe('PLAYING');
   expect(errors).toEqual([]);
 });
+
+test('Odak 5.8 the resonance badge and overload cards show in the real page', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await gotoGame(page, '/index.html');
+  await page.locator('#startBtn').click();
+  await expect.poll(() => page.evaluate(() => gameState)).toBe('PLAYING');
+  // A gold pickup also wakes the contextual gold chip on phones.
+  await page.evaluate(() => { totalGold += 5; sessionGold = 450; updateHUD(); });
+  await expect(page.locator('#goldResonanceText')).toBeVisible();
+  await expect(page.locator('#goldResonanceText')).toHaveText('+%12');
+  // A full build: the level-up dialog offers three overload cards.
+  await page.evaluate(() => {
+    for (const u of UPGRADES_POOL) player.upgradeCounts[u.id] = 3;
+    player.refreshBuildTraits();
+    triggerLevelUp();
+  });
+  const cards = page.locator('#upgradeCardsContainer .upgrade-card[data-role="overload"]');
+  await expect(cards).toHaveCount(3);
+  await expect(cards.first()).toContainText('AŞIRI YÜK');
+  await cards.first().click();
+  await expect.poll(() => page.evaluate(() => ({ state: gameState, stacks: player.overloadStacks })))
+    .toEqual({ state: 'PLAYING', stacks: 1 });
+  expect(errors).toEqual([]);
+});
