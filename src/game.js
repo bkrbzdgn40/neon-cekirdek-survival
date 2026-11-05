@@ -6885,7 +6885,7 @@
         // Neither a new spawn budget nor a reward system; existing entities
         // and arena rules provide the stakes, while the stage owns the visuals.
         const CHAPTER_SHOWCASES=Object.freeze({
-            FOUNDRY:Object.freeze({name:'KIZIL MAKAS',hint:'İKİ DİKEY PRES · SÜRÜYÜ HATTA ÇEK',color:'#ffb36f',duration:5.2}),
+            FOUNDRY:Object.freeze({name:'KIZIL MAKAS',hint:'İKİ PRES · İKİNCİSİ SENİ İZLER',color:'#ffb36f',duration:5.2}),
             GARDEN:Object.freeze({name:'İYON KOROSU',hint:'İKİ FARKLI ÇİÇEĞİ DOLDUR',color:'#86ffe0',duration:14}),
             RIFT:Object.freeze({name:'FAZ KISKACI',hint:'İŞARETTEN UZAKLAŞ YA DA DÜŞMANI DURDUR',color:'#e3a6ff',duration:4.5})
         });
@@ -7245,24 +7245,51 @@
             chapterFoundryAnchor=null;
             chapterFoundryLastPulse=-1;
         }
+        // Odak 4.5 · two vertical presses. The first sits at 28 % of the arena; the second
+        // locks onto where the player stood when the first slammed, so standing still is
+        // not safe. Each warning stays at least 1.8 s and each press hits a player once.
+        const FOUNDRY_PRESS = Object.freeze({ moments: Object.freeze([1.8, 3.8]), halfWidth: 35,
+            damage: 20, enemyHits: 10, enemyDamageCap: 85, lateWindow: .5, slam: .55,
+            jawTravel: 54, margin: 60 });
+        function foundryPressX(op, index) {
+            if (!op.pressX) op.pressX = [worldWidth * .28, null];
+            return op.pressX[index];
+        }
+        function aimFoundryPress(op) {
+            foundryPressX(op, 0);
+            const m = FOUNDRY_PRESS.margin;
+            op.pressX[1] = Math.max(m, Math.min(worldWidth - m, player.x));
+        }
         function fireFoundryPress(index) {
-            const x=worldWidth*(index===0?.28:.72);
-            const width=35;
+            const op = chapterShowcase;
+            const x = op ? foundryPressX(op, index) : worldWidth * (index === 0 ? .28 : .72);
+            if (!Number.isFinite(x)) return;
+            const width = FOUNDRY_PRESS.halfWidth;
             if(Math.abs(player.x-x)<width+player.radius){
                 const hp=player.hp;
-                player.takeDamage(8);
+                player.takeDamage(FOUNDRY_PRESS.damage);
                 if(player.hp<hp)chapterShowcaseStats.pressPlayerHits++;
             }
             let hits=0;
             for(const enemy of enemies){
-                if(hits>=10)break;
+                if(hits>=FOUNDRY_PRESS.enemyHits)break;
                 if(enemy.dead||enemy.isBoss||
                     Math.abs(enemy.x-x)>width+enemy.radius)continue;
-                enemy.takeDamage(Math.min(85,player.damage*.7+25),0,0,false,false);
+                enemy.takeDamage(Math.min(FOUNDRY_PRESS.enemyDamageCap,player.damage*.7+25),0,0,false,false);
                 hits++;
             }
             chapterShowcaseStats.pressEnemyHits+=hits;
             shockwaves.push(new Shockwave(x,worldHeight*.5,130,'#ffb36f',.4));
+            screenShake = Math.max(screenShake, graphicsQuality === 'low' ? 8 : 14);
+            // Sparks spray out of both jaws along the column.
+            const sparks = graphicsQuality === 'low' ? 6 : graphicsQuality === 'medium' ? 12 : 20;
+            for (let i = 0; i < sparks; i++) {
+                const side = i % 2 ? 1 : -1;
+                const y = rng() * worldHeight;
+                const speed = 160 + rng() * 260;
+                emitParticle(new Particle(x + side * width, y, side * speed, (rng() - .5) * 220,
+                    i % 3 ? '#ffb36f' : '#fff3cc', 2 + rng() * 2.5, .35 + rng() * .3));
+            }
         }
         function recordShowcaseIonFlower(index) {
             const op=chapterShowcase;
@@ -7317,11 +7344,13 @@
             const elapsed=totalTime-op.start;
             if(op.id==='FOUNDRY'){
                 for(let i=0;i<2;i++){
-                    const moment=i===0?1.8:3.8;
+                    const moment=FOUNDRY_PRESS.moments[i];
                     if(elapsed>=moment&&!(op.pulseMask&(1<<i))){
                         op.pulseMask|=1<<i;
+                        // The second press aims as the first one lands, even on a skipped frame.
+                        if(i===0)aimFoundryPress(op);
                         // Skipped frames cannot apply a hit after its warning.
-                        if(elapsed<moment+.5)fireFoundryPress(i);
+                        if(elapsed<moment+FOUNDRY_PRESS.lateWindow)fireFoundryPress(i);
                     }
                 }
             }else if(op.id==='RIFT'&&!op.completed&&elapsed>=2.2){
@@ -7336,6 +7365,80 @@
                 chapterFoundryLastPulse=-1;
             }
         }
+        // Odak 4.5 · each press is a pair of toothed steel jaws. During the warning they
+        // close in on the column while the floor heats up; at the moment they slam shut.
+        function drawFoundryPress(ctx, op, index, elapsed, low) {
+            const P = FOUNDRY_PRESS, moment = P.moments[index];
+            const warnFrom = index === 0 ? 0 : P.moments[0];
+            const x = op.pressX ? op.pressX[index] : (index === 0 ? worldWidth * .28 : null);
+            if (!Number.isFinite(x) || elapsed < warnFrom || elapsed > moment + P.slam) return;
+            const H = worldHeight, w = P.halfWidth;
+            const warming = elapsed < moment;
+            const k = warming ? (elapsed - warnFrom) / (moment - warnFrom) : 1;
+            const ease = k * k * (3 - 2 * k);
+            const after = warming ? 0 : (elapsed - moment) / P.slam;
+            ctx.save();
+            // Floor heat: pulses faster as the slam gets close.
+            const pulse = .5 + .5 * Math.sin(totalTime * (6 + 18 * k));
+            // A soft outer band and a hotter core; no gradient object per frame.
+            const glow = warming ? .08 + .22 * ease + .08 * pulse * k : .85 * (1 - after);
+            ctx.fillStyle = warming ? 'rgb(255,120,60)' : 'rgb(255,240,200)';
+            ctx.globalAlpha = glow * .45; ctx.fillRect(x - w - 10, 0, w * 2 + 20, H);
+            ctx.globalAlpha = glow; ctx.fillRect(x - w * .6, 0, w * 1.2, H);
+            ctx.globalAlpha = 1;
+            // Hazard stripes on both edges while it warns.
+            if (warming && !low) {
+                ctx.globalAlpha = .35 + .4 * k;
+                ctx.fillStyle = '#ffb020';
+                const stripe = 22, offset = (totalTime * 60) % stripe;
+                for (const edge of [-1, 1]) {
+                    const ex = x + edge * w;
+                    for (let y = -stripe + offset; y < H; y += stripe) {
+                        ctx.beginPath();
+                        ctx.moveTo(ex - 3, y); ctx.lineTo(ex + 3, y + 6);
+                        ctx.lineTo(ex + 3, y + 14); ctx.lineTo(ex - 3, y + 8);
+                        ctx.closePath(); ctx.fill();
+                    }
+                }
+                ctx.globalAlpha = 1;
+            }
+            // Jaws: travel in during the warning, meet in the middle on the slam.
+            const gap = warming ? w + P.jawTravel * (1 - ease) : Math.max(3, w * Math.min(1, after * 1.6) * .25);
+            const teeth = low ? 6 : 12, tooth = Math.min(16, w * .5);
+            for (const side of [-1, 1]) {
+                const jx = x + side * gap;
+                const back = jx + side * 12;
+                ctx.fillStyle = warming ? '#2a1414' : '#4a2016';
+                ctx.globalAlpha = warming ? .55 + .4 * ease : 1 - after * .6;
+                ctx.fillRect(Math.min(jx, back), 0, 12, H);
+                ctx.strokeStyle = warming ? (k > .75 && pulse > .5 ? '#fff3cc' : '#ff874b') : '#fff3cc';
+                ctx.lineWidth = low ? 2 : 3;
+                if (!low) { ctx.shadowColor = '#ff874b'; ctx.shadowBlur = 8 + 14 * ease; }
+                ctx.beginPath(); ctx.moveTo(jx, 0); ctx.lineTo(jx, H); ctx.stroke();
+                ctx.fillStyle = ctx.strokeStyle;
+                for (let t = 0; t < teeth; t++) {
+                    const y = (t + .5) * H / teeth;
+                    ctx.beginPath(); ctx.moveTo(jx, y - 9);
+                    ctx.lineTo(jx - side * tooth, y); ctx.lineTo(jx, y + 9);
+                    ctx.closePath(); ctx.fill();
+                }
+                ctx.shadowBlur = 0;
+            }
+            ctx.globalAlpha = 1;
+            // Countdown above the column; the aimed press says so.
+            if (warming) {
+                ctx.fillStyle = k > .75 ? '#ffffff' : '#ffb36f';
+                // Below the HUD bar and the showcase banner.
+                const labelY = Math.min(170, H * .24);
+                ctx.font = "800 16px 'Orbitron', sans-serif"; ctx.textAlign = 'center';
+                ctx.fillText((moment - elapsed).toFixed(1), x, labelY);
+                if (index === 1) {
+                    ctx.font = "700 10px 'Orbitron', sans-serif";
+                    ctx.fillText('SENİ İZLİYOR', x, labelY + 16);
+                }
+            }
+            ctx.restore();
+        }
         function drawChapterShowcase(ctx) {
             if(!chapterShowcase||!chapterEffectsAllowed())return;
             const op=chapterShowcase;
@@ -7343,31 +7446,7 @@
             const low=graphicsQuality==='low';
             ctx.save();
             if(op.id==='FOUNDRY'){
-                for(let i=0;i<2;i++){
-                    const moment=i===0?1.8:3.8;
-                    if(elapsed>moment+.5)continue;
-                    const x=worldWidth*(i===0?.28:.72);
-                    const active=elapsed>=moment;
-                    ctx.fillStyle=active?'#ffc178':'#ff874b';
-                    ctx.strokeStyle=active?'#fff3cc':'#ffb36f';
-                    ctx.lineWidth=active?5:3;
-                    ctx.globalAlpha=active?.28:.13;
-                    ctx.fillRect(x-35,0,70,worldHeight);
-                    ctx.globalAlpha=active?1:.78;
-                    if(!active)ctx.setLineDash([14,11]);
-                    ctx.beginPath();ctx.moveTo(x-35,0);ctx.lineTo(x-35,worldHeight);
-                    ctx.moveTo(x+35,0);ctx.lineTo(x+35,worldHeight);
-                    ctx.stroke();ctx.setLineDash([]);
-                    // The press teeth make this unmistakably vertical machinery.
-                    const teeth=low?5:10;
-                    for(let k=0;k<teeth;k++){
-                        const y=(k+.5)*worldHeight/teeth;
-                        ctx.beginPath();ctx.moveTo(x-19,y-10);
-                        ctx.lineTo(x,y);ctx.lineTo(x-19,y+10);ctx.stroke();
-                        ctx.beginPath();ctx.moveTo(x+19,y-10);
-                        ctx.lineTo(x,y);ctx.lineTo(x+19,y+10);ctx.stroke();
-                    }
-                }
+                for(let i=0;i<2;i++) drawFoundryPress(ctx, op, i, elapsed, low);
             }else if(op.id==='GARDEN'){
                 const nodes=getGardenCenters();
                 ctx.strokeStyle='#86ffe0';ctx.lineWidth=low?2:4;
@@ -7522,8 +7601,10 @@
                 if(chip.dataset.urgent!==nextUrgent)chip.dataset.urgent=nextUrgent;
                 if(d&&!show)showContextual(chip,HUD_CONTEXT_RULES.holdMs);
             }
-            announcement.classList.toggle('hidden',!show);
-            if(show){
+            // Odak 4.5 · during a showcase its own banner already names it; no second copy.
+            const announce=show&&!chapterShowcase;
+            announcement.classList.toggle('hidden',!announce);
+            if(announce){
                 const op=chapterShowcase;
                 const spec=op&&CHAPTER_SHOWCASES[op.id];
                 announcement.textContent=spec?spec.name+' · '+spec.hint:
