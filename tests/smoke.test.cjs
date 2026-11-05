@@ -8382,3 +8382,97 @@ test('Odak 5.8 overload cards fill a thin hand and stack without tiers', () => {
   assert.deepEqual(x.pool, ['overload_core', 'overload_hull']);
   assert.ok(x.legendary.includes('+%8'), x.legendary);
 });
+
+test('Odak 5.9 elite traits open with the waves and only elites carry one', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    const pools = {};
+    for (const w of [1, 4, 6, 8, 10, 30]) {
+      wave = w; const seen = new Set();
+      for (let i = 0; i < 300; i++) seen.add(new Enemy(300, 300, 'TANK', true).affix.id);
+      pools[w] = [...seen].sort();
+    }
+    wave = 10;
+    const plain = new Enemy(300, 300, 'TANK', false).affix;
+    const boss = new Enemy(300, 300, 'BOSS_TITAN', true).affix;
+    return JSON.stringify({ pools, plain, boss });
+  })()`));
+  assert.deepEqual(x.pools[1], ['SHIELDED']);
+  assert.deepEqual(x.pools[4], ['SHIELDED', 'SPLITTING']);
+  assert.deepEqual(x.pools[6], ['HASTE', 'SHIELDED', 'SPLITTING']);
+  assert.deepEqual(x.pools[8], ['HASTE', 'SHIELDED', 'SPLITTING', 'THIEF']);
+  assert.deepEqual(x.pools[10], ['HASTE', 'REFLECT', 'SHIELDED', 'SPLITTING', 'THIEF']);
+  assert.deepEqual(x.pools[30], x.pools[10]);
+  assert.equal(x.plain, null);
+  assert.equal(x.boss, null);
+});
+
+test('Odak 5.9 each elite trait changes the fight', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave = 10; player.x = 900; player.y = 900;
+    const make = (id, type = 'TANK') => { const e = new Enemy(300, 300, type, true);
+      applyEliteAffix(e, ELITE_AFFIXES.find(a => a.id === id)); e.speed = 0; enemies.push(e); return e; };
+    const out = {};
+    // KALKANLI: the shield takes the first hits, then regrows after a quiet spell.
+    enemies = []; const s = make('SHIELDED'); const hp0 = s.hp, pool = s.affixShieldMax;
+    s.takeDamage(pool * 0.5); out.shieldHit = { hpLost: Math.round(hp0 - s.hp), shieldLeft: Math.round(s.affixShield / pool * 100) };
+    s.takeDamage(pool); out.shieldBroken = { hpLost: Math.round(hp0 - s.hp), pool: Math.round(pool), shield: s.affixShield };
+    for (let i = 0; i < 60 * 2; i++) s.update(1 / 60); out.regrowEarly = s.affixShield;
+    for (let i = 0; i < 60 * 3; i++) s.update(1 / 60); out.regrowLate = +(s.affixShield / pool).toFixed(2);
+    // BÖLÜNEN: two weaker, plain copies.
+    enemies = []; const sp = make('SPLITTING'); sp.takeDamage(1e9);
+    const copies = enemies.filter(e => !e.dead);
+    out.split = { n: copies.length, elite: copies.some(c => c.isElite), share: +(copies[0].maxHp / sp.maxHp).toFixed(2), type: copies[0].type };
+    // HIZLANDIRICI: a neighbour moves 30% further per frame, a far foe does not.
+    enemies = []; const h = make('HASTE'); const near = new Enemy(400, 300, 'TANK'), far = new Enemy(800, 800, 'TANK'), ctrl = new Enemy(100, 100, 'TANK');
+    enemies.push(near, far, ctrl); h.update(1 / 60);
+    const step = e => { const x0 = e.x, y0 = e.y; e.update(1 / 60); return Math.hypot(e.x - x0, e.y - y0); };
+    out.haste = { near: +(step(near) / step(ctrl)).toFixed(2), speedBack: near.speed === ctrl.speed, farHasted: (far.affixHasteUntil || 0) > totalTime };
+    // HIRSIZ: pulls XP orbs in and pays 1.5x on death.
+    enemies = []; orbs = []; const t = make('THIEF'); emitEnergyOrb(360, 300, 40, false); emitEnergyOrb(310, 300, 20, false);
+    for (let i = 0; i < 60; i++) t.update(1 / 60);
+    out.thief = { stolen: t.stolenXp, left: orbs.filter(o => !o.dead).length };
+    t.takeDamage(1e9); out.thief.payout = orbs.filter(o => !o.dead && !o.isGold).map(o => o.value);
+    // YANSITICI: every fifth hit fires back at the player.
+    enemies = []; enemyProjectiles = []; const r = make('REFLECT'); r.hp = r.maxHp = 1e6;
+    for (let i = 0; i < 4; i++) r.takeDamage(1); out.reflect4 = enemyProjectiles.length;
+    r.takeDamage(1); out.reflect5 = enemyProjectiles.length;
+    const shot = enemyProjectiles[0]; out.aim = shot ? Math.sign(shot.vx) === 1 && Math.sign(shot.vy) === 1 : false;
+    return JSON.stringify(out);
+  })()`));
+  assert.deepEqual(x.shieldHit, { hpLost: 0, shieldLeft: 50 });
+  assert.ok(Math.abs(x.shieldBroken.hpLost - x.shieldBroken.pool * 0.5) <= 1, JSON.stringify(x.shieldBroken));
+  assert.equal(x.shieldBroken.shield, 0);
+  assert.equal(x.regrowEarly, 0);
+  assert.ok(x.regrowLate > 0.1 && x.regrowLate <= 1, String(x.regrowLate));
+  assert.deepEqual(x.split, { n: 2, elite: false, share: 0.35, type: 'TANK' });
+  assert.ok(Math.abs(x.haste.near - 1.3) < 0.02, JSON.stringify(x.haste));
+  assert.equal(x.haste.speedBack, true);
+  assert.equal(x.haste.farHasted, false);
+  assert.deepEqual(x.thief.stolen, 60);
+  assert.equal(x.thief.left, 0);
+  assert.ok(x.thief.payout.includes(90), JSON.stringify(x.thief.payout));
+  assert.equal(x.reflect4, 0);
+  assert.equal(x.reflect5, 1);
+  assert.equal(x.aim, true);
+});
+
+test('Odak 5.9 chain arcs apply the late power multiplier once', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); wave = 3;
+    const arc = gold => {
+      sessionGold = gold; player.chainLightning = 1;
+      const a = new Enemy(300, 300, 'TANK'), b = new Enemy(340, 300, 'TANK');
+      a.hp = a.maxHp = b.hp = b.maxHp = 1e6; enemies = [a, b];
+      a.takeDamage(100, 0, 0, false, true, true);
+      return { first: Math.round(1e6 - a.hp), arc: Math.round(1e6 - b.hp) };
+    };
+    return JSON.stringify({ plain: arc(0), rich: arc(1000) });
+  })()`));
+  assert.ok(x.plain.arc > 0);
+  assert.equal(x.rich.first, Math.round(x.plain.first * 1.3));
+  assert.ok(Math.abs(x.rich.arc - x.plain.arc * 1.3) <= 1, JSON.stringify(x));
+});

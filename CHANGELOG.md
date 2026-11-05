@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 5.9 · Elit özellikleri
+- Her elit bir özellikle doğar, başında etiketi görünür: Kalkanlı (yenilenen kalkan), Bölünen (ölünce ikiye ayrılır), Hızlandırıcı (yakındakileri %30 hızlandırır), Hırsız (XP kürelerini çalar, ölünce ×1,5 geri verir), Yansıtıcı (her 5. vuruşta geri ateş eder).
+- Özellikler dalgayla açılır (1, 4, 6, 8, 10); düşman sözlüğündeki elit kaydı bunları anlatır.
+- Düzeltme: 5.8'deki hasar çarpanı zincir şimşeğinde iki kez uygulanıyordu.
+
 ## Odak 5.8 · Geç oyun gücü
 - Düşmanların verdiği XP dalgayla büyür (dalga başına +%8, en çok ×3,5): ileri dalgalarda seviye atlamak yavaşlamaz.
 - Altın Rezonansı: koşuda toplanan her 100 altın o koşu için +%3 hasar (en çok +%60). Laboratuvar bakiyesinden bir şey harcanmaz; bonus HUD'da altının yanında görünür.

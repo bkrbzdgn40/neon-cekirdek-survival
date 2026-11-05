@@ -518,6 +518,9 @@ Masaüstünde ana menü 540 px yüksekliğe kadar kaydırmasız sığar: sözle�
 ### - [x] 5.8 Geç oyun gücü
 Düşman XP'si dalgayla büyür (dalga başına +%8, en çok ×3,5). Koşuda toplanan her 100 altın o koşu için +%3 hasar verir (Altın Rezonansı, en çok +%60, HUD'da). Build dolunca seviye atlamak birikimli Aşırı Yük kartları sunar.
 
+### - [x] 5.9 Elit özellikleri
+Her elit bir özellik taşır ve başında etiketiyle görünür: Kalkanlı (dalga 1), Bölünen (4), Hızlandırıcı (6), Hırsız (8), Yansıtıcı (10). Özellik seed'e bağlı seçilir.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

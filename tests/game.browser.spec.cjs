@@ -1804,3 +1804,26 @@ test('Odak 5.8 the resonance badge and overload cards show in the real page', as
     .toEqual({ state: 'PLAYING', stacks: 1 });
   expect(errors).toEqual([]);
 });
+
+test('Odak 5.9 elites with every trait fight and draw in the real page', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await gotoGame(page, '/index.html');
+  await page.locator('#startBtn').click();
+  await expect.poll(() => page.evaluate(() => gameState)).toBe('PLAYING');
+  const out = await page.evaluate(async () => {
+    wave = 10;
+    for (const [i, a] of ELITE_AFFIXES.entries()) {
+      const e = new Enemy(player.x + 160 + i * 60, player.y + 120, 'TANK', true);
+      applyEliteAffix(e, a); enemies.push(e);
+    }
+    await new Promise(r => setTimeout(r, 600));
+    const alive = enemies.filter(e => e.affix).map(e => e.affix.id).sort();
+    for (const e of enemies) if (e.affix) e.takeDamage(1e9);
+    await new Promise(r => setTimeout(r, 200));
+    return { alive, state: gameState };
+  });
+  expect(out.alive).toEqual(['HASTE', 'REFLECT', 'SHIELDED', 'SPLITTING', 'THIEF']);
+  expect(out.state).toBe('PLAYING');
+  expect(errors).toEqual([]);
+});
