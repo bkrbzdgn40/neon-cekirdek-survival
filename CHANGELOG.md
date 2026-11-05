@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 4.8 · Rapor ve laboratuvar ekrana sığar
+- Rapordaki SİBER LABORATUVAR butonu çalışıyordu ama laboratuvar raporun arkasında açılıyordu; artık önde açılır.
+- Ana menüye dönünce arkada açık kalan laboratuvar kapanır. Menüde görülen kaydırma çubuğu bu gizli laboratuvardı.
+- Masaüstünde rapor pencereye sığar: başlık, sekmeler ve butonlar yerinde durur, sadece sekme içeriği kayar; kısa pencerelerde başlık sıkışır.
+
 ## Odak 4.7 · Faz Kıskacı görseli
 - Oyuncunun çevresinde terk edilmesi gereken kesikli kaçış çemberi: dışa akan oklar, üstünde "UZAKLAŞ · 1,2" geri sayımı; çemberin dışına çıkınca yeşile döner, "GÜVENDESİN" yazar.
 - İşaretli düşmandan iniş noktasına akan ışın, düşmanın üstünde "DURDUR"; iniş noktasında dönen, tarama çizgili hologram ve kapanan geri sayım halkası. Düşman ölür ya da sersemlerse işaret yeşil çarpıyla iptal görünür.
