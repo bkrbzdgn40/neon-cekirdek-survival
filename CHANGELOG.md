@@ -1,5 +1,9 @@
 # Değişiklik Günlüğü
 
+## Odak 3.9 · Alan savunma görevi
+- Savunma ilerlemesi artık alanda durunca dolar; yakında düşman varsa 1,6 kat hızlı dolar (`DEFEND_RULES`). Önceden yakında düşman şartı vardı ve ilk dalgalarda düşmanlar alana varmadan öldüğü için ilerleme geri sayıyordu.
+- Geri sayım yalnız alan dışındayken, 0,65 yerine 0,4 hızla. Hedef 5 → 8 sn; gerçek koşuda 5–7 sn'de tamamlanıyor.
+
 ## Odak 3.8 · Hangar ana menüsü
 - Menü üç sütun: solda kimlik ve şasi seçimi; ortada seçili şasinin canlı önizlemesi (`hangarPreview`; düşmanlar yaklaşır, çekirdek ateş eder) ve başlat; sağda sıradaki hedef, başlangıç gücü ve son operasyon. Sütunlar aynı çizgide bitiyor, 1280×800 ve 1920×1080'de kaydırma yok.
 - "Sıradaki hedef" en ucuz kilitli içeriği altın çubuğuyla gösteriyor, koleksiyon bitince Laboratuvara, o da bitince rekora geçiyor. Son koşu kayıtta (`lastRun`); ilk açılışta yerine 3 adımlık rehber çıkıyor.

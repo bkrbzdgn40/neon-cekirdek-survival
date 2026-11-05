@@ -3370,13 +3370,14 @@ test('M5.2 flawless timer pays once at target without auto-finishing an idle mis
   assert.equal(x.awarded,1);
 });
 
-test('M5.2 defense requires position and live enemy presence and loses progress outside',()=>{
+test('Odak 3.9 defense fills while standing in the zone, faster with enemies near, and drains only outside',()=>{
   const {run}=setup();
   const d=JSON.parse(run("(()=>{startNewGame();wave=3;generateNextQuest('DEFEND');const q=activeQuest,old={x:player.x,y:player.y};player.x=q.point.x;player.y=q.point.y;updateQuest(2);const alone=q.progress;enemies=[{x:q.point.x+500,y:q.point.y+500,dead:false,isBoss:false}];updateQuest(2);const far=q.progress;enemies=[{x:q.point.x+35,y:q.point.y+30,dead:false,isBoss:false}];updateQuest(2);const inside=q.progress;player.x=old.x+500;player.y=old.y+500;updateQuest(1);const outside=q.progress;player.x=q.point.x;player.y=q.point.y;for(let i=0;i<20;i++)updateQuest(.25);return JSON.stringify({alone,far,inside,outside,completed:questStats.byType.DEFEND||0,point:q.point});})()"));
-  assert.equal(d.alone,0);
-  assert.equal(d.far,0);
-  assert.equal(d.inside,2);
-  assert.ok(d.outside<d.inside);
+  // Early waves: enemies die before reaching the zone, so standing there must still count.
+  assert.equal(d.alone,2);
+  assert.equal(d.far,4);
+  assert.ok(Math.abs(d.inside-7.2)<1e-9,'a nearby enemy speeds defense up 1.6x');
+  assert.ok(Math.abs(d.outside-6.8)<1e-9,'leaving drains slowly');
   assert.equal(d.completed,1);
   assert.ok(d.point.x>=65 && d.point.y>=65);
 });
@@ -3395,7 +3396,7 @@ test('M5.2 quest world marker renders safely and stays absent outside active gam
   const {run}=setup();
   const a=JSON.parse(run("(()=>{startNewGame();wave=3;generateNextQuest('DEFEND');const ctx={save(){},restore(){},setLineDash(){},beginPath(){},arc(){},fill(){},stroke(){},fillText(){}};drawQuestObjective(ctx);const live=activeQuest.point!=null;gameState='PAUSED';drawQuestObjective(ctx);return JSON.stringify({live,mobile:document.getElementById('questHudText').textContent,description:document.getElementById('questHudText').title});})()"));
   assert.equal(a.live,true);
-  assert.match(a.mobile,/^SAVUN · 0\/5 · \+\d+$/);
+  assert.match(a.mobile,/^SAVUN · 0\/8 · \+\d+$/);
   assert.match(a.description,/SİNYAL NOKTASINI SAVUN/);
 });
 

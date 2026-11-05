@@ -1177,7 +1177,7 @@
             else if(type==='ELITE_HUNT'){target=currentWave<9?1:2;desc=target+' ELİT HEDEFİ AVLA';}
             else if(type==='CHAIN'){target=Math.min(10,3+Math.floor(currentWave/3));desc=target+' ZİNCİR SIÇRAMASI';}
             else if(type==='NO_HIT'){target=Math.min(24,12+Math.floor(currentWave/2));desc=target+' SN HASAR ALMA';}
-            else if(type==='DEFEND'){target=5;desc='SİNYAL NOKTASINI SAVUN';}
+            else if(type==='DEFEND'){target=DEFEND_RULES.target;desc='SİNYAL NOKTASINI SAVUN';}
             else if(type==='RESCUE'){target=2;desc='2 VERİ KAPSÜLÜNÜ KURTAR';}
             const quest={type,target,progress,rewardGold:Math.min(180,
                 advanced?30+currentWave*5:18+currentWave*4),desc};
@@ -1229,6 +1229,9 @@
             questStats.hitsReset++;
             updateQuestHud();
         }
+        // Odak 3.9 · standing in the zone always counts; nearby enemies only speed it up.
+        // Early waves kill enemies before they reach the zone, so presence can't be required.
+        const DEFEND_RULES = Object.freeze({ target: 8, contestedRate: 1.6, contestRange: 170, decayOutside: 0.4 });
         function updateQuest(dt){
             if(!isSystemUnlocked('quests')) return;
             if(!activeQuest||!player||gameState!=='PLAYING'||dt<=0) return;
@@ -1236,14 +1239,14 @@
             if(current.type==='NO_HIT') advanceQuest('NO_HIT',dt);
             else if(current.type==='DEFEND'&&current.point){
                 const dist=Math.hypot(player.x-current.point.x,player.y-current.point.y);
-                // Only an enemy contesting this zone counts as a real defense.
-                const defending=dist<=current.radius &&
+                const inside=dist<=current.radius;
+                const contested=inside &&
                     enemies.some(enemy=>!enemy.dead&&!enemy.isBoss &&
                         Number.isFinite(enemy.x)&&Number.isFinite(enemy.y) &&
                         Math.hypot(enemy.x-current.point.x,
-                            enemy.y-current.point.y)<=current.radius+170);
-                const value=Math.max(0,Math.min(current.target,current.progress+
-                    (defending?dt:-dt*.65)));
+                            enemy.y-current.point.y)<=current.radius+DEFEND_RULES.contestRange);
+                const rate=inside?(contested?DEFEND_RULES.contestedRate:1):-DEFEND_RULES.decayOutside;
+                const value=Math.max(0,Math.min(current.target,current.progress+dt*rate));
                 current.progress=value;
                 if(value>=current.target) completeQuest();
                 else updateQuestHud();
