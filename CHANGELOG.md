@@ -1,5 +1,9 @@
 # Değişiklik Günlüğü
 
+## Odak 5.6 · Teknik temizlik
+- Test aracı (Playwright 1.64.1) artık `package.json` ve `package-lock.json` içinde tek yerde sabit; CI `npm ci` ile kurar. `npm test`, `npm run test:browser`, `npm run serve` komutları eklendi. Oyunun kendisi kurulum istemez.
+- YEDEK AL artık sözleşme ustalığını da taşır. Eski yedekler ustalığa dokunmaz; bozuk bir ustalık bloğu yedeği reddeder, yazma hatasında eski kayıt geri gelir.
+
 ## Odak 5.5 · Koşu sonu hedefi
 - Koşu raporunda SIRADAKİ HEDEF kartı: en yakın açılım, bu koşuda kazanılan altın ayrı renkle, "BİR KOŞU DAHA YETER" ya da "YAKLAŞIK N KOŞU" tahmini.
 - Hedef hazırsa kart LABORATUVARDA AÇ düğmesiyle doğrudan ilgili bölüme götürür; laboratuvardan dönünce kart güncellenir.

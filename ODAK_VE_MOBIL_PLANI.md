@@ -509,6 +509,9 @@ Kapalı test verisi bekliyor: hangi şasinin ne kadar seçildiğine göre 1–2 
 ### - [x] 5.5 Koşu sonu hedefi
 Rapor, sıradaki hedefi bu koşunun altınıyla gösterir ("bir koşu daha yeter" / "yaklaşık N koşu"); hazırsa doğrudan laboratuvarda açar. Yeni rekor eski skoru ve farkı yazar, parlar ve ses çalar.
 
+### - [x] 5.6 Teknik temizlik
+Test bağımlılığı `package.json` + kilit dosyasında tek yerde; CI `npm ci` kullanır. Sözleşme ustalığı yedeğe girer; eski yedekler ustalığa dokunmaz.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

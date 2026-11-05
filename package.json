@@ -1,0 +1,19 @@
+{
+  "name": "neon-cekirdek-survival",
+  "private": true,
+  "description": "Neon Çekirdek: browser arena-survival game. Dependencies are for tests only; the game itself needs no install or build.",
+  "scripts": {
+    "serve": "node scripts/serve.cjs",
+    "test": "node --test tests/smoke.test.cjs",
+    "test:browser": "playwright test",
+    "test:soak": "playwright test --config=playwright.soak.config.cjs",
+    "capture": "playwright test --config=playwright.capture.config.cjs",
+    "sim": "node scripts/sim-dps.cjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

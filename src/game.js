@@ -1074,7 +1074,9 @@
                     cosmetics: cosmeticsSaveData(),
                     upgrades: { ...metaUpgrades }
                 },
-                graphics: graphicsQuality
+                graphics: graphicsQuality,
+                // Odak 5.6 · contract mastery travels with the backup too.
+                contracts: sanitizeContractMastery(contractMastery)
             };
         }
 
@@ -1115,6 +1117,14 @@
                 // Odak 3.7 · backups from before the collection own nothing extra.
                 const restoredOwned = data.owned === undefined ? [] : parseOwnedContent(data.owned);
                 if (!restoredOwned) return null;
+                // Odak 5.6 · older backups carry no contracts and leave mastery as it is.
+                let contracts = null;
+                if (backup.contracts !== undefined) {
+                    const raw = backup.contracts;
+                    if (!raw || typeof raw !== 'object' || raw.version !== CONTRACT_MASTERY_VERSION ||
+                        !raw.contracts || typeof raw.contracts !== 'object') return null;
+                    contracts = sanitizeContractMastery(raw);
+                }
                 return {
                     progress: {
                         version: META_SAVE_VERSION,
@@ -1129,7 +1139,8 @@
                         cosmetics: cosmeticsSaveDataFrom(parseCosmetics(data.cosmetics)),
                         upgrades
                     },
-                    graphics: backup.graphics
+                    graphics: backup.graphics,
+                    contracts
                 };
             } catch (error) {
                 return null;
@@ -1140,12 +1151,14 @@
             const backup = parseProgressBackup(raw);
             // Never replace persistent progress during an active run.
             if (!backup || gameState !== 'MENU') return false;
-            let oldMeta, oldGraphics;
+            let oldMeta, oldGraphics, oldContracts;
             try {
                 oldMeta = localStorage.getItem(META_SAVE_KEY);
                 oldGraphics = localStorage.getItem(GRAPHICS_SAVE_KEY);
+                oldContracts = localStorage.getItem(CONTRACT_MASTERY_SAVE_KEY);
                 localStorage.setItem(META_SAVE_KEY, JSON.stringify(backup.progress));
                 localStorage.setItem(GRAPHICS_SAVE_KEY, backup.graphics);
+                if (backup.contracts) localStorage.setItem(CONTRACT_MASTERY_SAVE_KEY, JSON.stringify(backup.contracts));
             } catch (error) {
                 // If one write fails, make a best-effort rollback before touching live state.
                 try {
@@ -1156,6 +1169,10 @@
                     if (oldGraphics !== undefined) {
                         if (oldGraphics === null) localStorage.removeItem(GRAPHICS_SAVE_KEY);
                         else localStorage.setItem(GRAPHICS_SAVE_KEY, oldGraphics);
+                    }
+                    if (oldContracts !== undefined) {
+                        if (oldContracts === null) localStorage.removeItem(CONTRACT_MASTERY_SAVE_KEY);
+                        else localStorage.setItem(CONTRACT_MASTERY_SAVE_KEY, oldContracts);
                     }
                 } catch (rollbackError) {
                     console.warn('Kayıt geri alma girişimi tamamlanamadı.', rollbackError);
@@ -1174,6 +1191,7 @@
             ownedContent = new Set(backup.progress.owned);
             ({ seen: codexSeen, kills: codexKills } = parseCodex(backup.progress.codex));
             ({ owned: ownedCosmetics, equipped: equippedCosmetics } = parseCosmetics(backup.progress.cosmetics));
+            if (backup.contracts) contractMastery = backup.contracts;
             applyGraphicsQuality(backup.graphics, false);
             updateMenuCounters();
             return true;

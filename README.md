@@ -42,7 +42,7 @@ Open **http://127.0.0.1:8765/showcase.html** for the presentation or **http://12
 | `?learn=on` | Observation-only shadow player learner |
 | `?perf=1` | Opt-in performance diagnostics (desktop F3) |
 
-Gold, meta progression, settings and optional learning/tempo comparison records are stored in browser `localStorage`. They are **not synced to the cloud**. The menu's JSON **YEDEK AL / YEDEK YÜKLE** feature exports and restores meta progression and graphics configuration; learning model and comparison records are not part of that backup.
+Gold, meta progression, settings and optional learning/tempo comparison records are stored in browser `localStorage`. They are **not synced to the cloud**. The menu's JSON **YEDEK AL / YEDEK YÜKLE** feature exports and restores meta progression, contract mastery and graphics configuration; learning model and comparison records are not part of that backup.
 
 ## Engineering and verification
 
@@ -58,12 +58,12 @@ Gold, meta progression, settings and optional learning/tempo comparison records 
 | Architecture/change records | [`docs/`](docs/) |
 
 ```sh
-node --test tests/smoke.test.cjs
+npm test                    # logic regressions, no install needed
 
-# Optional local Chromium tests
-npm install --no-save --no-package-lock @playwright/test@1.64.1
+# Optional local Chromium tests (test-only dependency pinned in package-lock.json)
+npm ci
 npx playwright install chromium
-npx playwright test
+npm run test:browser
 ```
 
 **Verification boundary:** Passing CI establishes specific automated regression behavior, not visual snapshot approval, a universally stable FPS, or 30–60 minute real-device performance. See [Device QA](docs/DEVICE_QA.md). This remains an actively developed game, not a finished commercial product.
