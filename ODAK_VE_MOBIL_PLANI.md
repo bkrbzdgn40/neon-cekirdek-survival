@@ -524,6 +524,9 @@ Her elit bir özellik taşır ve başında etiketiyle görünür: Kalkanlı (dal
 ### - [x] 5.10 Eserler
 Boss sandığı 3 eserden birini seçtirir; eser koşu boyunca kalır ve oyun tarzını değiştirir (8 eser, her biri koşuda bir kez). Seviye kartları ekranı ESER SEÇ moduna geçer; yeniden seçme ve atlama kapalıdır.
 
+### - [x] 5.11 Günlük koşu
+Menüdeki GÜNLÜK düğmesi o günün tohumu ve sözleşmesiyle koşu başlatır (yerel takvim günü; sözleşmeler kilitliyse standart). Şasi oyuncunun seçimidir. Bugünün en iyi skoru kayıtta tutulur, düğmede ve raporda görünür.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

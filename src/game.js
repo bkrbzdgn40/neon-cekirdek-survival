@@ -665,6 +665,59 @@
         let ownedContent = new Set();
         // Odak 3.8 · the menu's "last operation" card survives reloads.
         let lastRunSummary = null;
+        // Odak 5.11 · daily run: one seed and one contract per local calendar day.
+        let dailyRunActive = false;
+        let dailyRunKey = null;
+        let dailyBest = null;
+        function dailyDateKey(d = new Date()) {
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }
+        // FNV-1a: stable across browsers and sessions.
+        function dailySeedFor(key) {
+            let h = 0x811c9dc5;
+            for (const ch of 'neon-daily-' + key) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; }
+            return h >>> 0;
+        }
+        function dailyContractFor(key) {
+            if (!isSystemUnlocked('contracts')) return 'STANDARD';
+            return NEON_CONTRACTS[dailySeedFor(key + ':contract') % NEON_CONTRACTS.length].id;
+        }
+        function parseDailyBest(data) {
+            if (!data || typeof data !== 'object' || typeof data.date !== 'string' ||
+                !/^\d{4}-\d{2}-\d{2}$/.test(data.date)) return null;
+            const score = safeSaveInteger(data.score, -1), wave = safeSaveInteger(data.wave, -1, 100000);
+            return score < 0 || wave < 1 ? null : { date: data.date, score, wave };
+        }
+        function todaysDailyBest(key = dailyDateKey()) {
+            return dailyBest && dailyBest.date === key ? dailyBest : null;
+        }
+        // Returns true when this run beats today's best.
+        function recordDailyResult(runScore, runWave, key = dailyRunKey) {
+            const best = todaysDailyBest(key);
+            const s = Math.max(0, Math.round(runScore));
+            if (best && best.score >= s) return false;
+            dailyBest = { date: key, score: s, wave: runWave };
+            return true;
+        }
+        function renderDailyRunButton() {
+            const meta = document.getElementById('dailyRunMeta');
+            const btn = document.getElementById('dailyRunBtn');
+            if (!meta || !btn) return;
+            const key = dailyDateKey();
+            const contract = NEON_CONTRACTS.find(c => c.id === dailyContractFor(key));
+            const best = todaysDailyBest(key);
+            meta.textContent = best ? `EN İYİ ${best.score.toLocaleString('tr-TR')}` : contract.short;
+            btn.title = `GÜNLÜK KOŞU · ${key}\nBugün her denemede aynı tohum ve ${contract.label}.` +
+                (best ? `\nBugünün en iyisi: ${best.score.toLocaleString('tr-TR')} · dalga ${best.wave}` : '\nBugün henüz denemedin.');
+        }
+        function startDailyRun() {
+            dailyRunActive = true;
+            dailyRunKey = dailyDateKey();
+            startNewGame();
+            showDopamineBanner(`GÜNLÜK KOŞU · ${dailyRunKey}`, '#6ee7b7');
+        }
+
         function parseLastRunSummary(data) {
             if (!data || typeof data !== 'object') return null;
             const score = safeSaveInteger(data.score, -1), wave = safeSaveInteger(data.wave, -1, 100000);
@@ -1005,6 +1058,7 @@
                 unlockSpotlightPending = data.unlockSpotlight === true;
                 ownedContent = new Set(parseOwnedContent(data.owned) || []);
                 lastRunSummary = parseLastRunSummary(data.lastRun);
+                dailyBest = parseDailyBest(data.daily);
                 guidesSeen = new Set(parseGuidesSeen(data.guides));
                 ({ seen: codexSeen, kills: codexKills } = parseCodex(data.codex));
                 ({ owned: ownedCosmetics, equipped: equippedCosmetics } = parseCosmetics(data.cosmetics));
@@ -1039,6 +1093,7 @@
                     unlockSpotlight: unlockSpotlightPending,
                     owned: [...ownedContent],
                     lastRun: lastRunSummary,
+                    daily: dailyBest,
                     guides: [...guidesSeen],
                     codex: codexSaveData(),
                     cosmetics: cosmeticsSaveData(),
@@ -11999,6 +12054,10 @@
             return { kind: 'record', title: 'Rekorunu geç', label: 'USTALIK', color: '#67e8f9', cost: 0, ready: false };
         }
         // Odak 5.5 · the report ends on the next goal, measured against this run's gold.
+        function dailyRecordLabel(isNew, best) {
+            if (isNew) return 'GÜNLÜK REKOR · ' + Math.round(best.score).toLocaleString('tr-TR');
+            return 'GÜNLÜK KOŞU · BUGÜNÜN EN İYİSİ ' + Math.round(best?.score || 0).toLocaleString('tr-TR');
+        }
         function newRecordLabel(isNew, score, previous) {
             if (!isNew) return '';
             if (previous <= 0) return 'İLK REKORUN KAYDEDİLDİ';
@@ -12115,6 +12174,7 @@
             refreshChassisLocks();
             renderMenuGoals();
             hangarPreview.start();
+            renderDailyRunButton();
             document.getElementById('menuHighScore').textContent = savedHighScore.toLocaleString('tr-TR');
             document.getElementById('menuMaxWave').textContent = savedMaxWave;
             document.getElementById('menuGoldText').textContent = totalGold.toLocaleString('tr-TR');
@@ -12499,7 +12559,7 @@
 
         function startNewGame() {
             clearGameplayInput();
-            setRunSeed(playtestParams.seed ?? Math.random() * 4294967296);
+            setRunSeed(dailyRunActive ? dailySeedFor(dailyRunKey) : (playtestParams.seed ?? Math.random() * 4294967296));
             // A button in the modal that just closed keeps focus until the browser
             // re-renders; combat keys ignore focused buttons, so drop it now.
             const focused = document.activeElement;
@@ -12523,7 +12583,8 @@
             bastionUses = 0;
             bastionGoldSpent = 0;
             bastionShotsBlocked = 0;
-            activeContractId = isSystemUnlocked('contracts') ? selectedContractId : 'STANDARD';
+            activeContractId = dailyRunActive ? dailyContractFor(dailyRunKey) :
+                isSystemUnlocked('contracts') ? selectedContractId : 'STANDARD';
             contractMasteryRecordedThisRun = false;
             lastBossGradientColor = null;
             lastBossIdentityMarkup = null;
@@ -13454,6 +13515,7 @@
             if (wave > savedMaxWave) {
                 savedMaxWave = wave;
             }
+            const dailyRecord = dailyRunActive && recordDailyResult(score, wave);
             lastRunUnlock = evaluateRunUnlock(wave);
             lastRunSummary = { score: Math.max(0, Math.round(score)), wave, seconds: Math.round(totalTime),
                 gold: sessionGold, chassis: player?.chassis || selectedChassis };
@@ -13465,9 +13527,12 @@
             // save the tiny weight vector only at end of a finished run.
             combatDirector?.playerLearner.save();
 
-            document.getElementById('newRecordBadge').classList.toggle('hidden', !isNewRecord);
+            document.getElementById('newRecordBadge').classList.toggle('hidden', !isNewRecord && !dailyRunActive);
             const recordText = document.getElementById('newRecordText');
-            if (recordText) recordText.textContent = newRecordLabel(isNewRecord, score, previousHighScore);
+            if (recordText) recordText.textContent = dailyRunActive ?
+                dailyRecordLabel(dailyRecord, todaysDailyBest(dailyRunKey)) + (isNewRecord ? ' · ' + newRecordLabel(true, score, previousHighScore) : '') :
+                newRecordLabel(isNewRecord, score, previousHighScore);
+            if (dailyRecord && !isNewRecord) audio.playJackpot();
             if (isNewRecord && previousHighScore > 0) audio.playJackpot();
             renderReportNextGoal(sessionGold);
             document.getElementById('finalScoreText').textContent = score.toLocaleString('tr-TR');
@@ -13934,8 +13999,10 @@
             }
         });
 
-        document.getElementById('startBtn').addEventListener('click', startNewGame);
-        document.getElementById('restartBtn').addEventListener('click', startNewGame);
+        document.getElementById('startBtn').addEventListener('click', () => { dailyRunActive = false; startNewGame(); });
+        document.getElementById('dailyRunBtn').addEventListener('click', startDailyRun);
+        // A daily run restarts as today's daily run.
+        document.getElementById('restartBtn').addEventListener('click', () => dailyRunActive ? startDailyRun() : startNewGame());
         document.getElementById('restartFromPauseBtn').addEventListener('click', startNewGame);
         document.getElementById('resumeBtn').addEventListener('click', togglePause);
         document.getElementById('pauseBtn').addEventListener('click', togglePause);
