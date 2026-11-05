@@ -7672,7 +7672,7 @@ test('Odak 3.7 locked content stays out of runs until bought, and the purchase p
   const store = {};
   const { run } = setup(store, { unlockAll: false });
   const x = JSON.parse(run(`(()=>{
-    unlockLevel=MAX_UNLOCK_LEVEL;totalGold=5000;selectedChassis='TITAN';startNewGame();
+    unlockLevel=MAX_UNLOCK_LEVEL;savedMaxWave=10;totalGold=5000;selectedChassis='TITAN';startNewGame();
     const gated=CONTENT_UNLOCKS.filter(c=>c.type!=='chassis').map(c=>c.id);
     const offered=UPGRADES_POOL.filter(u=>isUpgradeAvailable(u)).map(u=>u.id);
     const before={chassis:player.chassis,leaked:gated.filter(id=>offered.includes(id))};
@@ -7716,7 +7716,7 @@ test('Odak 3.7 backups carry owned content and reject unknown ids', () => {
 test('Odak 3.8 next goal walks collection, then lab, then the record', () => {
   const { run } = setup({}, { unlockAll: false });
   const x = JSON.parse(run(`(()=>{
-    const out=[];totalGold=0;out.push(getMenuNextGoal());
+    savedMaxWave=10;const out=[];totalGold=0;out.push(getMenuNextGoal());
     totalGold=1000;out.push(getMenuNextGoal());
     CONTENT_UNLOCKS.forEach(c=>ownedContent.add(c.id));out.push(getMenuNextGoal());
     META_SHOP_ITEMS.forEach(i=>metaUpgrades[i.key]=i.maxLevel);out.push(getMenuNextGoal());
@@ -7741,4 +7741,24 @@ test('Odak 3.8 the last run summary survives a reload and ignores broken saves',
   saved.lastRun = { score: -5, wave: 'x' };
   store['neonCekirdek.meta.v1'] = JSON.stringify(saved);
   assert.equal(setup(store).run('lastRunSummary'), null);
+});
+
+test('Odak 3.10 collection items need their wave before gold can buy them', () => {
+  const { run } = setup({}, { unlockAll: false });
+  const x = JSON.parse(run(`(()=>{
+    totalGold=5000;savedMaxWave=3;
+    const early={titan:buyContent('TITAN'),coolant:buyContent('coolant'),gold:totalGold};
+    const goal=getMenuNextGoal();
+    savedMaxWave=4;const later=buyContent('TITAN');
+    savedMaxWave=1;ownedContent=new Set();totalGold=0;
+    const fresh=getMenuNextGoal();
+    return JSON.stringify({early,goal:{kind:goal.kind,id:goal.id},later,fresh:{kind:fresh.kind,id:fresh.id,wave:fresh.wave},
+      dative:[waveDative(3),waveDative(4),waveDative(6),waveDative(10)],hint:unlockHintText(5)});})()`));
+  assert.deepEqual(x.early, { titan: false, coolant: true, gold: 4300 });
+  // Nothing else is buyable at wave 3, so the goal points at the nearest wave condition.
+  assert.deepEqual(x.goal, { kind: 'wave', id: 'TITAN' });
+  assert.equal(x.later, true);
+  assert.deepEqual(x.fresh, { kind: 'wave', id: 'coolant', wave: 3 });
+  assert.deepEqual(x.dative, ["3'e", "4'e", "6'ya", "10'a"]);
+  assert.equal(x.hint, "Yeni protokol: Dalga 5'e ulaşınca açılır.");
 });

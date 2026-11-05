@@ -585,9 +585,7 @@
             return UNLOCK_WAVE_GATES[unlockLevel];
         }
         function unlockHintText(gate) {
-            // Turkish dative suffix by last digit: 3'e, 6'ya, 9'a, 10'a.
-            const suffix = ['a', 'e', 'ye', 'e', 'e', 'e', 'ya', 'ye', 'e', 'a'][gate % 10];
-            return `Yeni protokol: Dalga ${gate}'${suffix} ulaşınca açılır.`;
+            return `Yeni protokol: Dalga ${waveDative(gate)} ulaşınca açılır.`;
         }
         function evaluateRunUnlock(reachedWave) {
             if (nextUnlockWaveGate() === null) return null;
@@ -653,14 +651,15 @@
         const GOLD_ECONOMY = Object.freeze({ waveCap: 20, greedPerLevel: 0.10 });
         function goldWave(currentWave) { return Math.min(GOLD_ECONOMY.waveCap, Math.max(1, currentWave || 1)); }
         // Odak 3.7 · content bought once with gold in the lab. Everything else is free.
+        // Odak 3.10 · `wave`: the best wave a run must reach before the item can be bought.
         const CONTENT_UNLOCKS = Object.freeze([
-            {id:'PHANTOM',        type:'chassis', cost:1200, name:'HAYALET', icon:'fa-solid fa-bolt',             color:'#ff007f', desc:'Çevik şasi: +%15 hız, +15 puan kritik ve kısa atılım.'},
-            {id:'TITAN',          type:'chassis', cost:1800, name:'TİTAN',   icon:'fa-solid fa-shield-halved',    color:'#00ff66', desc:'Dayanıklı şasi: +50 can, hazır kalkan ve uydu.'},
-            {id:'mine_trail',     type:'weapon',  cost:900,  name:'Mayın İzi',     icon:'fa-solid fa-bomb',            color:'#ff9f1c', desc:'Hareket ettikçe arkana patlayan mayınlar bırakır.'},
-            {id:'boomerang_disc', type:'weapon',  cost:1100, name:'Bumerang Disk', icon:'fa-solid fa-compact-disc',    color:'#c084fc', desc:'Düşmanları delip geçen ve sana geri dönen disk.'},
-            {id:'shock_ring',     type:'weapon',  cost:1300, name:'Şok Halkası',   icon:'fa-solid fa-circle-radiation', color:'#5eead4', desc:'Çekirdekten genişleyen halka; merkeze yakın düşmana tam hasar.'},
-            {id:'coolant',        type:'passive', cost:700,  name:'Soğutucu',      icon:'fa-solid fa-snowflake',       color:'#7dd3fc', desc:'Tüm beklemeleri kademe başına %10 kısaltır.'},
-            {id:'collector',      type:'passive', cost:800,  name:'Toplayıcı',     icon:'fa-solid fa-seedling',        color:'#86efac', desc:'XP küresi değerini kademe başına %15 artırır.'}
+            {id:'PHANTOM',        type:'chassis', wave:7, cost:1200, name:'HAYALET', icon:'fa-solid fa-bolt',             color:'#ff007f', desc:'Çevik şasi: +%15 hız, +15 puan kritik ve kısa atılım.'},
+            {id:'TITAN',          type:'chassis', wave:4, cost:1800, name:'TİTAN',   icon:'fa-solid fa-shield-halved',    color:'#00ff66', desc:'Dayanıklı şasi: +50 can, hazır kalkan ve uydu.'},
+            {id:'mine_trail',     type:'weapon',  wave:6, cost:900,  name:'Mayın İzi',     icon:'fa-solid fa-bomb',            color:'#ff9f1c', desc:'Hareket ettikçe arkana patlayan mayınlar bırakır.'},
+            {id:'boomerang_disc', type:'weapon',  wave:8, cost:1100, name:'Bumerang Disk', icon:'fa-solid fa-compact-disc',    color:'#c084fc', desc:'Düşmanları delip geçen ve sana geri dönen disk.'},
+            {id:'shock_ring',     type:'weapon',  wave:10, cost:1300, name:'Şok Halkası',   icon:'fa-solid fa-circle-radiation', color:'#5eead4', desc:'Çekirdekten genişleyen halka; merkeze yakın düşmana tam hasar.'},
+            {id:'coolant',        type:'passive', wave:3, cost:700,  name:'Soğutucu',      icon:'fa-solid fa-snowflake',       color:'#7dd3fc', desc:'Tüm beklemeleri kademe başına %10 kısaltır.'},
+            {id:'collector',      type:'passive', wave:5, cost:800,  name:'Toplayıcı',     icon:'fa-solid fa-seedling',        color:'#86efac', desc:'XP küresi değerini kademe başına %15 artırır.'}
         ]);
         const CONTENT_TYPE_LABELS = Object.freeze({ chassis: 'ŞASİ', weapon: 'SİLAH', passive: 'PASİF' });
         let ownedContent = new Set();
@@ -678,6 +677,13 @@
             if (window.NEON_UNLOCK_ALL === true) return true;
             return !CONTENT_UNLOCKS.some(item => item.id === id) || ownedContent.has(id);
         }
+        function isContentWaveReady(item) {
+            return window.NEON_UNLOCK_ALL === true || savedMaxWave >= (item.wave || 0);
+        }
+        function waveDative(gate) {
+            // Turkish dative suffix by last digit: 3'e, 6'ya, 9'a, 10'a.
+            return gate + "'" + ['a', 'e', 'ye', 'e', 'e', 'e', 'ya', 'ye', 'e', 'a'][gate % 10];
+        }
         function parseOwnedContent(list) {
             if (!Array.isArray(list) || list.length > CONTENT_UNLOCKS.length) return null;
             if (!list.every(id => CONTENT_UNLOCKS.some(item => item.id === id))) return null;
@@ -685,7 +691,7 @@
         }
         function buyContent(id) {
             const item = CONTENT_UNLOCKS.find(entry => entry.id === id);
-            if (!item || isContentOwned(id) || totalGold < item.cost) return false;
+            if (!item || isContentOwned(id) || !isContentWaveReady(item) || totalGold < item.cost) return false;
             totalGold -= item.cost;
             ownedContent.add(id);
             saveMetaProgress();
@@ -10178,9 +10184,11 @@
                     badge.className = 'chassis-lock';
                     card.appendChild(badge);
                 }
-                badge.dataset.affordable = totalGold >= item.cost ? 'true' : 'false';
-                badge.innerHTML = '<i class="fa-solid fa-lock" aria-hidden="true"></i> ' +
-                    item.cost.toLocaleString('tr-TR') + ' ALTIN · LABORATUVARDA AÇ';
+                const waveReady = isContentWaveReady(item);
+                badge.dataset.affordable = waveReady && totalGold >= item.cost ? 'true' : 'false';
+                badge.innerHTML = '<i class="fa-solid fa-lock" aria-hidden="true"></i> ' + (waveReady ?
+                    item.cost.toLocaleString('tr-TR') + ' ALTIN · LABORATUVARDA AÇ' :
+                    'DALGA ' + waveDative(item.wave).toLocaleUpperCase('tr-TR') + ' ULAŞ · ' + item.cost.toLocaleString('tr-TR') + ' ALTIN');
             });
             if (!isContentOwned(selectedChassis)) selectChassis('VANGUARD');
         }
@@ -10327,10 +10335,16 @@
         function getMenuNextGoal() {
             const unowned = CONTENT_UNLOCKS.filter(item => !isContentOwned(item.id))
                 .sort((a, b) => a.cost - b.cost);
-            if (unowned.length) {
-                const item = unowned.find(entry => totalGold >= entry.cost) || unowned[0];
+            const buyable = unowned.filter(isContentWaveReady);
+            if (buyable.length) {
+                const item = buyable.find(entry => totalGold >= entry.cost) || buyable[0];
                 return { kind: 'content', id: item.id, title: item.name, label: CONTENT_TYPE_LABELS[item.type],
                     color: item.color, cost: item.cost, ready: totalGold >= item.cost };
+            }
+            if (unowned.length) {
+                const item = [...unowned].sort((a, b) => a.wave - b.wave || a.cost - b.cost)[0];
+                return { kind: 'wave', id: item.id, title: item.name, label: CONTENT_TYPE_LABELS[item.type],
+                    color: item.color, cost: item.cost, wave: item.wave, ready: false };
             }
             const lab = META_SHOP_ITEMS.filter(item => (metaUpgrades[item.key] || 0) < item.maxLevel)
                 .map(item => ({ item, cost: Math.round(item.baseCost * Math.pow(item.costScale, metaUpgrades[item.key] || 0)) }))
@@ -10352,6 +10366,14 @@
                     goalEl.innerHTML = '<div class="hangar-goal-title">Tüm koleksiyon ve geliştirmeler açık</div>' +
                         '<p class="text-[11px] text-gray-400 mt-1">Rekor ' + savedHighScore.toLocaleString('tr-TR') +
                         ' · en uzak dalga ' + savedMaxWave + '. Sözleşmelerle daha yükseğe çık.</p>';
+                } else if (goal.kind === 'wave') {
+                    const pct = Math.min(100, Math.round(100 * savedMaxWave / Math.max(1, goal.wave)));
+                    goalEl.innerHTML = '<div class="flex items-center justify-between gap-2"><span class="hangar-goal-title" style="color:' + goal.color + '">' +
+                        goal.title + '</span><span class="shop-content-type">' + goal.label + '</span></div>' +
+                        '<div class="hangar-goal-bar is-wave" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><span style="width:' + pct + '%"></span></div>' +
+                        '<div class="flex items-center justify-between gap-2 text-[10px] font-cyber"><span class="text-purple-300">DALGA ' +
+                        Math.min(savedMaxWave, goal.wave) + ' / ' + goal.wave + '</span>' +
+                        '<span class="text-gray-400">SONRA ' + goal.cost.toLocaleString('tr-TR') + ' ALTIN</span></div>';
                 } else {
                     const pct = Math.min(100, Math.round(100 * totalGold / Math.max(1, goal.cost)));
                     const status = goal.ready ? 'HAZIR · LABORATUVARDA AÇ' :
@@ -11732,15 +11754,18 @@
             container.innerHTML = '';
             CONTENT_UNLOCKS.forEach(item => {
                 const owned = isContentOwned(item.id);
-                const canAfford = !owned && totalGold >= item.cost;
+                const waveReady = isContentWaveReady(item);
+                const canAfford = !owned && waveReady && totalGold >= item.cost;
                 const card = document.createElement('div');
                 card.className = 'shop-collection-card bg-gray-900/90 border border-gray-800 rounded-xl p-3 flex flex-col justify-between text-left gap-3';
                 card.dataset.content = item.id;
                 card.dataset.owned = owned ? 'true' : 'false';
+                card.dataset.waveReady = waveReady ? 'true' : 'false';
                 const btnClass = owned ? 'bg-gray-800 text-green-400 cursor-default' :
                     (canAfford ? 'bg-yellow-500 hover:bg-yellow-400 text-black cursor-pointer' : 'bg-gray-800 text-gray-500 cursor-not-allowed');
-                const btnText = owned ? '<i class="fa-solid fa-check"></i> AÇIK' :
-                    '<i class="fa-solid fa-lock-open"></i> ' + item.cost.toLocaleString('tr-TR') + ' ALTIN İLE AÇ';
+                const btnText = owned ? '<i class="fa-solid fa-check"></i> AÇIK' : (!waveReady ?
+                    '<i class="fa-solid fa-lock"></i> DALGA ' + waveDative(item.wave).toLocaleUpperCase('tr-TR') + ' ULAŞ · ' + item.cost.toLocaleString('tr-TR') + ' ALTIN' :
+                    '<i class="fa-solid fa-lock-open"></i> ' + item.cost.toLocaleString('tr-TR') + ' ALTIN İLE AÇ');
                 card.innerHTML = `
                     <div class="flex items-start gap-2.5">
                         <div class="w-10 h-10 shrink-0 rounded-lg flex items-center justify-center border" style="color:${item.color}; border-color:${item.color}; background:rgba(0,0,0,0.4);">
