@@ -601,7 +601,8 @@ test('malformed or out-of-range save data does not break initialisation', () => 
   assert.equal(s.run('totalGold'), 50);
   assert.equal(s.run('savedMaxWave'), 1);
   assert.equal(s.run('metaUpgrades.baseDamage'), 10);
-  assert.equal(s.run('metaUpgrades.defibrillator'), 3);
+  // Odak 4.4 · the lab sells one tier; 999 is garbage, so it is clamped with no refund.
+  assert.equal(s.run('metaUpgrades.defibrillator'), 1);
   assert.equal(s.run('metaUpgrades.greed'), 0);
 });
 
@@ -3894,15 +3895,18 @@ test('M5.5.1 peak combo captures actual kill streak before it resets',()=>{
  assert.equal(r.peak,8);assert.equal(r.reported,8);assert.equal(r.killCount,7);
 });
 
+// Odak 4.4 · one paid revive per run, priced 60 + 10 × wave; the second attempt ends the run.
 test('M5.5.1 paid revives log actual gold cost and do not invent run income',()=>{
  const {run}=setup();
- const r=JSON.parse(run("(()=>{startNewGame();player.freeRevives=0;totalGold=200;gameState='REVIVE_PROMPT';executePlayerRevive();gameState='REVIVE_PROMPT';executePlayerRevive();triggerGameOver();return JSON.stringify({report:window.getNeonFinalReport(),gold:totalGold});})()"));
- assert.equal(r.report.combat.paidRevivesUsed,2);
+ const r=JSON.parse(run("(()=>{startNewGame();wave=4;player.freeRevives=0;totalGold=200;gameState='REVIVE_PROMPT';executePlayerRevive();const after=gameState;gameState='REVIVE_PROMPT';executePlayerRevive();return JSON.stringify({after,end:gameState,report:window.getNeonFinalReport(),gold:totalGold});})()"));
+ assert.equal(r.after,'PLAYING');
+ assert.equal(r.end,'GAME_OVER');
+ assert.equal(r.report.combat.paidRevivesUsed,1);
  assert.equal(r.report.combat.freeRevivesUsed,0);
- assert.equal(r.report.combat.paidReviveGoldSpent,95);
- assert.equal(r.gold,105);
+ assert.equal(r.report.combat.paidReviveGoldSpent,100);
+ assert.equal(r.gold,100);
  assert.equal(r.report.result.goldEarned,0);
- assert.equal(r.report.result.totalGoldBalance,105);
+ assert.equal(r.report.result.totalGoldBalance,100);
 });
 
 test('M5.5.1 free revive and rejected second revive preserve explicit end reason',()=>{
@@ -5728,7 +5732,7 @@ test('portable save backup round-trips meta and graphics with strict schema', ()
   const result = JSON.parse(run(`(() => {
     savedHighScore = 7450; savedMaxWave = 19; totalGold = 250;
     metaUpgrades.baseDamage = 7;
-    metaUpgrades.defibrillator = 2;
+    metaUpgrades.defibrillator = 1;
     applyGraphicsQuality('low', false);
     const backup = JSON.stringify(createProgressBackup());
     savedHighScore = 0; savedMaxWave = 1; totalGold = 0;
@@ -5746,7 +5750,7 @@ test('portable save backup round-trips meta and graphics with strict schema', ()
   assert.equal(result.score, 7450);
   assert.equal(result.wave, 19);
   assert.equal(result.baseDamage, 7);
-  assert.equal(result.defibrillator, 2);
+  assert.equal(result.defibrillator, 1);
   assert.equal(result.graphics, 'low');
   assert.equal(result.backup.format, 'neon-cekirdek-progress');
   assert.equal(result.backup.version, 1);
@@ -7899,4 +7903,50 @@ test('Odak 4.3 every card is stronger at a higher rarity, and the card says by h
   assert.deepEqual(x.mixed, [12, 24, 16]);
   assert.equal(x.cap, 24);
   assert.deepEqual(x.lured, [5, 10]);
+});
+
+test('Odak 4.4 revives: at most 3 free, health shrinks each time, no free Cinnet', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(()=>{
+    metaUpgrades.defibrillator = 1; selectedChassis = 'VANGUARD'; startNewGame();
+    const free = player.freeRevives;
+    player.addOverdrive(-1000); const od = player.overdrive;
+    const hp = [];
+    for (let i = 0; i < 3; i++) { gameState = 'REVIVE_PROMPT'; player.hp = 0; executePlayerRevive(); hp.push(+(player.hp / player.maxHp).toFixed(2)); }
+    // Free charges are gone; a 4th revive costs gold and still brings back 30 %.
+    wave = 12; totalGold = 1000; player.hp = 0; showRevivePromptOrGameOver();
+    const prompt = { state: gameState, price: paidReviveCost(), label: document.getElementById('confirmReviveBtn').innerHTML };
+    executePlayerRevive(); hp.push(+(player.hp / player.maxHp).toFixed(2));
+    player.hp = 0; showRevivePromptOrGameOver();
+    return JSON.stringify({ free, hp, prompt, gold: totalGold, after: gameState, cinnetGain: player.overdrive - od,
+      lab: META_SHOP_ITEMS.find(i => i.key === 'defibrillator').maxLevel });
+  })()`));
+  assert.equal(x.free, 3);
+  assert.deepEqual(x.hp, [0.6, 0.45, 0.3, 0.3]);
+  assert.equal(x.prompt.state, 'REVIVE_PROMPT');
+  assert.equal(x.prompt.price, 180);
+  assert.match(x.prompt.label, /180 ALTIN/);
+  assert.equal(x.gold, 820);
+  assert.equal(x.after, 'GAME_OVER');
+  assert.equal(x.cinnetGain, 0);
+  assert.equal(x.lab, 1);
+});
+
+test('Odak 4.4 old saves and backups with 2-3 lab revive tiers get their gold back once', () => {
+  const key = 'neonCekirdek.meta.v1';
+  const store = { [key]: JSON.stringify({ version: 1, gold: 100, highScore: 0, maxWave: 3,
+    upgrades: { baseDamage: 0, maxHp: 0, speedDash: 0, greed: 0, defibrillator: 3 } }) };
+  const first = setup(store);
+  // Tier 2 cost 132, tier 3 cost 290.
+  assert.equal(first.run('totalGold'), 100 + 132 + 290);
+  assert.equal(first.run('metaUpgrades.defibrillator'), 1);
+  assert.equal(JSON.parse(store[key]).upgrades.defibrillator, 1);
+  assert.equal(JSON.parse(store[key]).gold, 522);
+  // Saved once: a reload does not pay again.
+  assert.equal(setup(store).run('totalGold'), 522);
+  const r = JSON.parse(first.run(`(()=>{ gameState = 'MENU';
+    const backup = createProgressBackup(); backup.progress.upgrades.defibrillator = 2; backup.progress.gold = 10;
+    const ok = restoreProgressBackup(JSON.stringify(backup));
+    return JSON.stringify({ ok, gold: totalGold, defib: metaUpgrades.defibrillator }); })()`));
+  assert.deepEqual(r, { ok: true, gold: 142, defib: 1 });
 });

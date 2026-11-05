@@ -697,7 +697,28 @@
             saveMetaProgress();
             return true;
         }
-        const META_UPGRADE_LIMITS = { baseDamage: 10, maxHp: 10, speedDash: 8, greed: 8, defibrillator: 3 };
+        // Odak 4.4 · the lab sells one revive tier now; saves may still hold the old three.
+        const META_UPGRADE_LIMITS = { baseDamage: 10, maxHp: 10, speedDash: 8, greed: 8, defibrillator: 1 };
+        const LEGACY_DEFIBRILLATOR_MAX = 3;
+        const DEFIBRILLATOR_PRICE = Object.freeze({ baseCost: 60, costScale: 2.2 });
+        // Gold paid for tiers above today's cap, given back once.
+        function defibrillatorRefund(level) {
+            let gold = 0;
+            for (let tier = META_UPGRADE_LIMITS.defibrillator; tier < level; tier++)
+                gold += Math.round(DEFIBRILLATOR_PRICE.baseCost * Math.pow(DEFIBRILLATOR_PRICE.costScale, tier));
+            return gold;
+        }
+        let defibrillatorRefundGold = 0;
+        // Odak 4.4 · at most 3 free revives (1 base, 1 lab, 1 Öncü), one paid revive whose
+        // price follows the wave, and each revive brings back less health.
+        const REVIVE_RULES = Object.freeze({ paidMax: 1, paidBase: 60, paidPerWave: 10,
+            hp: Object.freeze([.60, .45, .30]), invuln: 3.5 });
+        function paidReviveCost(currentWave = wave) {
+            return REVIVE_RULES.paidBase + REVIVE_RULES.paidPerWave * Math.max(1, currentWave || 1);
+        }
+        function reviveHpFraction(used = reviveCountUsed) {
+            return REVIVE_RULES.hp[Math.min(REVIVE_RULES.hp.length - 1, Math.max(0, used))];
+        }
 
         function safeSaveInteger(value, fallback, max = 1000000000) {
             return Number.isSafeInteger(value) && value >= 0 ? Math.min(value, max) : fallback;
@@ -722,6 +743,14 @@
                 lastRunSummary = parseLastRunSummary(data.lastRun);
                 guidesSeen = new Set(parseGuidesSeen(data.guides));
                 if (data.upgrades && typeof data.upgrades === 'object') {
+                    const rawDefib = data.upgrades.defibrillator;
+                    const legacyDefib = Number.isSafeInteger(rawDefib) && rawDefib >= 0 &&
+                        rawDefib <= LEGACY_DEFIBRILLATOR_MAX ? rawDefib : 0;
+                    const refund = defibrillatorRefund(legacyDefib);
+                    if (refund > 0) {
+                        totalGold += refund;
+                        defibrillatorRefundGold = refund;
+                    }
                     for (const [key, max] of Object.entries(META_UPGRADE_LIMITS)) {
                         metaUpgrades[key] = safeSaveInteger(data.upgrades[key], metaUpgrades[key], max);
                     }
@@ -795,10 +824,13 @@
                         data[key] > maximum) return null;
                 }
                 const upgrades = {};
+                let refund = 0;
                 for (const [key, maximum] of Object.entries(META_UPGRADE_LIMITS)) {
                     const level = data.upgrades[key];
-                    if (!Number.isSafeInteger(level) || level < 0 || level > maximum) return null;
-                    upgrades[key] = level;
+                    const accepted = key === 'defibrillator' ? LEGACY_DEFIBRILLATOR_MAX : maximum;
+                    if (!Number.isSafeInteger(level) || level < 0 || level > accepted) return null;
+                    if (key === 'defibrillator') refund = defibrillatorRefund(level);
+                    upgrades[key] = Math.min(level, maximum);
                 }
                 // Backups exported before v2 carry no unlock tier; migrate like a v1 save.
                 const restoredUnlockLevel = data.version === 1 ?
@@ -818,7 +850,7 @@
                         version: META_SAVE_VERSION,
                         highScore: data.highScore,
                         maxWave: data.maxWave,
-                        gold: data.gold,
+                        gold: data.gold + refund,
                         unlockLevel: restoredUnlockLevel,
                         unlockFailedRuns: restoredFailedRuns,
                         owned: restoredOwned,
@@ -918,10 +950,10 @@
                 name: 'Yedek Defibrilatör Şarjı',
                 icon: 'fa-solid fa-heart-circle-bolt',
                 color: '#10b981',
-                desc: 'Her kademe operasyon başına +1 Ücretsiz Acil Durum Diriliş hakkı ekler.',
-                baseCost: 60,
-                costScale: 2.2,
-                maxLevel: 3
+                desc: 'Operasyon başına +1 ücretsiz acil durum diriliş hakkı ekler.',
+                baseCost: DEFIBRILLATOR_PRICE.baseCost,
+                costScale: DEFIBRILLATOR_PRICE.costScale,
+                maxLevel: META_UPGRADE_LIMITS.defibrillator
             }
         ];
 
@@ -11539,14 +11571,16 @@
         }
 
         function showRevivePromptOrGameOver() {
-            const goldReviveCost = 30 + paidRevivesUsed * 35;
+            const goldReviveCost = paidReviveCost();
             const canUseFree = player.freeRevives > 0;
-            const canAffordGold = paidRevivesUsed < 2 && totalGold >= goldReviveCost;
+            const canAffordGold = paidRevivesUsed < REVIVE_RULES.paidMax && totalGold >= goldReviveCost;
 
             if (canUseFree || canAffordGold) {
                 gameState = 'REVIVE_PROMPT';
                 document.getElementById('reviveScoreText').textContent = score.toLocaleString('tr-TR');
                 document.getElementById('reviveGoldText').textContent = totalGold.toLocaleString('tr-TR');
+                // Odak 4.4 · each revive brings back less health; say how much this one gives.
+                document.getElementById('reviveHpText').textContent = '%' + Math.round(reviveHpFraction() * 100) + ' Can';
                 document.getElementById('reviveFreeChargesText').textContent = canUseFree ? `${player.freeRevives} ÜCRETSİZ` : `${goldReviveCost} ALTIN`;
 
                 const confirmBtn = document.getElementById('confirmReviveBtn');
@@ -11566,11 +11600,11 @@
 
         function executePlayerRevive() {
             if (gameState !== 'REVIVE_PROMPT') return;
-            const goldReviveCost = 30 + paidRevivesUsed * 35;
+            const goldReviveCost = paidReviveCost();
             if (player.freeRevives > 0) {
                 player.freeRevives--;
                 runMetrics.freeRevivesUsed++;
-            } else if (paidRevivesUsed < 2 && totalGold >= goldReviveCost) {
+            } else if (paidRevivesUsed < REVIVE_RULES.paidMax && totalGold >= goldReviveCost) {
                 totalGold -= goldReviveCost;
                 runMetrics.paidRevivesUsed++;
                 runMetrics.paidReviveGoldSpent+=goldReviveCost;
@@ -11581,11 +11615,11 @@
                 return;
             }
 
+            const hpFraction = reviveHpFraction();
             reviveCountUsed++;
-            player.hp = Math.round(player.maxHp * 0.65);
-            player.invulnTimer = 3.5;
+            player.hp = Math.round(player.maxHp * hpFraction);
+            player.invulnTimer = REVIVE_RULES.invuln;
             player.momentum = 100;
-            player.addOverdrive(50);
 
             enemyProjectiles = [];
             for (const e of enemies) {
@@ -11601,7 +11635,7 @@
             audio.playRevive();
             screenShake = 18;
             shockwaves.push(new Shockwave(player.x, player.y, 380, '#10b981', 0.6));
-            showDopamineBanner('⚡ DİRİLİŞ · 3,5s KORUMA ⚡', '#10b981');
+            showDopamineBanner(`⚡ DİRİLİŞ · %${Math.round(hpFraction * 100)} CAN · 3,5s KORUMA ⚡`, '#10b981');
 
             const modal = document.getElementById('reviveModal');
             modal.classList.add('hidden');
@@ -12205,7 +12239,8 @@
                                 </div>
                             </div>
                         </div>
-                        <p class="text-xs text-gray-400 leading-relaxed mb-4">${item.desc}</p>
+                        <p class="text-xs text-gray-400 leading-relaxed mb-4">${item.desc}${item.key === 'defibrillator' && defibrillatorRefundGold > 0 ?
+                            `<span class="block mt-1 text-yellow-300">Artık tek kademe var: fazla kademeler için +${defibrillatorRefundGold.toLocaleString('tr-TR')} altın iade edildi.</span>` : ''}</p>
                     </div>
                     <button type="button" class="buy-btn w-full py-2.5 rounded-lg font-cyber font-bold text-xs flex items-center justify-center gap-1.5 transition ${isMax ? 'bg-gray-800 text-green-400 cursor-default' : (canAfford ? 'bg-yellow-500 hover:bg-yellow-400 text-black cursor-pointer' : 'bg-gray-800 text-gray-500 cursor-not-allowed')}">
                         ${isMax ? '<i class="fa-solid fa-check"></i> MAKSİMUM SEVİYE' : `<i class="fa-solid fa-coins"></i> ${cost} ALTIN İLE YÜKSELT`}
@@ -12879,6 +12914,7 @@
             resizeCanvas();
             initMenuDemoNodes();
             updateMenuCounters();
+            if (defibrillatorRefundGold > 0) saveMetaProgress();
             scheduleMenuFit();
             document.getElementById('perfOverlay').classList.toggle('hidden', !performanceOverlayOn);
             requestAnimationFrame(gameLoop);
