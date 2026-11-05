@@ -1683,3 +1683,28 @@ test('Odak 5.2 the lab wardrobe sells looks that show in the hangar and the run'
   expect(await page.evaluate(() => equippedCosmetic('core').color)).toBe('#ff6a3d');
   expect(errors).toEqual([]);
 });
+
+test('Odak 5.3 the data capsule in the lab hands out a new costume to wear', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await gotoGame(page, '/index.html', { unlockAll: false });
+  await page.evaluate(() => { totalGold = 650; updateMenuCounters(); });
+  await page.locator('#openShopFromMenuBtn').click();
+  const open = page.locator('#openCapsuleBtn');
+  await expect(open).toBeEnabled();
+  await open.click();
+  await expect(page.locator('#capsuleResult')).toBeVisible();
+  await expect(page.locator('#shopGoldBalance')).toHaveText('350');
+  await expect(page.locator('#shopCosmeticCount')).toHaveText('1/16');
+  const fresh = page.locator('.wardrobe-item[data-fresh="true"]');
+  await expect(fresh).toHaveCount(1);
+  await expect(fresh).toHaveAttribute('data-state', 'owned');
+  await fresh.click();
+  await expect(fresh).toHaveAttribute('data-state', 'worn');
+  await open.click();
+  await expect(page.locator('#shopCosmeticCount')).toHaveText('2/16');
+  await expect(open).toBeDisabled();
+  const owned = await page.evaluate(() => [...ownedCosmetics]);
+  expect(new Set(owned).size).toBe(2);
+  expect(errors).toEqual([]);
+});

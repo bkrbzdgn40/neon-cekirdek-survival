@@ -1,5 +1,9 @@
 # Değişiklik Günlüğü
 
+## Odak 5.3 · Veri Kapsülü
+- Gardırobun başına VERİ KAPSÜLÜ eklendi: 300 altına, sahip olmadığın kostümlerden birini rastgele verir. Aynı kostüm asla tekrar çıkmaz.
+- Çıkan kostüm kapsülün altında gösterilir ve ızgarada parlar; otomatik giyilmez, GİY ile takarsın. 16 kostümün hepsi sende olunca kapsül kapanır.
+
 ## Odak 5.2 · Kostümler
 - Laboratuvara GARDIROP eklendi: 4 yuvada 16 kostüm (çekirdek rengi, iz efekti, çekirdek şekli, arena paleti), 400–1500 altın.
 - Kostümler yalnızca görünüşü değiştirir; can, hasar ve hız aynı kalır. Alınan kostüm hemen giyilir, tekrar tıklayınca çıkar; hangarda ve koşuda görünür.

@@ -500,7 +500,7 @@ TEHDİTLER sekmesi sözlük olur: karşılaşılan düşman (ve elit) kaydedilir
 ### - [x] 5.2 Kostümler
 4 kategoride 16 kostüm: çekirdek rengi, iz efekti, çekirdek şekli, arena paleti. Laboratuvarda doğrudan satılır.
 
-### - [ ] 5.3 Veri Kapsülü
+### - [x] 5.3 Veri Kapsülü
 Daha ucuz kapsül, sahip olunmayan kostümlerden birini rastgele verir; asla tekrar çıkmaz.
 
 ### - [ ] 5.4 Yeni şasi

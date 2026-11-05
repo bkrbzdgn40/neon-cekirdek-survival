@@ -2220,3 +2220,22 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
 .wardrobe-item[data-state="owned"] .wardrobe-action { color: #67e8f9; }
 .wardrobe-item[data-state="worn"] .wardrobe-action { color: #6ee7b7; }
 .wardrobe-item[data-state="locked"] .wardrobe-action { color: #8ea6bd; }
+
+/* Odak 5.3 · data capsule */
+.capsule-panel { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 14px;
+    background: linear-gradient(135deg, #1a1030, #0e1828); border: 1px solid #5b3d8f; }
+.capsule-panel[data-state="done"] { border-color: #2f5a4a; background: #0b1f1a; }
+.capsule-info { display: grid; gap: 4px; min-width: 0; }
+.capsule-title { font: 800 12px 'Orbitron', sans-serif; color: #d8b4fe; letter-spacing: .1em; }
+.capsule-note { font-size: 12px; color: #a9bccd; }
+.capsule-result { display: flex; align-items: center; gap: 8px; font: 700 11px 'Orbitron', sans-serif; color: #fde68a; animation: capsuleReveal .45s ease-out; }
+.capsule-result .wardrobe-swatch svg { width: 32px; height: 32px; }
+.capsule-btn { flex: none; padding: 10px 14px; border-radius: 10px; font: 800 11px 'Orbitron', sans-serif; color: #1a0f2e;
+    background: #c084fc; border: 0; cursor: pointer; }
+.capsule-btn:hover:not(:disabled) { background: #d8b4fe; }
+.capsule-btn:focus-visible { outline: 2px solid #defbff; outline-offset: 2px; }
+.capsule-btn:disabled { cursor: not-allowed; background: #33405a; color: #8ea6bd; }
+.wardrobe-item[data-fresh="true"] { border-color: #c084fc; box-shadow: 0 0 0 1px #c084fc66, 0 0 14px #c084fc44; }
+@keyframes capsuleReveal { from { opacity: 0; transform: translateY(4px) scale(.96); } to { opacity: 1; transform: none; } }
+@media (max-width: 640px) { .capsule-panel { flex-direction: column; align-items: stretch; } }
+@media (prefers-reduced-motion: reduce) { .capsule-result { animation: none; } }
