@@ -1613,7 +1613,7 @@
                         for (const target of enemies) {
                             if (target.dead) continue;
                             if (Math.hypot(target.x - this.x, target.y - this.y) <= 145) {
-                                target.takeDamage(this.damage * 0.62, 0, 0, false, false);
+                                target.takeDamage(this.damage * LEGACY_WEAPON_RULES.orbital.pulseDamage, 0, 0, false, false);
                             }
                         }
                     }
@@ -1666,7 +1666,8 @@
                 const effectiveCrit = Math.min(0.78, this.critChance +
                     (this.overdriveActive ? this.overdriveCritBonus : 0) + (this.momentum / 100) * 0.1);
                 const isCrit = rng() < effectiveCrit;
-                const finalDamage = isCrit ? this.damage * 2.0 : this.damage;
+                const finalDamage = (isCrit ? this.damage * 2.0 : this.damage) *
+                    (this.multishot > 1 ? getLegacyWeaponValue('multishot', 'salvoDamage', this) : 1);
 
                 for (let i = 0; i < this.multishot; i++) {
                     const angle = startAngle + i * spread;
@@ -1725,7 +1726,7 @@
                             this.y,
                             Math.cos(mAngle) * (this.bulletSpeed * 0.78),
                             Math.sin(mAngle) * (this.bulletSpeed * 0.78),
-                            this.damage * 1.35,
+                            this.damage * getLegacyWeaponValue('homing', 'missileDamage', this),
                             6, 1, 0, true, true
                         );
                         missile.clusterPayload = this.evolutions.has('homing');
@@ -3298,7 +3299,7 @@
                                 nextTarget.x, nextTarget.y, isCrit || evolvedArc);
                             if(lastTarget===this) audio.playWeaponHit('arc',isCrit,false);
                             advanceQuest('CHAIN',1);
-                            nextTarget.takeDamage(finalDmg * 0.55, 0, 0, false, false);
+                            nextTarget.takeDamage(finalDmg * getLegacyWeaponValue('lightning', 'arcDamage'), 0, 0, false, false);
                             lastTarget = nextTarget;
                             jumps--;
                         } else {
@@ -3857,6 +3858,22 @@
         });
 
         const MAX_MODULE_TIER = 3;
+        // Odak 3.5 · per-tier damage for the original weapons, tuned with
+        // scripts/sim-dps.cjs into the ±25 % band of each tier's median.
+        // Multishot scales every bullet of a salvo; orbital is a share of
+        // player damage per contact hit (0.12 s shared cooldown); homing is per
+        // missile; lightning is per arc jump. Tier 0 (a TITAN chassis satellite,
+        // or a stat set without the card) behaves like tier 1.
+        const LEGACY_WEAPON_RULES = Object.freeze({
+            multishot: { salvoDamage: [.88, .88, .66, .55] },
+            orbital: { contactDamage: [.13, .13, .105, .06], pulseDamage: .35 },
+            homing: { missileDamage: [2.3, 2.3, 1.55, 1.35] },
+            lightning: { arcDamage: [1.2, 1.2, .88, 1] }
+        });
+        function getLegacyWeaponValue(id, key, p = player) {
+            const tier = Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.[id] || 0);
+            return LEGACY_WEAPON_RULES[id][key][tier];
+        }
         // Odak 3.1 · build slots. Plasma permanently holds weapon slot 1; a
         // weapon card marked upgradeOf (multishot) improves it without a slot.
         const BUILD_SLOT_LIMITS = Object.freeze({ weapon: 4, passive: 5 });
@@ -4052,7 +4069,7 @@
                 name: 'Çatallı Plazma',
                 icon: 'fa-solid fa-burst',
                 color: '#00f3ff',
-                getDesc: (r) => `Her atışta +${r.id === 'LEGENDARY' ? 2 : 1} ekstra plazma mermisi ve +%${Math.round(8 * r.mult)} hasar kazandırır.`,
+                getDesc: (r) => `Her atışta +${r.id === 'LEGENDARY' ? 2 : 1} ekstra plazma mermisi ve +%${Math.round(8 * r.mult)} hasar kazandırır. Salvo genişledikçe her mermi biraz daha az vurur.`,
                 apply: (p, r) => {
                     p.multishot += (r.id === 'LEGENDARY' ? 2 : 1);
                     p.damage *= (1 + 0.08 * r.mult);
@@ -5441,7 +5458,7 @@
         const MINE_TRAIL_RULES = Object.freeze({
             dropDistance: [0, 300, 260, 220],
             maxMines: [0, 3, 4, 5],
-            damageMult: [0, 0.35, 0.5, 0.75],
+            damageMult: [0, 0.35, 0.45, 0.75],
             flatDamage: [0, 2, 3, 4],
             blastRadius: [0, 52, 58, 64],
             triggerRadius: 30, armDelay: .45, lifetime: 8,
@@ -9376,7 +9393,8 @@
                             // Shared contact cooldown limits both DPS and damage-number spam.
                             e.orbitalHitCooldown = 0.12;
                             const angle = Math.atan2(e.y - player.y, e.x - player.x);
-                            e.takeDamage(player.damage * 8 * 0.12, Math.cos(angle) * 13.2, Math.sin(angle) * 13.2, false, false);
+                            e.takeDamage(player.damage * getLegacyWeaponValue('orbital', 'contactDamage'),
+                                Math.cos(angle) * 13.2, Math.sin(angle) * 13.2, false, false);
                         }
                     }
                 }
