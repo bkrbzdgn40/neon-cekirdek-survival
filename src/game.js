@@ -6880,12 +6880,19 @@
         let chapterFoundryLastPulse = -1;
         // Foundry timing starts in its first eligible frame, never mid-pulse.
         let chapterFoundryAnchor = null;
+        // Odak 4.9 · each pulse rolls its own direction and two lanes.
+        const FOUNDRY_RAILS = Object.freeze({
+            slots: Object.freeze([.2, .35, .5, .65, .8]),
+            // Never two neighbouring slots, so a safe lane always stays between or beside them.
+            pairs: Object.freeze([[0, 2], [0, 3], [0, 4], [1, 3], [1, 4], [2, 4]]),
+            damage: 9, jawTravel: 40, residue: .7 });
+        let chapterFoundryLayout = null;
 
         // M5.20: one cinematic encounter on each chapter's middle wave.
         // Neither a new spawn budget nor a reward system; existing entities
         // and arena rules provide the stakes, while the stage owns the visuals.
         const CHAPTER_SHOWCASES=Object.freeze({
-            FOUNDRY:Object.freeze({name:'KIZIL MAKAS',hint:'İKİ PRES · İKİNCİSİ SENİ İZLER',color:'#ffb36f',duration:5.2}),
+            FOUNDRY:Object.freeze({name:'KIZIL MAKAS',hint:'YÖNÜ RASTGELE · İKİNCİSİ SENİ İZLER',color:'#ffb36f',duration:5.2}),
             GARDEN:Object.freeze({name:'İYON KOROSU',hint:'İKİ FARKLI ÇİÇEĞİ DOLDUR',color:'#86ffe0',duration:14}),
             RIFT:Object.freeze({name:'FAZ KISKACI',hint:'İŞARETTEN UZAKLAŞ YA DA DÜŞMANI DURDUR',color:'#e3a6ff',duration:4.5})
         });
@@ -6937,7 +6944,7 @@
             chapterRiftArmed=true;
             chapterRiftReadyAt=0;
             chapterFoundryLastPulse=-1;
-            chapterFoundryAnchor=null;
+            chapterFoundryAnchor=null;chapterFoundryLayout=null;
             chapterShowcase=null;
             chapterShowcaseAttemptedWave=0;
             chapterShowcaseStats={started:0,completed:0,cancelled:0,
@@ -6960,13 +6967,35 @@
             chapterRiftArmed=true;
             chapterRiftReadyAt=0;
             chapterFoundryLastPulse=-1;
-            chapterFoundryAnchor=null;
+            chapterFoundryAnchor=null;chapterFoundryLayout=null;
             if (!next) return false;
             chapterAnnounceUntil=totalTime+5.0;
             chapterStats.changes++;
             const d=ARENA_CHAPTERS[next];
             createFloatingText(player.x,player.y-54,d.label,d.color,17);
             return true;
+        }
+        function foundryPulseIndex() {
+            return Math.floor(Math.max(0, totalTime - chapterFoundryAnchor) / CHAPTER_RULES.foundryCycle);
+        }
+        // Rolled only from the update path, so draw order never changes the random sequence.
+        function foundryRailLayout() {
+            if (chapterFoundryAnchor === null) return null;
+            const pulse = foundryPulseIndex();
+            if (!chapterFoundryLayout || chapterFoundryLayout.pulse !== pulse) {
+                const axis = rng() < .5 ? 'y' : 'x';
+                const pair = FOUNDRY_RAILS.pairs[Math.floor(rng() * FOUNDRY_RAILS.pairs.length)];
+                chapterFoundryLayout = { pulse, axis, slots: [...pair] };
+            }
+            return chapterFoundryLayout;
+        }
+        // axis 'y' = horizontal rails (they sit at a y), axis 'x' = vertical rails.
+        function foundryRailPositions(layout) {
+            const span = layout.axis === 'y' ? worldHeight : worldWidth;
+            return layout.slots.map(i => span * FOUNDRY_RAILS.slots[i]);
+        }
+        function onFoundryLane(axis, at, entity, halfWidth) {
+            return Math.abs((axis === 'y' ? entity.y : entity.x) - at) <= halfWidth;
         }
         function chapterFoundryPhase(t=totalTime) {
             if(chapterFoundryAnchor===null)return 0;
@@ -6979,12 +7008,16 @@
                 chapterFoundryPhase()>=CHAPTER_RULES.foundryWarn)return;
             const traveled=Math.hypot(enemy.x-fromX,enemy.y-fromY);
             if(traveled<0.001)return;
-            const rails=[worldHeight*.32,worldHeight*.68];
-            const nearest=rails[Math.abs(enemy.y-rails[0])<Math.abs(enemy.y-rails[1])?0:1];
+            const layout=foundryRailLayout();
+            if(!layout)return;
+            const across=layout.axis==='y'?enemy.y:enemy.x;
+            const rails=foundryRailPositions(layout);
+            const nearest=rails[Math.abs(across-rails[0])<Math.abs(across-rails[1])?0:1];
             const clearance=CHAPTER_RULES.foundryHalfWidth+enemy.radius+24;
-            if(Math.abs(enemy.y-nearest)>clearance)return;
-            const escape=nearest+(enemy.y<nearest?-1:1)*clearance;
-            const desiredX=enemy.x-fromX,desiredY=escape-fromY;
+            if(Math.abs(across-nearest)>clearance)return;
+            const escape=nearest+(across<nearest?-1:1)*clearance;
+            const desiredX=layout.axis==='y'?enemy.x-fromX:escape-fromX;
+            const desiredY=layout.axis==='y'?escape-fromY:enemy.y-fromY;
             const norm=Math.hypot(desiredX,desiredY)||1;
             enemy.x=Math.max(enemy.radius,Math.min(worldWidth-enemy.radius,
                 fromX+traveled*desiredX/norm));
@@ -6998,29 +7031,44 @@
             }
         }
         function updateFoundryChapter() {
+            const layout=foundryRailLayout();
             const phase=chapterFoundryPhase();
-            if (phase<CHAPTER_RULES.foundryWarn ||
+            if (!layout || phase<CHAPTER_RULES.foundryWarn ||
                 phase>=CHAPTER_RULES.foundryActiveEnd) return;
-            const pulse=Math.floor(Math.max(0,totalTime-chapterFoundryAnchor)/CHAPTER_RULES.foundryCycle);
+            const pulse=layout.pulse;
             if (chapterFoundryLastPulse===pulse) return;
             chapterFoundryLastPulse=pulse;
-            const ys=[worldHeight*.32,worldHeight*.68];
-            if (ys.some(y=>Math.abs(player.y-y)<=CHAPTER_RULES.foundryHalfWidth)) {
+            const w=CHAPTER_RULES.foundryHalfWidth, axis=layout.axis;
+            const lanes=foundryRailPositions(layout);
+            if (lanes.some(at=>onFoundryLane(axis,at,player,w))) {
                 const prev=player.hp;
-                player.takeDamage(9);
+                player.takeDamage(FOUNDRY_RAILS.damage);
                 if(player.hp<prev)chapterStats.foundryPlayerHits++;
             }
             let hits=0;
             for(const e of enemies){
                 if(hits>=CHAPTER_RULES.foundryHitCap) break;
-                if(e.dead||e.isBoss||!ys.some(y=>
-                    Math.abs(e.y-y)<=CHAPTER_RULES.foundryHalfWidth)) continue;
+                if(e.dead||e.isBoss||!lanes.some(at=>onFoundryLane(axis,at,e,w))) continue;
                 e.takeDamage(Math.min(70,player.damage*.65+18),0,0,false,false);
                 hits++;
             }
             chapterStats.foundryEnemyHits+=hits;
-            if(hits)shockwaves.push(new Shockwave(worldWidth*.5,ys[0],85,
-                ARENA_CHAPTERS.FOUNDRY.color,.25));
+            for(const at of lanes) slamFoundrySparks(axis,at,w,graphicsQuality==='low'?3:graphicsQuality==='medium'?6:10);
+            screenShake=Math.max(screenShake,graphicsQuality==='low'?3:5);
+            if(hits)shockwaves.push(new Shockwave(axis==='y'?worldWidth*.5:lanes[0],
+                axis==='y'?lanes[0]:worldHeight*.5,85,ARENA_CHAPTERS.FOUNDRY.color,.25));
+        }
+        // Sparks jump out of both jaws along a lane.
+        function slamFoundrySparks(axis, at, w, count) {
+            const length = axis === 'y' ? worldWidth : worldHeight;
+            for (let i = 0; i < count; i++) {
+                const side = i % 2 ? 1 : -1, along = rng() * length;
+                const speed = 160 + rng() * 260, drift = (rng() - .5) * 220;
+                const color = i % 3 ? '#ffb36f' : '#fff3cc', size = 2 + rng() * 2.5, life = .35 + rng() * .3;
+                emitParticle(axis === 'y' ?
+                    new Particle(along, at + side * w, drift, side * speed, color, size, life) :
+                    new Particle(at + side * w, along, side * speed, drift, color, size, life));
+            }
         }
         function updateGardenChapter(dt) {
             const nodes=getGardenCenters();
@@ -7230,8 +7278,9 @@
                 completed:false,targets,
                 anchorX:player.x,anchorY:player.y};
             chapterShowcaseStats.started++;
+            if(arenaChapter==='FOUNDRY')rollFoundryShowcasePress(chapterShowcase);
             if(arenaChapter==='FOUNDRY'){
-                chapterFoundryAnchor=null;
+                chapterFoundryAnchor=null;chapterFoundryLayout=null;
                 chapterFoundryLastPulse=-1;
             }
             chapterAnnounceUntil=Math.max(chapterAnnounceUntil,totalTime+3);
@@ -7242,7 +7291,7 @@
             if(!chapterShowcase)return;
             chapterShowcaseStats.cancelled++;
             chapterShowcase=null;
-            chapterFoundryAnchor=null;
+            chapterFoundryAnchor=null;chapterFoundryLayout=null;
             chapterFoundryLastPulse=-1;
         }
         // Odak 4.5 · two vertical presses. The first sits at 28 % of the arena; the second
@@ -7251,21 +7300,32 @@
         const FOUNDRY_PRESS = Object.freeze({ moments: Object.freeze([1.8, 3.8]), halfWidth: 35,
             damage: 20, enemyHits: 10, enemyDamageCap: 85, lateWindow: .5, slam: .55,
             jawTravel: 54, margin: 60 });
-        function foundryPressX(op, index) {
-            if (!op.pressX) op.pressX = [worldWidth * .28, null];
-            return op.pressX[index];
+        // Odak 4.9 · a press is {axis, at}: axis 'x' is a column at x, axis 'y' a row at y.
+        function clampFoundryPress(axis, at) {
+            const span = axis === 'y' ? worldHeight : worldWidth, m = FOUNDRY_PRESS.margin;
+            return Math.max(m, Math.min(span - m, at));
         }
+        function rollFoundryShowcasePress(op) {
+            const axis = rng() < .5 ? 'x' : 'y';
+            const span = axis === 'y' ? worldHeight : worldWidth;
+            op.press = [{ axis, at: clampFoundryPress(axis, span * (.22 + rng() * .56)) }, null];
+        }
+        function foundryPress(op, index) {
+            if (!op.press) rollFoundryShowcasePress(op);
+            return op.press[index];
+        }
+        // The second press picks a direction as the first lands and locks onto the player.
         function aimFoundryPress(op) {
-            foundryPressX(op, 0);
-            const m = FOUNDRY_PRESS.margin;
-            op.pressX[1] = Math.max(m, Math.min(worldWidth - m, player.x));
+            foundryPress(op, 0);
+            const axis = rng() < .5 ? 'x' : 'y';
+            op.press[1] = { axis, at: clampFoundryPress(axis, axis === 'y' ? player.y : player.x) };
         }
         function fireFoundryPress(index) {
             const op = chapterShowcase;
-            const x = op ? foundryPressX(op, index) : worldWidth * (index === 0 ? .28 : .72);
-            if (!Number.isFinite(x)) return;
-            const width = FOUNDRY_PRESS.halfWidth;
-            if(Math.abs(player.x-x)<width+player.radius){
+            const press = op ? foundryPress(op, index) : null;
+            if (!press || !Number.isFinite(press.at)) return;
+            const width = FOUNDRY_PRESS.halfWidth, axis = press.axis, at = press.at;
+            if(onFoundryLane(axis,at,player,width+player.radius)){
                 const hp=player.hp;
                 player.takeDamage(FOUNDRY_PRESS.damage);
                 if(player.hp<hp)chapterShowcaseStats.pressPlayerHits++;
@@ -7273,23 +7333,14 @@
             let hits=0;
             for(const enemy of enemies){
                 if(hits>=FOUNDRY_PRESS.enemyHits)break;
-                if(enemy.dead||enemy.isBoss||
-                    Math.abs(enemy.x-x)>width+enemy.radius)continue;
+                if(enemy.dead||enemy.isBoss||!onFoundryLane(axis,at,enemy,width+enemy.radius))continue;
                 enemy.takeDamage(Math.min(FOUNDRY_PRESS.enemyDamageCap,player.damage*.7+25),0,0,false,false);
                 hits++;
             }
             chapterShowcaseStats.pressEnemyHits+=hits;
-            shockwaves.push(new Shockwave(x,worldHeight*.5,130,'#ffb36f',.4));
+            shockwaves.push(new Shockwave(axis==='x'?at:worldWidth*.5,axis==='x'?worldHeight*.5:at,130,'#ffb36f',.4));
             screenShake = Math.max(screenShake, graphicsQuality === 'low' ? 8 : 14);
-            // Sparks spray out of both jaws along the column.
-            const sparks = graphicsQuality === 'low' ? 6 : graphicsQuality === 'medium' ? 12 : 20;
-            for (let i = 0; i < sparks; i++) {
-                const side = i % 2 ? 1 : -1;
-                const y = rng() * worldHeight;
-                const speed = 160 + rng() * 260;
-                emitParticle(new Particle(x + side * width, y, side * speed, (rng() - .5) * 220,
-                    i % 3 ? '#ffb36f' : '#fff3cc', 2 + rng() * 2.5, .35 + rng() * .3));
-            }
+            slamFoundrySparks(axis, at, width, graphicsQuality === 'low' ? 6 : graphicsQuality === 'medium' ? 12 : 20);
         }
         function recordShowcaseIonFlower(index) {
             const op=chapterShowcase;
@@ -7371,83 +7422,126 @@
             if(totalTime>=op.endAt){
                 if(op.id==='FOUNDRY')chapterShowcaseStats.completed++;
                 chapterShowcase=null;
-                chapterFoundryAnchor=null;
+                chapterFoundryAnchor=null;chapterFoundryLayout=null;
                 chapterFoundryLastPulse=-1;
             }
         }
-        // Odak 4.5 · each press is a pair of toothed steel jaws. During the warning they
-        // close in on the column while the floor heats up; at the moment they slam shut.
-        function drawFoundryPress(ctx, op, index, elapsed, low) {
-            const P = FOUNDRY_PRESS, moment = P.moments[index];
-            const warnFrom = index === 0 ? 0 : P.moments[0];
-            const x = op.pressX ? op.pressX[index] : (index === 0 ? worldWidth * .28 : null);
-            if (!Number.isFinite(x) || elapsed < warnFrom || elapsed > moment + P.slam) return;
-            const H = worldHeight, w = P.halfWidth;
-            const warming = elapsed < moment;
-            const k = warming ? (elapsed - warnFrom) / (moment - warnFrom) : 1;
+        // Odak 4.9 · one pair of toothed steel jaws on a lane. Drawn in lane space: u runs
+        // across the lane (0 = centre), v along it. k is the warning progress (0..1);
+        // after is null while warning, then 0..1 through the slam.
+        function drawSteelJaws(ctx, axis, at, w, travel, k, after, low) {
+            const L = axis === 'y' ? worldWidth : worldHeight;
+            const warming = after === null;
             const ease = k * k * (3 - 2 * k);
-            const after = warming ? 0 : (elapsed - moment) / P.slam;
+            const clock = PREFERS_REDUCED_VFX_MOTION ? 0 : totalTime;
             ctx.save();
-            // Floor heat: pulses faster as the slam gets close.
-            const pulse = .5 + .5 * Math.sin(totalTime * (6 + 18 * k));
-            // A soft outer band and a hotter core; no gradient object per frame.
+            // axis 'x': (u, v) -> (at + u, v); axis 'y': (u, v) -> (v, at + u).
+            if (axis === 'y') ctx.transform(0, 1, 1, 0, 0, at); else ctx.transform(1, 0, 0, 1, at, 0);
+            // Floor heat: a soft band and a hot core, pulsing faster near the slam.
+            const pulse = .5 + .5 * Math.sin(clock * (6 + 18 * k));
             const glow = warming ? .08 + .22 * ease + .08 * pulse * k : .85 * (1 - after);
             ctx.fillStyle = warming ? 'rgb(255,120,60)' : 'rgb(255,240,200)';
-            ctx.globalAlpha = glow * .45; ctx.fillRect(x - w - 10, 0, w * 2 + 20, H);
-            ctx.globalAlpha = glow; ctx.fillRect(x - w * .6, 0, w * 1.2, H);
-            ctx.globalAlpha = 1;
-            // Hazard stripes on both edges while it warns.
+            ctx.globalAlpha = glow * .45; ctx.fillRect(-w - 10, 0, w * 2 + 20, L);
+            ctx.globalAlpha = glow; ctx.fillRect(-w * .6, 0, w * 1.2, L);
+            // Hazard stripes run along both edges while it warns.
             if (warming && !low) {
                 ctx.globalAlpha = .35 + .4 * k;
                 ctx.fillStyle = '#ffb020';
-                const stripe = 22, offset = (totalTime * 60) % stripe;
+                const stripe = 22, offset = (clock * 60) % stripe;
                 for (const edge of [-1, 1]) {
-                    const ex = x + edge * w;
-                    for (let y = -stripe + offset; y < H; y += stripe) {
-                        ctx.beginPath();
-                        ctx.moveTo(ex - 3, y); ctx.lineTo(ex + 3, y + 6);
-                        ctx.lineTo(ex + 3, y + 14); ctx.lineTo(ex - 3, y + 8);
-                        ctx.closePath(); ctx.fill();
+                    const eu = edge * w;
+                    ctx.beginPath();
+                    for (let v = -stripe + offset; v < L; v += stripe) {
+                        ctx.moveTo(eu - 3, v); ctx.lineTo(eu + 3, v + 6);
+                        ctx.lineTo(eu + 3, v + 14); ctx.lineTo(eu - 3, v + 8); ctx.closePath();
                     }
+                    ctx.fill();
                 }
-                ctx.globalAlpha = 1;
             }
-            // Jaws: travel in during the warning, meet in the middle on the slam.
-            const gap = warming ? w + P.jawTravel * (1 - ease) : Math.max(3, w * Math.min(1, after * 1.6) * .25);
-            const teeth = low ? 6 : 12, tooth = Math.min(16, w * .5);
+            // Jaws travel in during the warning and meet on the slam.
+            const gap = warming ? w + travel * (1 - ease) : Math.max(3, w * Math.min(1, after * 1.6) * .25);
+            const teeth = Math.max(4, Math.round(L / (low ? 150 : 75))), tooth = Math.min(16, w * .5);
+            const edgeColor = warming ? (k > .75 && pulse > .5 ? '#fff3cc' : '#ff874b') : '#fff3cc';
             for (const side of [-1, 1]) {
-                const jx = x + side * gap;
-                const back = jx + side * 12;
+                const ju = side * gap;
                 ctx.fillStyle = warming ? '#2a1414' : '#4a2016';
                 ctx.globalAlpha = warming ? .55 + .4 * ease : 1 - after * .6;
-                ctx.fillRect(Math.min(jx, back), 0, 12, H);
-                ctx.strokeStyle = warming ? (k > .75 && pulse > .5 ? '#fff3cc' : '#ff874b') : '#fff3cc';
-                ctx.lineWidth = low ? 2 : 3;
+                ctx.fillRect(side < 0 ? ju - 12 : ju, 0, 12, L);
+                ctx.strokeStyle = edgeColor; ctx.lineWidth = low ? 2 : 3;
                 if (!low) { ctx.shadowColor = '#ff874b'; ctx.shadowBlur = 8 + 14 * ease; }
-                ctx.beginPath(); ctx.moveTo(jx, 0); ctx.lineTo(jx, H); ctx.stroke();
-                ctx.fillStyle = ctx.strokeStyle;
+                ctx.beginPath(); ctx.moveTo(ju, 0); ctx.lineTo(ju, L); ctx.stroke();
+                ctx.fillStyle = edgeColor;
+                ctx.beginPath();
                 for (let t = 0; t < teeth; t++) {
-                    const y = (t + .5) * H / teeth;
-                    ctx.beginPath(); ctx.moveTo(jx, y - 9);
-                    ctx.lineTo(jx - side * tooth, y); ctx.lineTo(jx, y + 9);
-                    ctx.closePath(); ctx.fill();
+                    const v = (t + .5) * L / teeth;
+                    ctx.moveTo(ju, v - 9); ctx.lineTo(ju - side * tooth, v); ctx.lineTo(ju, v + 9); ctx.closePath();
                 }
+                ctx.fill();
                 ctx.shadowBlur = 0;
             }
-            ctx.globalAlpha = 1;
-            // Countdown above the column; the aimed press says so.
+            ctx.restore();
+        }
+        // Where a lane's countdown goes: above a column, or at the middle of a row.
+        function foundryLabelAt(axis, at, w) {
+            return axis === 'x' ? { x: at, y: Math.min(170, worldHeight * .24) } :
+                { x: worldWidth * .5, y: at - w - 14 };
+        }
+        function drawFoundryPress(ctx, op, index, elapsed, low) {
+            const P = FOUNDRY_PRESS, moment = P.moments[index];
+            const warnFrom = index === 0 ? 0 : P.moments[0];
+            const press = op.press ? op.press[index] : null;
+            if (!press || !Number.isFinite(press.at) || elapsed < warnFrom || elapsed > moment + P.slam) return;
+            const warming = elapsed < moment;
+            const k = warming ? (elapsed - warnFrom) / (moment - warnFrom) : 1;
+            drawSteelJaws(ctx, press.axis, press.at, P.halfWidth, P.jawTravel, k,
+                warming ? null : (elapsed - moment) / P.slam, low);
             if (warming) {
+                const at = foundryLabelAt(press.axis, press.at, P.halfWidth);
+                ctx.save();
                 ctx.fillStyle = k > .75 ? '#ffffff' : '#ffb36f';
-                // Below the HUD bar and the showcase banner.
-                const labelY = Math.min(170, H * .24);
                 ctx.font = "800 16px 'Orbitron', sans-serif"; ctx.textAlign = 'center';
-                ctx.fillText((moment - elapsed).toFixed(1), x, labelY);
+                ctx.fillText((moment - elapsed).toFixed(1), at.x, at.y);
                 if (index === 1) {
                     ctx.font = "700 10px 'Orbitron', sans-serif";
-                    ctx.fillText('SENİ İZLİYOR', x, labelY + 16);
+                    ctx.fillText('SENİ İZLİYOR', at.x, at.y + 16);
                 }
+                ctx.restore();
             }
-            ctx.restore();
+        }
+        // The chapter's own heat rails: jaws close during the warning, slam for the
+        // active window, then the lane cools off.
+        function drawFoundryRails(ctx, low) {
+            const layout = chapterFoundryLayout;
+            if (!layout || chapterFoundryAnchor === null || layout.pulse !== foundryPulseIndex()) return;
+            const R = CHAPTER_RULES, phase = chapterFoundryPhase(), w = R.foundryHalfWidth;
+            const lanes = foundryRailPositions(layout);
+            if (phase < R.foundryActiveEnd) {
+                const warming = phase < R.foundryWarn;
+                const k = warming ? phase / R.foundryWarn : 1;
+                const after = warming ? null : (phase - R.foundryWarn) / (R.foundryActiveEnd - R.foundryWarn);
+                for (const at of lanes) drawSteelJaws(ctx, layout.axis, at, w, FOUNDRY_RAILS.jawTravel, k, after, low);
+                if (warming) {
+                    ctx.save();
+                    ctx.fillStyle = k > .7 ? '#ffffff' : '#ffb36f';
+                    ctx.font = "800 14px 'Orbitron', sans-serif"; ctx.textAlign = 'center';
+                    for (const at of lanes) {
+                        const p = foundryLabelAt(layout.axis, at, w);
+                        ctx.fillText((R.foundryWarn - phase).toFixed(1), p.x, p.y);
+                    }
+                    ctx.restore();
+                }
+            } else if (phase < R.foundryActiveEnd + FOUNDRY_RAILS.residue) {
+                // Cooling: the scorched lane fades out.
+                const fade = 1 - (phase - R.foundryActiveEnd) / FOUNDRY_RAILS.residue;
+                ctx.save();
+                ctx.fillStyle = '#ff6a3a';
+                for (const at of lanes) {
+                    ctx.globalAlpha = .16 * fade;
+                    if (layout.axis === 'y') ctx.fillRect(0, at - w, worldWidth, w * 2);
+                    else ctx.fillRect(at - w, 0, w * 2, worldHeight);
+                }
+                ctx.restore();
+            }
         }
         // Odak 4.6 · İyon Korosu stage. Uncaptured flowers send out beacon rings, the
         // one being charged opens its petals, captured ones bloom gold and push ions
@@ -7694,7 +7788,7 @@
                     chapterRiftLastWarpAt=-Infinity;
                 }
                 if(arenaChapter==='FOUNDRY'){
-                    chapterFoundryAnchor=null;
+                    chapterFoundryAnchor=null;chapterFoundryLayout=null;
                     chapterFoundryLastPulse=-1;
                 }
                 return;
@@ -7703,6 +7797,7 @@
             if(arenaChapter==='FOUNDRY'){
                 if(!chapterShowcase){
                     if(chapterFoundryAnchor===null)chapterFoundryAnchor=totalTime;
+                    foundryRailLayout();
                     updateFoundryChapter();
                 }
             }
@@ -7718,6 +7813,8 @@
                 showcaseStats:{...chapterShowcaseStats},
                 foundryPhase:arenaChapter==='FOUNDRY'?
                     Math.round(chapterFoundryPhase()*10)/10:null,
+                foundryLanes:arenaChapter==='FOUNDRY'&&chapterFoundryLayout?
+                    {axis:chapterFoundryLayout.axis,at:foundryRailPositions(chapterFoundryLayout).map(Math.round)}:null,
                 foundryReadyIn:arenaChapter==='FOUNDRY'&&chapterFoundryAnchor!==null?
                     Math.max(0,Math.round((CHAPTER_RULES.foundryWarn-chapterFoundryPhase())*10)/10):null,
                 gardenCharge:[...chapterGardenCharge],
@@ -7776,7 +7873,7 @@
             }
             if(chapterShowcase){
                 const op=chapterShowcase;
-                if(op.id==='FOUNDRY')message='KIZIL MAKAS · DİKEY PRESLERDEN KAÇ';
+                if(op.id==='FOUNDRY')message='KIZIL MAKAS · PRESLERDEN KAÇ';
                 else if(op.id==='GARDEN'){
                     const secured=[0,1,2].filter(i=>op.flowerMask&(1<<i)).length;
                     message=op.completed?'İYON KOROSU · REZONANS!':
@@ -7837,25 +7934,9 @@
                     ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x-22,worldHeight);
                     ctx.stroke();
                 }
-                const phase=chapterFoundryPhase();
-                const danger=active&&phase>=CHAPTER_RULES.foundryWarn&&
-                    phase<CHAPTER_RULES.foundryActiveEnd;
-                const warning=active&&phase<CHAPTER_RULES.foundryWarn;
-                for(const y of [worldHeight*.32,worldHeight*.68]){
-                    ctx.save();
-                    ctx.fillStyle=d.color;
-                    ctx.globalAlpha=danger ? .21 : warning ? .09 : .025;
-                    ctx.fillRect(0,y-CHAPTER_RULES.foundryHalfWidth,worldWidth,
-                        CHAPTER_RULES.foundryHalfWidth*2);
-                    ctx.globalAlpha=danger ? .9 : warning ? .65 : .16;
-                    ctx.strokeStyle=danger?'#fff1c9':d.color;
-                    ctx.lineWidth=danger?4:2;
-                    if(warning)ctx.setLineDash([12,10]);
-                    ctx.beginPath();ctx.moveTo(0,y-CHAPTER_RULES.foundryHalfWidth);
-                    ctx.lineTo(worldWidth,y-CHAPTER_RULES.foundryHalfWidth);
-                    ctx.moveTo(0,y+CHAPTER_RULES.foundryHalfWidth);
-                    ctx.lineTo(worldWidth,y+CHAPTER_RULES.foundryHalfWidth);
-                    ctx.stroke();
+                if(active&&!chapterShowcase){
+                    ctx.save();ctx.globalAlpha=1;
+                    drawFoundryRails(ctx,low);
                     ctx.restore();
                 }
             } else if(arenaChapter==='GARDEN'){
