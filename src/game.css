@@ -326,6 +326,10 @@
             background:repeating-linear-gradient(135deg,transparent 0 22px,rgba(77,204,234,.06) 22px 23px,transparent 23px 43px),
                 linear-gradient(180deg,transparent 50%,rgba(57,188,223,.1));
         }
+        .upgrade-card[data-role="relic"]{
+            --card-accent:#ffd34d;--card-glow:rgba(255,211,77,.30);
+            background:linear-gradient(150deg,rgba(54,40,6,.97),rgba(10,8,18,.99) 72%);
+        }
         .upgrade-card[data-role="overload"]{
             --card-accent:#ff9a5c;--card-glow:rgba(255,122,61,.26);
             background:linear-gradient(155deg,rgba(52,22,10,.96),rgba(10,8,18,.99) 72%);
@@ -2326,3 +2330,5 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
 /* Odak 5.8 · gold resonance next to the gold counter */
 #hud .hud-resonance{margin-left:6px;padding:1px 5px;border-radius:6px;font:800 10px/1.2 'Orbitron','Segoe UI',system-ui,sans-serif;color:#1a1204;background:#fcd34d;}
 #hud .hud-resonance[hidden]{display:none;}
+/* Odak 5.10 · the reroll/skip row hides while a relic hand is open */
+#upgradeToolsRow[hidden]{display:none !important;}

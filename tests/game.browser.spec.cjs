@@ -1827,3 +1827,21 @@ test('Odak 5.9 elites with every trait fight and draw in the real page', async (
   expect(out.state).toBe('PLAYING');
   expect(errors).toEqual([]);
 });
+
+test('Odak 5.10 a boss chest offers relics in the real page', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await gotoGame(page, '/index.html');
+  await page.locator('#startBtn').click();
+  await expect.poll(() => page.evaluate(() => gameState)).toBe('PLAYING');
+  await page.evaluate(() => { lootChests.push(new LootChest(player.x, player.y, 'boss')); });
+  const cards = page.locator('#upgradeCardsContainer .upgrade-card[data-role="relic"]');
+  await expect(cards).toHaveCount(3);
+  await expect(page.locator('#upgradeModalTitle')).toHaveText('ESER SEÇ');
+  await expect(page.locator('#rerollUpgradesBtn')).toBeHidden();
+  await cards.nth(0).click();
+  await expect.poll(() => page.evaluate(() => ({ state: gameState, relics: player.relics.size })))
+    .toEqual({ state: 'PLAYING', relics: 1 });
+  await expect(page.locator('#hudModulesDock [title^="ESER"]')).toHaveCount(1);
+  expect(errors).toEqual([]);
+});

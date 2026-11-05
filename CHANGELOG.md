@@ -1,5 +1,9 @@
 # Değişiklik Günlüğü
 
+## Odak 5.10 · Eserler
+- Boss sandığı artık normal ödülünün yanında 3 eserden birini seçtirir. Eser koşu boyunca kalır, alt bardaki modül şeridinde görünür.
+- 8 eser: Patlayan Şarjör, Kor İzi, Kritik Fırtına, Son Direniş, Altın Kan, Yankı Novası, Kombo Hasadı, Ayna Namlu. Hepsi oyunun nasıl oynandığını değiştirir; aynı eser bir koşuda iki kez çıkmaz.
+
 ## Odak 5.9 · Elit özellikleri
 - Her elit bir özellikle doğar, başında etiketi görünür: Kalkanlı (yenilenen kalkan), Bölünen (ölünce ikiye ayrılır), Hızlandırıcı (yakındakileri %30 hızlandırır), Hırsız (XP kürelerini çalar, ölünce ×1,5 geri verir), Yansıtıcı (her 5. vuruşta geri ateş eder).
 - Özellikler dalgayla açılır (1, 4, 6, 8, 10); düşman sözlüğündeki elit kaydı bunları anlatır.
