@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 3.5 · Eski silahlar ±%25 bandında
+- Çatallı Plazma, Plazma Uydusu, Güdümlü Füze ve Zincirleme Yıldırım artık kademe başına hasar tablosu kullanıyor (`LEGACY_WEAPON_RULES`), değerler `sim-dps` ile ayarlandı.
+- Uydu en çok zayıfladı: temas hasarı oyuncu hasarının 0,96 katından 0,13 / 0,105 / 0,06 katına, evrim darbesi 0,62'den 0,35'e indi. TITAN şasisinin başlangıç uydusu da K1 gibi vurur.
+- Güdümlü Füze ve Yıldırım K1'de güçlendi, Çatallı Plazma salvodaki her mermiyi biraz zayıflatıyor (kartta yazıyor). Mayın İzi K2 hasar çarpanı 0,5 → 0,45.
+
 ## Odak 3.4 · Sinerjiler genişledi (4 → 9)
 - Her yeni silah bir pasifle eşleşiyor; her sinerji bir davranış değişikliği: Mayın Fırlatıcı (Mayın İzi + Kinetik Türbin: Atılım bittiği yere 3 mayın), Sekme Disk (Bumerang Disk + Kuantum Sekme: disk dönmeden en yakın düşmana seker), Şok Kalkanı (Şok Halkası + Aegis: kalkan kırılınca halka), Hasat Uyduları (Plazma Uydusu + Toplayıcı: uydu değdiği XP küresini çeker), Buzlu Disk (Bumerang Disk + Soğutucu: yakalanan disk Atılımı 0,5 sn öne alır).
 - Sinerjiyi tamamlayan kart bunu "YENİ SİNERJİ" satırıyla gösterir (davranış testiyle doğrulandı). Sayılar `SYNERGY_RULES` içinde.

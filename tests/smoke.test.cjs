@@ -24,7 +24,7 @@ test('Odak 3.2 Mayın İzi tier rules, card and evolution are wired', () => {
   assert.equal(x.label, 'SİLAH MODÜLÜ');
   assert.deepEqual(x.rules.maxMines, [0, 3, 4, 5]);
   assert.deepEqual(x.rules.dropDistance, [0, 300, 260, 220]);
-  assert.deepEqual(x.rules.damageMult, [0, 0.35, 0.5, 0.75]);
+  assert.deepEqual(x.rules.damageMult, [0, 0.35, 0.45, 0.75]);
   assert.ok(x.rules.blastRadius[1] < x.rules.blastRadius[3]);
   assert.equal(x.max, 6);
   assert.ok(x.rules.maxMines.every(n => n + x.rules.evolvedExtraMines <= x.max));
@@ -355,6 +355,71 @@ test('Odak 3.2 Toplayıcı adds 15 % XP per tier and its evolution pulls every o
   assert.equal(x.evo, true);
   assert.deepEqual(x.pulls, [40, 80]);
   assert.deepEqual(x.far, [true, true]);
+});
+
+test('Odak 3.5 salvo bullets and homing missiles take their damage from the tier table', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    rng = () => 0.99;
+    enemies = [new Enemy(player.x + 200, player.y, 'TANK')];
+    const rows = [];
+    for (let t = 1; t <= 3; t++) {
+      player.upgradeCounts = { multishot: t, homing: t };
+      player.multishot = t + 1; player.homingMissiles = t;
+      bullets = []; player.shotCounter = 2;
+      player.autoShoot();
+      const ratio = b => +(b.damage / player.damage).toFixed(4);
+      rows.push({ shells: bullets.filter(b => !b.isHoming).map(ratio), missiles: bullets.filter(b => b.isHoming).map(ratio) });
+    }
+    player.upgradeCounts = {}; player.multishot = 1; player.homingMissiles = 0;
+    bullets = []; player.autoShoot();
+    return JSON.stringify({ rows, single: bullets.map(b => b.damage / player.damage), rules: LEGACY_WEAPON_RULES });
+  })()`));
+  const { salvoDamage } = x.rules.multishot, { missileDamage } = x.rules.homing;
+  x.rows.forEach((row, i) => {
+    const t = i + 1;
+    assert.deepEqual(row.shells, Array(t + 1).fill(salvoDamage[t]));
+    assert.deepEqual(row.missiles, Array(t).fill(missileDamage[t]));
+  });
+  assert.deepEqual(x.single, [1], 'a lone plasma bolt keeps full damage');
+  assert.equal(salvoDamage[0], salvoDamage[1]);
+  assert.equal(missileDamage[0], missileDamage[1]);
+});
+
+test('Odak 3.5 orbital contact, orbital pulse and lightning arcs follow the tier table', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    enemies = []; nextBossTime = 9999; rng = () => 0;
+    const contact = [];
+    for (let t = 0; t <= 3; t++) {
+      player.upgradeCounts = t ? { orbital: t } : {}; player.orbitals = 1; player.orbitalSpeed = 0; player.fireTimer = 99;
+      const s = player.getOrbitalPositions()[0];
+      const foe = new Enemy(s.x, s.y, 'TANK'); foe.hp = foe.maxHp = 1e6; enemies = [foe];
+      updateGame(1 / 60);
+      contact.push(+((1e6 - foe.hp) / player.damage).toFixed(4));
+    }
+    enemies = [];
+    player.upgradeCounts = { orbital: 3 }; player.refreshBuildTraits(); player.evolutionPulseTimer = 0;
+    const near = new Enemy(player.x + 100, player.y, 'TANK'); near.hp = near.maxHp = 1e6; enemies = [near];
+    player.update(1 / 60);
+    const pulse = +((1e6 - near.hp) / player.damage).toFixed(4);
+    const arcs = [];
+    for (let t = 1; t <= 3; t++) {
+      player.upgradeCounts = { lightning: t }; player.chainLightning = 1;
+      const a = new Enemy(200, 200, 'TANK'), b = new Enemy(300, 200, 'TANK');
+      for (const e of [a, b]) e.hp = e.maxHp = 1e6;
+      enemies = [a, b];
+      a.takeDamage(100, 0, 0, false, true, true);
+      arcs.push(+((1e6 - b.hp) / (1e6 - a.hp)).toFixed(4));
+    }
+    return JSON.stringify({ contact, pulse, arcs, rules: LEGACY_WEAPON_RULES });
+  })()`));
+  const { contactDamage, pulseDamage } = x.rules.orbital;
+  assert.deepEqual(x.contact, contactDamage.map(v => +v.toFixed(4)));
+  assert.equal(x.pulse, pulseDamage);
+  assert.deepEqual(x.arcs, x.rules.lightning.arcDamage.slice(1));
 });
 
 test('Odak 3.4 every new weapon pairs with a passive in a one-sentence synergy', () => {
