@@ -474,7 +474,7 @@ Her görev/olay ilk görüldüğünde oyunu durduran tek seferlik rehber: hedef 
 ### - [x] 4.3 Kart enderliği her kartta güç farkı
 Soğutucu, Toplayıcı, Devre Örücü ve Faz Yankısı enderlikle büyür (NADİR = eski değer). Kart açıklaması gerçek sayıyı yazar.
 
-### - [ ] 4.4 Dirilme ekonomisi
+### - [x] 4.4 Dirilme ekonomisi
 En fazla 3 ücretsiz hak, koşu başına 1 altınlı dirilme (fiyat dalgayla artar), azalan dirilme canı, +50 Cinnet kalkar; fazla Laboratuvar kademesi iade edilir.
 
 ### - [ ] 4.5 Kızıl Makas görseli ve tehlikesi

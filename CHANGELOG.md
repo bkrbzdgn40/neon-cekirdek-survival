@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 4.4 · Dirilme ekonomisi
+- En fazla 3 ücretsiz diriliş (1 temel, 1 Laboratuvar kademesi, 1 Öncü); koşu başına 1 altınlı diriliş, fiyatı 60 + 10 × dalga (eskiden 2 hak, 30 ve 65 altın).
+- Dirilme canı her seferinde azalır: %60, %45, sonra %30. Dirilişteki +50 Cinnet kalktı; koruma ve EMP patlaması aynı. Dirilme ekranı o dirilişin canını yazar.
+- Laboratuvarda 2-3. kademeyi almış kayıt ve yedeklere o kademelerin altını bir kez iade edilir (132 + 290); bozuk değerler (999 gibi) iade almaz.
+
 ## Odak 4.3 · Kart enderliği her kartta güç farkı
 - Enderlikten etkilenmeyen dört kart artık büyür (YAYGIN / NADİR / DESTANSI / EFSANEVİ): Soğutucu %8/10/13/16 bekleme kısaltması, Toplayıcı %12/15/19/24 XP, Devre Örücü 12/16/20/24 hedef, Faz Yankısı 5/6/8/10 düşman.
 - Her kademe kendi enderliğini saklar; hedef sınırında en ender kademe geçerli. NADİR eski sabit değere eşit, kaydı olmayan kademe NADİR sayılır.
