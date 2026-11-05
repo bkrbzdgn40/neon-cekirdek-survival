@@ -491,6 +491,21 @@ Biyomun yatay ısı rayları da dişli çenelerle canlanır; olayda preslerin y�
 ### - [x] 4.10 İyon Korosu ve Faz Kıskacı ikinci tur
 İki biyomun zemini ve iki olayın sahnesi daha zengin animasyon alır; kural aynı, düşük grafikte sadeleşir.
 
+## Faz 5 · Eklenebilirler
+Kaynak: eklenebilirler.txt. Kostümler sadece görünüşü değiştirir, güç vermez.
+
+### - [x] 5.1 Düşman sözlüğü
+TEHDİTLER sekmesi sözlük olur: karşılaşılan düşman (ve elit) kaydedilir, adı, ne yaptığı, nasıl yenileceği ve imha sayısı görünür; görülmeyenler siluet olarak durur.
+
+### - [ ] 5.2 Kostümler
+4 kategoride 16 kostüm: çekirdek rengi, iz efekti, çekirdek şekli, arena paleti. Laboratuvarda doğrudan satılır.
+
+### - [ ] 5.3 Veri Kapsülü
+Daha ucuz kapsül, sahip olunmayan kostümlerden birini rastgele verir; asla tekrar çıkmaz.
+
+### - [ ] 5.4 Yeni şasi
+Kapalı test verisi bekliyor: hangi şasinin ne kadar seçildiğine göre 1–2 rol eklenir.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

@@ -1627,3 +1627,34 @@ test('Odak 4.2 the first objective pauses once for a guide with a spotlight and 
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem(META_SAVE_KEY)).guides)).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+test('Odak 5.1 the threats tab is a codex: silhouettes until met, then the foe and its counter', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await gotoGame(page, '/index.html', { unlockAll: false });
+  const openCodex = async () => {
+    await page.locator('#howToBtn').click();
+    await page.locator('#tabCodexBtn').click();
+    await expect(page.locator('#tabCodexContent')).toBeVisible();
+  };
+  await openCodex();
+  await expect(page.locator('#codexCount')).toHaveText('0/15');
+  await expect(page.locator('.codex-card[data-seen="false"]')).toHaveCount(15);
+  await expect(page.locator('.codex-card[data-codex="SWARM"] h3')).toHaveText('???');
+  await page.locator('#closeHowToBtn').click();
+  await page.locator('#startBtn').click();
+  await page.evaluate(() => { spawnEnemy(false, 'SWARM'); spawnEnemy(false, 'SNIPER'); });
+  await page.evaluate(() => returnToMainMenu());
+  await openCodex();
+  await expect(page.locator('#codexCount')).toHaveText('2/15');
+  const swarm = page.locator('.codex-card[data-codex="SWARM"]');
+  await expect(swarm).toHaveAttribute('data-seen', 'true');
+  await expect(swarm.locator('h3')).toHaveText('SÜRÜ');
+  await expect(swarm).toContainText('KARŞI:');
+  await expect(page.locator('.codex-card[data-codex="TANK"] h3')).toHaveText('???');
+  // The record survives a reload.
+  await page.reload();
+  await openCodex();
+  await expect(page.locator('#codexCount')).toHaveText('2/15');
+  expect(errors).toEqual([]);
+});
