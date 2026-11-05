@@ -7726,3 +7726,48 @@ test('Odak 3.6 gold stops growing past wave 20 and greed no longer boosts XP', (
   assert.ok(Math.abs(x.greedy.gold - 1.8) < 1e-9);
   assert.equal(x.greedy.orb, Math.round(x.orb.w20 * 1.8));
 });
+
+test('Odak 3.7 locked content stays out of runs until bought, and the purchase persists', () => {
+  const store = {};
+  const { run } = setup(store, { unlockAll: false });
+  const x = JSON.parse(run(`(()=>{
+    unlockLevel=MAX_UNLOCK_LEVEL;totalGold=5000;selectedChassis='TITAN';startNewGame();
+    const gated=CONTENT_UNLOCKS.filter(c=>c.type!=='chassis').map(c=>c.id);
+    const offered=UPGRADES_POOL.filter(u=>isUpgradeAvailable(u)).map(u=>u.id);
+    const before={chassis:player.chassis,leaked:gated.filter(id=>offered.includes(id))};
+    const poor=(()=>{const g=totalGold;totalGold=10;const ok=buyContent('shock_ring');totalGold=g;return ok;})();
+    const bought=buyContent('shock_ring')&&buyContent('TITAN');
+    const again=buyContent('TITAN');
+    selectChassis('TITAN');startNewGame();
+    return JSON.stringify({before,poor,bought,again,gold:totalGold,
+      ring:isUpgradeAvailable(UPGRADES_POOL.find(u=>u.id==='shock_ring')),chassis:player.chassis});})()`));
+  assert.deepEqual(x.before, { chassis: 'VANGUARD', leaked: [] });
+  assert.equal(x.poor, false);
+  assert.equal(x.bought, true);
+  assert.equal(x.again, false, 'owned content cannot be bought twice');
+  assert.equal(x.gold, 5000 - 1300 - 1800);
+  assert.equal(x.ring, true);
+  assert.equal(x.chassis, 'TITAN');
+  const reloaded = setup(store, { unlockAll: false });
+  assert.equal(reloaded.run("[...ownedContent].sort().join(',')"), 'TITAN,shock_ring');
+  assert.equal(reloaded.run('totalGold'), 1900);
+});
+
+test('Odak 3.7 backups carry owned content and reject unknown ids', () => {
+  const { run } = setup({}, { unlockAll: false });
+  const x = JSON.parse(run(`(()=>{
+    ownedContent=new Set(['PHANTOM','coolant']);
+    const raw=JSON.stringify(createProgressBackup());
+    const ok=parseProgressBackup(raw).progress.owned;
+    const bad=JSON.parse(raw);bad.progress.owned=['PHANTOM','laser'];
+    const old=JSON.parse(raw);delete old.progress.owned;
+    ownedContent=new Set();
+    const restored=restoreProgressBackup(raw);
+    return JSON.stringify({ok,bad:parseProgressBackup(JSON.stringify(bad)),old:parseProgressBackup(JSON.stringify(old)).progress.owned,
+      restored,owned:[...ownedContent].sort()});})()`));
+  assert.deepEqual(x.ok, ['PHANTOM', 'coolant']);
+  assert.equal(x.bad, null);
+  assert.deepEqual(x.old, []);
+  assert.equal(x.restored, true);
+  assert.deepEqual(x.owned, ['PHANTOM', 'coolant']);
+});

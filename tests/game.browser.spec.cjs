@@ -1467,3 +1467,25 @@ for(const [weapon,statKey] of [['mine_trail','mineDrops'],['boomerang_disc','dis
    expect(errors).toEqual([]);
  });
 }
+
+test('Odak 3.7 a locked chassis opens the lab, and buying it selects it',async({page})=>{
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await gotoGame(page,'/index.html',{unlockAll:false});
+ const titan=page.locator('.chassis-card[data-chassis="TITAN"]');
+ await expect(titan).toHaveAttribute('data-locked','true');
+ await expect(titan.locator('.chassis-lock')).toContainText('1.800 ALTIN');
+ await titan.click();
+ await expect(page.locator('#shopModal')).toBeVisible();
+ await expect(page.locator('.chassis-card.active')).toHaveAttribute('data-chassis','VANGUARD');
+ const buy=page.locator('.shop-collection-card[data-content="TITAN"] .buy-content-btn');
+ await expect(buy).toContainText('1.800 ALTIN İLE AÇ');
+ await page.evaluate(()=>{totalGold=2000;renderShopItems();});
+ await buy.click();
+ await expect(page.locator('.shop-collection-card[data-content="TITAN"]')).toHaveAttribute('data-owned','true');
+ expect(await page.evaluate(()=>totalGold)).toBe(200);
+ await page.locator('#closeShopBtn').click();
+ await expect(titan).toHaveAttribute('data-locked','false');
+ await expect(titan).toHaveClass(/active/);
+ await expect(page.locator('#selectedChassisBadge')).toHaveText('TİTAN');
+ expect(errors).toEqual([]);
+});

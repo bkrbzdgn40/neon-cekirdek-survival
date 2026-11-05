@@ -2020,3 +2020,11 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
     #hud .hud-action-bay > button{width:var(--landscape-skill);height:var(--landscape-skill);}
     #hud{--landscape-skill:clamp(44px,calc((100dvh - 82px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)) / 4),52px);}
 }
+
+/* Odak 3.7 · locked chassis and lab collection */
+.chassis-card[data-locked="true"] > :not(.chassis-lock) { opacity: .45; filter: grayscale(.7); }
+.chassis-lock { margin-top: .5rem; padding: .35rem .5rem; border-radius: .5rem; border: 1px solid rgba(250,204,21,.35);
+  background: rgba(0,0,0,.45); color: #fde68a; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+.chassis-lock[data-affordable="true"] { border-color: #facc15; color: #facc15; box-shadow: 0 0 12px rgba(250,204,21,.25); }
+.shop-content-type { font-size: 10px; letter-spacing: .12em; color: #9ca3af; border: 1px solid #374151; border-radius: 4px; padding: 0 .35rem; }
+.shop-collection-card[data-owned="true"] { border-color: rgba(74,222,128,.35); }

@@ -652,6 +652,35 @@
         // Odak 3.6 · gold stops scaling past wave 20; greed only boosts gold.
         const GOLD_ECONOMY = Object.freeze({ waveCap: 20, greedPerLevel: 0.10 });
         function goldWave(currentWave) { return Math.min(GOLD_ECONOMY.waveCap, Math.max(1, currentWave || 1)); }
+        // Odak 3.7 · content bought once with gold in the lab. Everything else is free.
+        const CONTENT_UNLOCKS = Object.freeze([
+            {id:'PHANTOM',        type:'chassis', cost:1200, name:'HAYALET', icon:'fa-solid fa-bolt',             color:'#ff007f', desc:'Çevik şasi: +%15 hız, +15 puan kritik ve kısa atılım.'},
+            {id:'TITAN',          type:'chassis', cost:1800, name:'TİTAN',   icon:'fa-solid fa-shield-halved',    color:'#00ff66', desc:'Dayanıklı şasi: +50 can, hazır kalkan ve uydu.'},
+            {id:'mine_trail',     type:'weapon',  cost:900,  name:'Mayın İzi',     icon:'fa-solid fa-bomb',            color:'#ff9f1c', desc:'Hareket ettikçe arkana patlayan mayınlar bırakır.'},
+            {id:'boomerang_disc', type:'weapon',  cost:1100, name:'Bumerang Disk', icon:'fa-solid fa-compact-disc',    color:'#c084fc', desc:'Düşmanları delip geçen ve sana geri dönen disk.'},
+            {id:'shock_ring',     type:'weapon',  cost:1300, name:'Şok Halkası',   icon:'fa-solid fa-circle-radiation', color:'#5eead4', desc:'Çekirdekten genişleyen halka; merkeze yakın düşmana tam hasar.'},
+            {id:'coolant',        type:'passive', cost:700,  name:'Soğutucu',      icon:'fa-solid fa-snowflake',       color:'#7dd3fc', desc:'Tüm beklemeleri kademe başına %10 kısaltır.'},
+            {id:'collector',      type:'passive', cost:800,  name:'Toplayıcı',     icon:'fa-solid fa-seedling',        color:'#86efac', desc:'XP küresi değerini kademe başına %15 artırır.'}
+        ]);
+        const CONTENT_TYPE_LABELS = Object.freeze({ chassis: 'ŞASİ', weapon: 'SİLAH', passive: 'PASİF' });
+        let ownedContent = new Set();
+        function isContentOwned(id) {
+            if (window.NEON_UNLOCK_ALL === true) return true;
+            return !CONTENT_UNLOCKS.some(item => item.id === id) || ownedContent.has(id);
+        }
+        function parseOwnedContent(list) {
+            if (!Array.isArray(list) || list.length > CONTENT_UNLOCKS.length) return null;
+            if (!list.every(id => CONTENT_UNLOCKS.some(item => item.id === id))) return null;
+            return [...new Set(list)];
+        }
+        function buyContent(id) {
+            const item = CONTENT_UNLOCKS.find(entry => entry.id === id);
+            if (!item || isContentOwned(id) || totalGold < item.cost) return false;
+            totalGold -= item.cost;
+            ownedContent.add(id);
+            saveMetaProgress();
+            return true;
+        }
         const META_UPGRADE_LIMITS = { baseDamage: 10, maxHp: 10, speedDash: 8, greed: 8, defibrillator: 3 };
 
         function safeSaveInteger(value, fallback, max = 1000000000) {
@@ -673,6 +702,7 @@
                 unlockFailedRuns = data.version === 1 ? 0 :
                     safeSaveInteger(data.unlockFailedRuns, 0, UNLOCK_FALLBACK_RUNS - 1);
                 unlockSpotlightPending = data.unlockSpotlight === true;
+                ownedContent = new Set(parseOwnedContent(data.owned) || []);
                 if (data.upgrades && typeof data.upgrades === 'object') {
                     for (const [key, max] of Object.entries(META_UPGRADE_LIMITS)) {
                         metaUpgrades[key] = safeSaveInteger(data.upgrades[key], metaUpgrades[key], max);
@@ -694,6 +724,7 @@
                     unlockLevel,
                     unlockFailedRuns,
                     unlockSpotlight: unlockSpotlightPending,
+                    owned: [...ownedContent],
                     upgrades: { ...metaUpgrades }
                 }));
             } catch (error) {
@@ -721,6 +752,7 @@
                     gold: totalGold,
                     unlockLevel,
                     unlockFailedRuns,
+                    owned: [...ownedContent],
                     upgrades: { ...metaUpgrades }
                 },
                 graphics: graphicsQuality
@@ -758,6 +790,9 @@
                     0 : data.unlockFailedRuns;
                 if (!Number.isSafeInteger(restoredFailedRuns) || restoredFailedRuns < 0 ||
                     restoredFailedRuns >= UNLOCK_FALLBACK_RUNS) return null;
+                // Odak 3.7 · backups from before the collection own nothing extra.
+                const restoredOwned = data.owned === undefined ? [] : parseOwnedContent(data.owned);
+                if (!restoredOwned) return null;
                 return {
                     progress: {
                         version: META_SAVE_VERSION,
@@ -766,6 +801,7 @@
                         gold: data.gold,
                         unlockLevel: restoredUnlockLevel,
                         unlockFailedRuns: restoredFailedRuns,
+                        owned: restoredOwned,
                         upgrades
                     },
                     graphics: backup.graphics
@@ -810,6 +846,7 @@
             unlockFailedRuns = backup.progress.unlockFailedRuns;
             unlockSpotlightPending = false;
             metaUpgrades = { ...backup.progress.upgrades };
+            ownedContent = new Set(backup.progress.owned);
             applyGraphicsQuality(backup.graphics, false);
             updateMenuCounters();
             return true;
@@ -1276,7 +1313,7 @@
                 this.vx = 0;
                 this.vy = 0;
                 this.radius = 16;
-                this.chassis = selectedChassis;
+                this.chassis = isContentOwned(selectedChassis) ? selectedChassis : 'VANGUARD';
                 this.color = this.chassis === 'PHANTOM' ? '#ff007f' : (this.chassis === 'TITAN' ? '#00ff66' : '#00f3ff');
 
                 const dmgBonus = 1 + metaUpgrades.baseDamage * 0.08;
@@ -10116,8 +10153,28 @@
             }
         }
 
+        function refreshChassisLocks() {
+            document.querySelectorAll('.chassis-card').forEach(card => {
+                const id = card.getAttribute('data-chassis');
+                const item = CONTENT_UNLOCKS.find(entry => entry.id === id);
+                const locked = !isContentOwned(id);
+                card.dataset.locked = locked ? 'true' : 'false';
+                let badge = card.querySelector('.chassis-lock');
+                if (!locked) { if (badge) badge.remove(); return; }
+                if (!badge) {
+                    badge = document.createElement('div');
+                    badge.className = 'chassis-lock';
+                    card.appendChild(badge);
+                }
+                badge.dataset.affordable = totalGold >= item.cost ? 'true' : 'false';
+                badge.innerHTML = '<i class="fa-solid fa-lock" aria-hidden="true"></i> ' +
+                    item.cost.toLocaleString('tr-TR') + ' ALTIN · LABORATUVARDA AÇ';
+            });
+            if (!isContentOwned(selectedChassis)) selectChassis('VANGUARD');
+        }
         function updateMenuCounters() {
             applySystemLockVisibility();
+            refreshChassisLocks();
             document.getElementById('menuHighScore').textContent = savedHighScore.toLocaleString('tr-TR');
             document.getElementById('menuMaxWave').textContent = savedMaxWave;
             document.getElementById('menuGoldText').textContent = totalGold.toLocaleString('tr-TR');
@@ -10745,7 +10802,7 @@
         }
 
         function isUpgradeAvailable(upgrade) {
-            return !upgrade.requires || isSystemUnlocked(upgrade.requires);
+            return isContentOwned(upgrade.id) && (!upgrade.requires || isSystemUnlocked(upgrade.requires));
         }
 
         function populateUpgradeCards() {
@@ -11437,12 +11494,55 @@
         }
 
         let shopReturnTarget = 'MENU';
-        function openShop(from) {
+        function openShop(from, focus) {
             shopReturnTarget = from;
             renderShopItems();
             const shopModal = document.getElementById('shopModal');
             shopModal.classList.remove('hidden');
             shopModal.classList.add('flex');
+            if (focus === 'collection') {
+                const section = document.getElementById('shopCollectionSection');
+                if (section && section.scrollIntoView) section.scrollIntoView({ block: 'start' });
+            }
+        }
+        function renderShopCollection() {
+            const container = document.getElementById('shopCollectionContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            CONTENT_UNLOCKS.forEach(item => {
+                const owned = isContentOwned(item.id);
+                const canAfford = !owned && totalGold >= item.cost;
+                const card = document.createElement('div');
+                card.className = 'shop-collection-card bg-gray-900/90 border border-gray-800 rounded-xl p-3 flex flex-col justify-between text-left gap-3';
+                card.dataset.content = item.id;
+                card.dataset.owned = owned ? 'true' : 'false';
+                const btnClass = owned ? 'bg-gray-800 text-green-400 cursor-default' :
+                    (canAfford ? 'bg-yellow-500 hover:bg-yellow-400 text-black cursor-pointer' : 'bg-gray-800 text-gray-500 cursor-not-allowed');
+                const btnText = owned ? '<i class="fa-solid fa-check"></i> AÇIK' :
+                    '<i class="fa-solid fa-lock-open"></i> ' + item.cost.toLocaleString('tr-TR') + ' ALTIN İLE AÇ';
+                card.innerHTML = `
+                    <div class="flex items-start gap-2.5">
+                        <div class="w-10 h-10 shrink-0 rounded-lg flex items-center justify-center border" style="color:${item.color}; border-color:${item.color}; background:rgba(0,0,0,0.4);">
+                            <i class="${item.icon}" aria-hidden="true"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2"><h4 class="font-cyber font-bold text-white text-sm">${item.name}</h4><span class="shop-content-type">${CONTENT_TYPE_LABELS[item.type]}</span></div>
+                            <p class="text-xs text-gray-400 leading-relaxed mt-1">${item.desc}</p>
+                        </div>
+                    </div>
+                    <button type="button" class="buy-content-btn w-full py-2 rounded-lg font-cyber font-bold text-xs flex items-center justify-center gap-1.5 transition ${btnClass}">${btnText}</button>`;
+                if (canAfford) {
+                    card.querySelector('.buy-content-btn').addEventListener('click', () => {
+                        if (!buyContent(item.id)) return;
+                        audio.init();
+                        audio.playLevelUp();
+                        if (item.type === 'chassis') selectChassis(item.id);
+                        renderShopItems();
+                        updateMenuCounters();
+                    });
+                }
+                container.appendChild(card);
+            });
         }
 
         function closeShop() {
@@ -11454,6 +11554,7 @@
 
         function renderShopItems() {
             document.getElementById('shopGoldBalance').textContent = totalGold.toLocaleString('tr-TR');
+            renderShopCollection();
             const container = document.getElementById('shopItemsContainer');
             container.innerHTML = '';
 
@@ -11852,11 +11953,11 @@
         document.getElementById('confirmReviveBtn').addEventListener('click', executePlayerRevive);
         document.getElementById('declineReviveBtn').addEventListener('click', () => triggerGameOver('REVIVE_DECLINED'));
 
-        document.querySelectorAll('.chassis-card').forEach((card) => {
-            card.addEventListener('click', () => {
-                document.querySelectorAll('.chassis-card').forEach(c => c.classList.remove('active'));
-                card.classList.add('active');
-                selectedChassis = card.getAttribute('data-chassis');
+        function selectChassis(id) {
+            selectedChassis = id;
+            {
+                document.querySelectorAll('.chassis-card').forEach(c =>
+                    c.classList.toggle('active', c.getAttribute('data-chassis') === id));
                 const badge = document.getElementById('selectedChassisBadge');
                 const dot = document.getElementById('menuCorePreviewDot');
                 if (selectedChassis === 'VANGUARD') {
@@ -11869,6 +11970,14 @@
                     badge.textContent = 'TİTAN';
                     dot.style.backgroundColor = '#00ff66';
                 }
+            }
+        }
+        document.querySelectorAll('.chassis-card').forEach((card) => {
+            card.addEventListener('click', () => {
+                const id = card.getAttribute('data-chassis');
+                // Odak 3.7 · a locked chassis opens the lab's collection instead.
+                if (!isContentOwned(id)) { openShop('MENU', 'collection'); return; }
+                selectChassis(id);
                 audio.init();
                 audio.playOrbPickup(5, false);
                 updateMenuCounters();
