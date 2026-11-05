@@ -512,6 +512,9 @@ Rapor, sıradaki hedefi bu koşunun altınıyla gösterir ("bir koşu daha yeter
 ### - [x] 5.6 Teknik temizlik
 Test bağımlılığı `package.json` + kilit dosyasında tek yerde; CI `npm ci` kullanır. Sözleşme ustalığı yedeğe girer; eski yedekler ustalığa dokunmaz.
 
+### - [x] 5.7 Ana menü tek ekran
+Masaüstünde ana menü 540 px yüksekliğe kadar kaydırmasız sığar: sözleşmeler ortadaki boşluğa taşınır, kısa pencerede ikincil açıklamalar gizlenir. Mobilde sözleşmeler artık başlat düğmelerinin hemen üstünde.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 5.7 · Ana menü tek ekran
+- Masaüstünde ana menü artık kaydırılmaz: 1280×600 ile 1920×1080 arası her pencerede, ilerlemesi dolu oyuncuda bile tek ekrana sığar (540 px altı kaydırmaya döner).
+- Neon Sözleşmesi sağ sütundan ortadaki sahnenin altına taşındı; kısa pencerelerde ikincil açıklamalar gizlenir, sözleşme açıklaması kartın ipucunda kalır.
+- Düzeltme: son operasyon hücreleri tek sütuna düşüyordu, artık 2×2. Büyük rekor skorları kutusundan taşmaz.
+
 ## Odak 5.6 · Teknik temizlik
 - Test aracı (Playwright 1.64.1) artık `package.json` ve `package-lock.json` içinde tek yerde sabit; CI `npm ci` ile kurar. `npm test`, `npm run test:browser`, `npm run serve` komutları eklendi. Oyunun kendisi kurulum istemez.
 - YEDEK AL artık sözleşme ustalığını da taşır. Eski yedekler ustalığa dokunmaz; bozuk bir ustalık bloğu yedeği reddeder, yazma hatasında eski kayıt geri gelir.

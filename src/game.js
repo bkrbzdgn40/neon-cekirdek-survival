@@ -11456,7 +11456,7 @@
             container.innerHTML = getNeonContractList().map(contract => {
                 const mastery = contractMastery.contracts[contract.id];
                 const tier = getContractMasteryTier(mastery);
-                return `<button type="button" class="neon-contract-card mastery-tier-${tier} rounded-lg p-2.5 text-left${contract.id === selectedContractId ? ' is-selected' : ''}" data-neon-contract="${contract.id}" aria-pressed="${contract.id === selectedContractId ? 'true' : 'false'}" style="--contract-color:${contract.color}" title="EN İYİ SKOR ${mastery.bestScore} · EN UZUN ${Math.round(mastery.bestDurationSeconds)}s">
+                return `<button type="button" class="neon-contract-card mastery-tier-${tier} rounded-lg p-2.5 text-left${contract.id === selectedContractId ? ' is-selected' : ''}" data-neon-contract="${contract.id}" aria-pressed="${contract.id === selectedContractId ? 'true' : 'false'}" style="--contract-color:${contract.color}" title="${contract.desc} · EN İYİ SKOR ${mastery.bestScore} · EN UZUN ${Math.round(mastery.bestDurationSeconds)}s">
                     <div class="flex items-center justify-between gap-2"><strong class="font-cyber text-[10px]" style="color:${contract.color}">${contract.label}</strong><span class="text-[9px] text-gray-400">${contract.short}</span></div>
                     <p class="text-[10px] text-gray-300 leading-snug mt-1.5">${contract.desc}</p>
                     <div class="contract-mastery-line" style="color:${contract.color}">USTALIK ${tier}/3 · DALGA ${mastery.bestWave} · ${mastery.runs} KOŞU</div>
@@ -11758,7 +11758,7 @@
                 } else {
                     const info = MENU_CHASSIS_DETAILS[run.chassis] || MENU_CHASSIS_DETAILS.VANGUARD;
                     const cell = (label, value, cls) => '<div class="hangar-run-cell"><span>' + label + '</span><b class="' + cls + '">' + value + '</b></div>';
-                    runEl.innerHTML = '<div class="grid grid-cols-2 gap-2">' +
+                    runEl.innerHTML = '<div class="hangar-run-grid">' +
                         cell('SKOR', run.score.toLocaleString('tr-TR'), 'text-cyan-300') +
                         cell('DALGA', run.wave, 'text-purple-300') +
                         cell('SÜRE', formatRunClock(run.seconds), 'text-gray-100') +
@@ -13682,12 +13682,13 @@
             if (event.key === 'Escape' && closeHowTo()) event.stopImmediatePropagation?.();
         }, true);
 
+        const MENU_FIT_MIN_HEIGHT = 540;
         function fitStartMenuToViewport() {
             const modal = document.getElementById('startModal');
             const shell = document.getElementById('startMenuShell');
             if (!modal || !shell) return;
             shell.style.transform = '';
-            if (window.innerWidth < 1024 || window.innerHeight < 680) {
+            if (window.innerWidth < 1024 || window.innerHeight < MENU_FIT_MIN_HEIGHT) {
                 modal.style.overflowY = 'auto';
                 return;
             }

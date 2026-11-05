@@ -1735,3 +1735,47 @@ test('Odak 5.5 the report shows the next goal and a new record, and its lab butt
   await expect(goal).toHaveAttribute('data-ready', 'false');
   expect(errors).toEqual([]);
 });
+
+test('Odak 5.7 the hangar fits one desktop screen for new and veteran players', async ({ page, isMobile }) => {
+  test.skip(!!isMobile, 'desktop layout');
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const veteran = JSON.stringify({ version: 2, gold: 13400, highScore: 1234567, maxWave: 31, unlockLevel: 9, owned: [],
+    lastRun: { score: 18420, wave: 9, seconds: 400, gold: 260, chassis: 'PHANTOM' },
+    upgrades: { baseDamage: 2, maxHp: 1, speedDash: 0, greed: 0, defibrillator: 0 } });
+  for (const save of [null, veteran]) {
+    for (const [width, height] of [[1280, 600], [1366, 657], [1536, 730], [1920, 1080]]) {
+      await page.setViewportSize({ width, height });
+      await page.addInitScript(raw => { if (raw) localStorage.setItem('neonCekirdek.meta.v1', raw); else localStorage.removeItem('neonCekirdek.meta.v1'); }, save);
+      await gotoGame(page, '/index.html', { unlockAll: false });
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(150);
+      const fit = await page.evaluate(() => {
+        const modal = document.getElementById('startModal');
+        const box = id => document.getElementById(id).getBoundingClientRect();
+        const score = document.getElementById('menuHighScore');
+        return { overflow: getComputedStyle(modal).overflowY, start: box('startBtn'), howTo: box('howToBtn'),
+          scoreFits: score.scrollWidth - score.clientWidth <= 2,
+          contractInCentre: !!document.querySelector('.hangar-center #neonContractPanel') };
+      });
+      const size = (save ? 'veteran ' : 'new ') + width + 'x' + height;
+      expect(fit.overflow, size + ' the menu does not scroll').toBe('hidden');
+      expect(fit.start.top, size + ' start button on screen').toBeGreaterThanOrEqual(0);
+      expect(fit.start.bottom, size + ' start button on screen').toBeLessThanOrEqual(height);
+      expect(fit.howTo.bottom, size + ' last panel on screen').toBeLessThanOrEqual(height);
+      expect(fit.scoreFits, size + ' the record fits its cell').toBe(true);
+      expect(fit.contractInCentre).toBe(true);
+    }
+  }
+  // The last run shows as a 2 x 2 grid, not one stacked column.
+  const cells = await page.locator('#menuLastRunBody .hangar-run-cell').evaluateAll(list => list.map(el => Math.round(el.getBoundingClientRect().top)));
+  expect(cells.length).toBe(4);
+  expect(cells[0]).toBe(cells[1]);
+  expect(cells[2]).toBeGreaterThan(cells[0]);
+  // Shorter than 540 px the menu scrolls instead of shrinking past readable.
+  await page.setViewportSize({ width: 1280, height: 500 });
+  await expect.poll(() => page.evaluate(() => document.getElementById('startModal').style.overflowY)).toBe('auto');
+  await page.locator('#startBtn').click();
+  await expect.poll(() => page.evaluate(() => gameState)).toBe('PLAYING');
+  expect(errors).toEqual([]);
+});
