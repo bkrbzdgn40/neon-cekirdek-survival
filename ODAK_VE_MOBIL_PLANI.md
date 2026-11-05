@@ -430,9 +430,11 @@ Hayalet ve Titan şasileri ile Faz 3'te eklenen silah ve pasifler Laboratuvarda 
 
 Sonuç: 7 içerik (`CONTENT_UNLOCKS`), toplam 7.800 altın. Hayalet 1.200, Titan 1.800, Mayın İzi 900, Bumerang Disk 1.100, Şok Halkası 1.300, Soğutucu 700, Toplayıcı 800. Kilitli şasi kartı fiyatını gösterir, tıklanınca Laboratuvarın Koleksiyon bölümü açılır.
 
-### - [ ] 3.8 Hangar ana menüsü
+### - [x] 3.8 Hangar ana menüsü
 
 Ortada seçili şasi canlı ve büyük, solda şasi seçimi, sağda "sıradaki hedef" ve son koşu özeti. Kontroller ayrı bir sekmeye taşınır. 1280×800 ve 1920×1080'de boş bant kalmaz.
+
+Sonuç: üç sütun aynı çizgide bitiyor (fark ≤2 px). Ortada canvas önizleme (DÜŞÜK grafikte ve azaltılmış harekette tek kare), sağda sıradaki hedef, başlangıç gücü ve son operasyon. Kontroller ve tehditler "Nasıl oynanır" penceresinde. Altı eski yerleşim regex testi silindi, yerine davranış testleri geldi.
 
 ---
 

@@ -664,6 +664,16 @@
         ]);
         const CONTENT_TYPE_LABELS = Object.freeze({ chassis: 'ŞASİ', weapon: 'SİLAH', passive: 'PASİF' });
         let ownedContent = new Set();
+        // Odak 3.8 · the menu's "last operation" card survives reloads.
+        let lastRunSummary = null;
+        function parseLastRunSummary(data) {
+            if (!data || typeof data !== 'object') return null;
+            const score = safeSaveInteger(data.score, -1), wave = safeSaveInteger(data.wave, -1, 100000);
+            const seconds = safeSaveInteger(data.seconds, -1, 10000000), gold = safeSaveInteger(data.gold, -1);
+            if (score < 0 || wave < 1 || seconds < 0 || gold < 0) return null;
+            const chassis = ['VANGUARD', 'PHANTOM', 'TITAN'].includes(data.chassis) ? data.chassis : 'VANGUARD';
+            return { score, wave, seconds, gold, chassis };
+        }
         function isContentOwned(id) {
             if (window.NEON_UNLOCK_ALL === true) return true;
             return !CONTENT_UNLOCKS.some(item => item.id === id) || ownedContent.has(id);
@@ -703,6 +713,7 @@
                     safeSaveInteger(data.unlockFailedRuns, 0, UNLOCK_FALLBACK_RUNS - 1);
                 unlockSpotlightPending = data.unlockSpotlight === true;
                 ownedContent = new Set(parseOwnedContent(data.owned) || []);
+                lastRunSummary = parseLastRunSummary(data.lastRun);
                 if (data.upgrades && typeof data.upgrades === 'object') {
                     for (const [key, max] of Object.entries(META_UPGRADE_LIMITS)) {
                         metaUpgrades[key] = safeSaveInteger(data.upgrades[key], metaUpgrades[key], max);
@@ -725,6 +736,7 @@
                     unlockFailedRuns,
                     unlockSpotlight: unlockSpotlightPending,
                     owned: [...ownedContent],
+                    lastRun: lastRunSummary,
                     upgrades: { ...metaUpgrades }
                 }));
             } catch (error) {
@@ -10126,11 +10138,8 @@
             assign('menuChassisDetail', info.detail);
             assign('menuChassisDifficulty', 'ZORLUK · ' + info.difficulty);
             assign('menuChassisAdvice', info.advice);
-            const preview = document.getElementById('menuCorePreview');
-            if (preview) {
-                preview.style.borderColor = info.color;
-                preview.style.color = info.color;
-            }
+            const title = document.getElementById('menuChassisDetailTitle');
+            if (title && title.style) title.style.color = info.color;
         }
 
         function renderNeonContractOptions() {
@@ -10172,9 +10181,216 @@
             });
             if (!isContentOwned(selectedChassis)) selectChassis('VANGUARD');
         }
+        // Odak 3.8 · live chassis preview on the hangar stage. Menu only; low graphics draws one still frame.
+        const HANGAR_COLORS = Object.freeze({ VANGUARD: '0,243,255', PHANTOM: '255,0,127', TITAN: '0,255,102' });
+        const hangarPreview = {
+            raf: 0, last: 0, t: 0, fire: 0, foes: [], shots: [], sparks: [], trail: [],
+            visible() {
+                const modal = document.getElementById('startModal');
+                return gameState === 'MENU' && !!modal && !modal.classList.contains('hidden');
+            },
+            animated() {
+                const reduced = typeof window.matchMedia === 'function' &&
+                    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                return graphicsQuality !== 'low' && !reduced;
+            },
+            start() {
+                if (this.raf) return;
+                const canvas = document.getElementById('hangarCanvas');
+                const ctx = canvas && typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+                if (!ctx || typeof requestAnimationFrame !== 'function') return;
+                this.canvas = canvas; this.ctx = ctx; this.last = 0;
+                const loop = (now) => {
+                    this.raf = 0;
+                    if (!this.visible()) return;
+                    const dt = this.last ? Math.min(0.05, (now - this.last) / 1000) : 0;
+                    this.last = now;
+                    this.frame(this.animated() ? dt : 0);
+                    if (this.animated()) this.raf = requestAnimationFrame(loop);
+                };
+                this.raf = requestAnimationFrame(loop);
+            },
+            frame(dt) {
+                const { canvas, ctx } = this;
+                const rect = canvas.getBoundingClientRect();
+                const dpr = Math.min(2, window.devicePixelRatio || 1);
+                const w = Math.max(1, Math.round(rect.width * dpr)), h = Math.max(1, Math.round(rect.height * dpr));
+                if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+                this.t += dt;
+                const t = this.t, rgb = HANGAR_COLORS[selectedChassis] || HANGAR_COLORS.VANGUARD;
+                const s = Math.min(w, h), R = s * 0.085;
+                let cx = w / 2, cy = h * 0.46;
+                if (selectedChassis === 'PHANTOM') { cx += Math.cos(t * 1.6) * s * 0.07; cy += Math.sin(t * 3.2) * s * 0.03; }
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.clearRect(0, 0, w, h);
+                // perspective floor grid
+                ctx.strokeStyle = 'rgba(' + rgb + ',0.09)'; ctx.lineWidth = dpr;
+                for (let i = 1; i <= 9; i++) {
+                    const y = h * 0.62 + Math.pow(i / 9, 1.8) * h * 0.38;
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+                }
+                for (let i = -8; i <= 8; i++) {
+                    ctx.beginPath(); ctx.moveTo(w / 2 + i * w * 0.02, h * 0.62); ctx.lineTo(w / 2 + i * w * 0.16, h); ctx.stroke();
+                }
+                // foes drift in, plasma shots pick them off
+                if (dt > 0) {
+                    if (this.foes.length < 6 && Math.random() < dt * 1.6) {
+                        const a = Math.random() * Math.PI * 2, d = Math.hypot(w, h) * 0.55;
+                        this.foes.push({ x: w / 2 + Math.cos(a) * d, y: h * 0.46 + Math.sin(a) * d, spin: Math.random() * 6 });
+                    }
+                    this.fire -= dt;
+                    const target = this.foes[0];
+                    if (target && this.fire <= 0) {
+                        this.fire = selectedChassis === 'PHANTOM' ? 0.22 : 0.34;
+                        const a = Math.atan2(target.y - cy, target.x - cx);
+                        this.shots.push({ x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R, vx: Math.cos(a) * s * 1.3, vy: Math.sin(a) * s * 1.3, life: 1.2 });
+                    }
+                    for (const f of this.foes) {
+                        const a = Math.atan2(cy - f.y, cx - f.x);
+                        f.x += Math.cos(a) * s * 0.09 * dt; f.y += Math.sin(a) * s * 0.09 * dt; f.spin += dt * 2;
+                    }
+                    for (const b of this.shots) {
+                        b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+                        for (const f of this.foes) {
+                            if (!f.dead && Math.hypot(f.x - b.x, f.y - b.y) < R * 0.7) {
+                                f.dead = true; b.life = 0;
+                                for (let k = 0; k < 7; k++) {
+                                    const a = Math.random() * Math.PI * 2;
+                                    this.sparks.push({ x: f.x, y: f.y, vx: Math.cos(a) * s * 0.3, vy: Math.sin(a) * s * 0.3, life: 0.5 });
+                                }
+                            }
+                        }
+                    }
+                    for (const p of this.sparks) { p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; }
+                    this.foes = this.foes.filter(f => !f.dead && Math.hypot(f.x - cx, f.y - cy) > R * 2.2);
+                    this.shots = this.shots.filter(b => b.life > 0);
+                    this.sparks = this.sparks.filter(p => p.life > 0);
+                    this.trail.push({ x: cx, y: cy });
+                    if (this.trail.length > 14) this.trail.shift();
+                }
+                ctx.fillStyle = 'rgba(255,59,107,0.85)';
+                for (const f of this.foes) {
+                    ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.spin); ctx.beginPath();
+                    ctx.moveTo(0, -R * 0.42); ctx.lineTo(R * 0.36, R * 0.3); ctx.lineTo(-R * 0.36, R * 0.3); ctx.closePath();
+                    ctx.fill(); ctx.restore();
+                }
+                ctx.fillStyle = '#dbfdff';
+                for (const b of this.shots) { ctx.beginPath(); ctx.arc(b.x, b.y, R * 0.12, 0, Math.PI * 2); ctx.fill(); }
+                for (const p of this.sparks) {
+                    ctx.fillStyle = 'rgba(255,180,200,' + (p.life * 2).toFixed(2) + ')';
+                    ctx.fillRect(p.x, p.y, 2 * dpr, 2 * dpr);
+                }
+                if (selectedChassis === 'PHANTOM') {
+                    this.trail.forEach((p, i) => {
+                        ctx.beginPath(); ctx.arc(p.x, p.y, R * (i / this.trail.length), 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(' + rgb + ',' + ((i + 1) / this.trail.length * 0.25).toFixed(3) + ')'; ctx.fill();
+                    });
+                }
+                // rotating rings
+                ctx.save(); ctx.translate(cx, cy);
+                ctx.rotate(t * 0.5); ctx.setLineDash([R * 0.35, R * 0.25]);
+                ctx.strokeStyle = 'rgba(' + rgb + ',0.55)'; ctx.lineWidth = 2 * dpr;
+                ctx.beginPath(); ctx.arc(0, 0, R * 2.1, 0, Math.PI * 2); ctx.stroke();
+                ctx.rotate(-t * 0.9); ctx.setLineDash([R * 0.08, R * 0.3]);
+                ctx.strokeStyle = 'rgba(' + rgb + ',0.28)'; ctx.lineWidth = dpr;
+                ctx.beginPath(); ctx.arc(0, 0, R * 3.1, 0, Math.PI * 2); ctx.stroke();
+                ctx.restore(); ctx.setLineDash([]);
+                if (selectedChassis === 'TITAN') {
+                    ctx.setLineDash([R * 0.3, R * 0.2]); ctx.strokeStyle = 'rgba(0,243,255,0.85)'; ctx.lineWidth = 2.5 * dpr;
+                    ctx.beginPath(); ctx.arc(cx, cy, R * 1.35, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+                    const a = t * 1.8, ox = cx + Math.cos(a) * R * 1.9, oy = cy + Math.sin(a) * R * 1.9;
+                    ctx.beginPath(); ctx.arc(ox, oy, R * 0.22, 0, Math.PI * 2); ctx.fillStyle = '#ffe600'; ctx.fill();
+                } else if (selectedChassis === 'VANGUARD') {
+                    ctx.strokeStyle = 'rgba(' + rgb + ',0.8)'; ctx.lineWidth = 2 * dpr;
+                    const gap = R * (1.45 + Math.sin(t * 3) * 0.08);
+                    for (let k = 0; k < 4; k++) {
+                        const a = k * Math.PI / 2;
+                        ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * gap, cy + Math.sin(a) * gap);
+                        ctx.lineTo(cx + Math.cos(a) * (gap + R * 0.4), cy + Math.sin(a) * (gap + R * 0.4)); ctx.stroke();
+                    }
+                }
+                // core
+                ctx.save();
+                ctx.shadowBlur = graphicsQuality === 'high' ? R * 0.9 : 0;
+                ctx.shadowColor = 'rgb(' + rgb + ')';
+                const g = ctx.createRadialGradient(cx, cy, R * 0.1, cx, cy, R);
+                g.addColorStop(0, '#ffffff'); g.addColorStop(0.45, 'rgba(' + rgb + ',0.95)'); g.addColorStop(1, 'rgba(' + rgb + ',0.25)');
+                ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5 * dpr; ctx.stroke();
+                ctx.restore();
+            }
+        };
+
+        function getMenuNextGoal() {
+            const unowned = CONTENT_UNLOCKS.filter(item => !isContentOwned(item.id))
+                .sort((a, b) => a.cost - b.cost);
+            if (unowned.length) {
+                const item = unowned.find(entry => totalGold >= entry.cost) || unowned[0];
+                return { kind: 'content', id: item.id, title: item.name, label: CONTENT_TYPE_LABELS[item.type],
+                    color: item.color, cost: item.cost, ready: totalGold >= item.cost };
+            }
+            const lab = META_SHOP_ITEMS.filter(item => (metaUpgrades[item.key] || 0) < item.maxLevel)
+                .map(item => ({ item, cost: Math.round(item.baseCost * Math.pow(item.costScale, metaUpgrades[item.key] || 0)) }))
+                .sort((a, b) => a.cost - b.cost)[0];
+            if (lab) return { kind: 'lab', id: lab.item.key, title: lab.item.name, label: 'GELİŞTİRME',
+                color: lab.item.color, cost: lab.cost, ready: totalGold >= lab.cost };
+            return { kind: 'record', title: 'Rekorunu geç', label: 'USTALIK', color: '#67e8f9', cost: 0, ready: false };
+        }
+        function formatRunClock(seconds) {
+            const m = Math.floor(seconds / 60), sec = seconds % 60;
+            return m + ':' + String(sec).padStart(2, '0');
+        }
+        function renderMenuGoals() {
+            const goalEl = document.getElementById('menuNextGoalBody');
+            if (goalEl) {
+                const goal = getMenuNextGoal();
+                goalEl.dataset.kind = goal.kind;
+                if (goal.kind === 'record') {
+                    goalEl.innerHTML = '<div class="hangar-goal-title">Tüm koleksiyon ve geliştirmeler açık</div>' +
+                        '<p class="text-[11px] text-gray-400 mt-1">Rekor ' + savedHighScore.toLocaleString('tr-TR') +
+                        ' · en uzak dalga ' + savedMaxWave + '. Sözleşmelerle daha yükseğe çık.</p>';
+                } else {
+                    const pct = Math.min(100, Math.round(100 * totalGold / Math.max(1, goal.cost)));
+                    const status = goal.ready ? 'HAZIR · LABORATUVARDA AÇ' :
+                        'KALAN ' + (goal.cost - totalGold).toLocaleString('tr-TR') + ' ALTIN';
+                    goalEl.innerHTML = '<div class="flex items-center justify-between gap-2"><span class="hangar-goal-title" style="color:' + goal.color + '">' +
+                        goal.title + '</span><span class="shop-content-type">' + goal.label + '</span></div>' +
+                        '<div class="hangar-goal-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><span style="width:' + pct + '%"></span></div>' +
+                        '<div class="flex items-center justify-between gap-2 text-[10px] font-cyber"><span class="text-yellow-300">' +
+                        Math.min(totalGold, goal.cost).toLocaleString('tr-TR') + ' / ' + goal.cost.toLocaleString('tr-TR') + '</span>' +
+                        '<span class="' + (goal.ready ? 'text-green-400' : 'text-gray-400') + '">' + status + '</span></div>';
+                }
+            }
+            const runEl = document.getElementById('menuLastRunBody');
+            if (runEl) {
+                const run = lastRunSummary;
+                runEl.dataset.empty = run ? 'false' : 'true';
+                if (!run) {
+                    const step = (n, title, text) => '<div class="hangar-guide-step"><span>' + n + '</span><div><b>' + title + '</b><p>' + text + '</p></div></div>';
+                    runEl.innerHTML = '<p class="text-xs text-gray-300 leading-relaxed">İlk operasyonunun sonucu burada görünecek.</p>' +
+                        '<div class="hangar-guide">' +
+                        step(1, 'İLK DALGALAR', 'XP kürelerini topla; hasar ve güvenlik temelini kur.') +
+                        step(2, 'BUILD KUR', 'Aynı modülü üçüncü kademeye çıkar, evrimi aç.') +
+                        step(3, 'ALTINI HARCA', 'Koşu sonunda kazandığın altınla Laboratuvarda yeni içerik aç.') + '</div>';
+                } else {
+                    const info = MENU_CHASSIS_DETAILS[run.chassis] || MENU_CHASSIS_DETAILS.VANGUARD;
+                    const cell = (label, value, cls) => '<div class="hangar-run-cell"><span>' + label + '</span><b class="' + cls + '">' + value + '</b></div>';
+                    runEl.innerHTML = '<div class="grid grid-cols-2 gap-2">' +
+                        cell('SKOR', run.score.toLocaleString('tr-TR'), 'text-cyan-300') +
+                        cell('DALGA', run.wave, 'text-purple-300') +
+                        cell('SÜRE', formatRunClock(run.seconds), 'text-gray-100') +
+                        cell('ALTIN', '+' + run.gold.toLocaleString('tr-TR'), 'text-yellow-300') + '</div>' +
+                        '<p class="text-[10px] text-gray-400 mt-2 font-cyber" style="color:' + info.color + '">' + info.title + '</p>';
+                }
+            }
+            const howTo = document.getElementById('howToBtn');
+            if (howTo && howTo.dataset) howTo.dataset.fresh = (!lastRunSummary && savedHighScore === 0) ? 'true' : 'false';
+        }
         function updateMenuCounters() {
             applySystemLockVisibility();
             refreshChassisLocks();
+            renderMenuGoals();
+            hangarPreview.start();
             document.getElementById('menuHighScore').textContent = savedHighScore.toLocaleString('tr-TR');
             document.getElementById('menuMaxWave').textContent = savedMaxWave;
             document.getElementById('menuGoldText').textContent = totalGold.toLocaleString('tr-TR');
@@ -11472,6 +11688,8 @@
                 savedMaxWave = wave;
             }
             lastRunUnlock = evaluateRunUnlock(wave);
+            lastRunSummary = { score: Math.max(0, Math.round(score)), wave, seconds: Math.round(totalTime),
+                gold: sessionGold, chassis: player?.chassis || selectedChassis };
             saveMetaProgress();
             snapshotEndOfRun(reason,isNewRecord);
             // Once per completed run; no writes during combat or card choices.
@@ -11987,6 +12205,27 @@
 
         // Desktop: fit the full menu including Start without hiding buttons.
         // Compact CSS handles most cases; proportional adjustment absorbs font/UI scaling.
+        function openHowTo() {
+            const modal = document.getElementById('howToModal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.getElementById('closeHowToBtn')?.focus?.();
+        }
+        function closeHowTo() {
+            const modal = document.getElementById('howToModal');
+            if (!modal || modal.classList.contains('hidden')) return false;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('howToBtn')?.focus?.();
+            return true;
+        }
+        document.getElementById('howToBtn')?.addEventListener('click', openHowTo);
+        document.getElementById('closeHowToBtn')?.addEventListener('click', closeHowTo);
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && closeHowTo()) event.stopImmediatePropagation?.();
+        }, true);
+
         function fitStartMenuToViewport() {
             const modal = document.getElementById('startModal');
             const shell = document.getElementById('startMenuShell');
