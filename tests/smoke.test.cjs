@@ -8244,3 +8244,52 @@ test('Odak 5.5 the report ends on the next goal and names a new record', () => {
   assert.match(x.ready.html, /HAZIR/);
   assert.match(x.ready.html, /id="reportGoalOpenBtn"/);
 });
+
+test('Odak 5.6 contract mastery travels with the backup; old backups leave it and bad ones are refused', () => {
+  const key = 'neonCekirdek.contractMastery.v1';
+  const { run, stored } = setup({});
+  const x = JSON.parse(run(`(()=>{
+    selectNeonContract('REDLINE');startNewGame();wave=12;score=900;totalTime=200;triggerGameOver();
+    gameState='MENU';
+    const backup=createProgressBackup();
+    const raw=JSON.stringify(backup);
+    const mastered=window.getNeonContractMastery().REDLINE;
+    // A fresh device: mastery wiped, then the backup comes back.
+    contractMastery=createEmptyContractMastery();localStorage.setItem(CONTRACT_MASTERY_SAVE_KEY,JSON.stringify(contractMastery));
+    const restored=restoreProgressBackup(raw);
+    const afterRestore=window.getNeonContractMastery().REDLINE;
+    // An old backup without contracts keeps what is there.
+    const old=JSON.parse(raw);delete old.contracts;
+    const oldOk=restoreProgressBackup(JSON.stringify(old));
+    const afterOld=window.getNeonContractMastery().REDLINE;
+    // A broken contracts block refuses the whole backup.
+    const bad=JSON.parse(raw);bad.contracts={version:99};
+    const badOk=restoreProgressBackup(JSON.stringify(bad));
+    // Clamped values are sanitized.
+    const big=JSON.parse(raw);big.contracts.contracts.REDLINE.bestWave=1e9;
+    const bigOk=restoreProgressBackup(JSON.stringify(big));
+    const afterBig=window.getNeonContractMastery().REDLINE.bestWave;
+    // A failed contracts write rolls everything back.
+    const before=localStorage.getItem(CONTRACT_MASTERY_SAVE_KEY);
+    const original=localStorage.setItem;
+    localStorage.setItem=(k,v)=>{if(k===CONTRACT_MASTERY_SAVE_KEY&&v!==before)throw Error('quota');return original(k,v);};
+    const changed=JSON.parse(raw);changed.contracts.contracts.REDLINE.runs=7;
+    const failOk=restoreProgressBackup(JSON.stringify(changed));
+    localStorage.setItem=original;
+    return JSON.stringify({hasContracts:!!backup.contracts,mastered,restored,afterRestore,oldOk,afterOld,badOk,bigOk,afterBig,failOk,
+      kept:localStorage.getItem(CONTRACT_MASTERY_SAVE_KEY)===before,size:raw.length});})()`));
+  assert.equal(x.hasContracts, true);
+  assert.equal(x.mastered.runs, 1);
+  assert.equal(x.mastered.bestWave, 12);
+  assert.equal(x.restored, true);
+  assert.deepEqual(x.afterRestore, x.mastered, 'mastery comes back on a new device');
+  assert.equal(x.oldOk, true);
+  assert.deepEqual(x.afterOld, x.mastered, 'an old backup leaves mastery alone');
+  assert.equal(x.badOk, false);
+  assert.equal(x.bigOk, true);
+  assert.equal(x.afterBig, 100000, 'values are clamped like a normal load');
+  assert.equal(x.failOk, false);
+  assert.equal(x.kept, true, 'a failed write keeps the old mastery');
+  assert.ok(x.size < 16384, 'still well under the backup size limit');
+  assert.equal(JSON.parse(stored[key]).contracts.REDLINE.bestWave, 100000);
+});
