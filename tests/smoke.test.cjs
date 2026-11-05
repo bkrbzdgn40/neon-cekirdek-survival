@@ -7962,3 +7962,20 @@ test('Odak 4.4 old saves and backups with 2-3 lab revive tiers get their gold ba
     return JSON.stringify({ ok, gold: totalGold, defib: metaUpgrades.defibrillator }); })()`));
   assert.deepEqual(r, { ok: true, gold: 142, defib: 1 });
 });
+
+test('Odak 4.6 ion chorus marks the harmony moment and draws less on low graphics', () => {
+  let calls = 0;
+  const ctx = new Proxy({}, { get: () => () => { calls++; } });
+  const { run } = setup({}, { canvasContext: ctx });
+  const x = JSON.parse(run(`(()=>{startNewGame();wave=10;waveTimer=2;nextBossTime=1000;totalTime=300;
+    enemies=[new Enemy(600,330,'SHOOTER')];updateArenaChapter(.02);
+    recordShowcaseIonFlower(0);const half=chapterShowcase.completed;
+    totalTime=301;recordShowcaseIonFlower(2);totalTime=301.3;
+    return JSON.stringify({half,done:chapterShowcase.completed,at:chapterShowcase.completedAt});})()`));
+  const draw = (quality) => { const before = calls; run(`graphicsQuality='${quality}';drawIonChorus(ctx,chapterShowcase,${quality === 'low'})`); return calls - before; };
+  const high = draw('high'), low = draw('low');
+  assert.equal(x.half, false);
+  assert.equal(x.done, true);
+  assert.equal(x.at, 301);
+  assert.ok(low > 0 && low < high, `low ${low} high ${high}`);
+});

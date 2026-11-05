@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 4.6 · İyon Korosu görseli
+- Doldurulmamış çiçekler dışa yayılan işaret halkalarıyla çağırır, üstünde "DOLDUR" ya da yüzde yazar; dolan çiçeğin içi büyüyerek parlar.
+- Alınan çiçek altın renkte açar, taç yaprakları döner; sahne üçgeninin kenarlarında ondan diğer çiçeklere iyon ışıkları akar, iki ucu alınan kenar altına döner.
+- Uyumda üçgen bir an altınla dolar ve merkezden üç ses halkası yayılır. Kural ve ödül aynı. Düşük grafikte parlama ve ikinci halkalar yok, kenar başına tek iyon.
+
 ## Odak 4.5 · Kızıl Makas görseli ve tehlikesi
 - Presler artık dişli çelik çeneler: uyarı boyunca kapanır, zemin ısınır ve kenarlarda akan tehlike şeritleri var; çarpmada kapanır, ekran sarsılır, iki yandan kıvılcım saçılır. Sütunun üstünde geri sayım.
 - Pres hasarı 8 → 20 (her pres oyuncuya bir kez). İkinci pres ilkinin çarptığı anda oyuncunun durduğu yere kilitlenir ("SENİ İZLİYOR"), 2 sn uyarır: uzaklaşan kurtulur.

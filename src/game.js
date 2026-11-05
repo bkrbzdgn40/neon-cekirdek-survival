@@ -7298,6 +7298,7 @@
             op.flowerMask|=1<<index;
             if((op.flowerMask & (op.flowerMask-1))===0)return;
             op.completed=true;
+            op.completedAt=totalTime;
             op.endAt=Math.min(op.endAt,totalTime+2.5);
             chapterShowcaseStats.ionHarmonies++;
             chapterShowcaseStats.completed++;
@@ -7439,6 +7440,106 @@
             }
             ctx.restore();
         }
+        // Odak 4.6 · İyon Korosu stage. Uncaptured flowers send out beacon rings, the
+        // one being charged opens its petals, captured ones bloom gold and push ions
+        // along the triangle; harmony fills the stage and sends three sound rings.
+        function drawIonChorus(ctx, op, low) {
+            const nodes = getGardenCenters(), r = CHAPTER_RULES.gardenRadius;
+            const teal = '#86ffe0', gold = '#fff5b2';
+            const on = (i) => !!(op.flowerMask & (1 << i));
+            const clock = PREFERS_REDUCED_VFX_MOTION ? 0 : totalTime;
+            const sinceHarmony = op.completed && Number.isFinite(op.completedAt) ? totalTime - op.completedAt : -1;
+            ctx.save();
+            // Harmony: the stage fills, then three rings leave the centre.
+            if (sinceHarmony >= 0) {
+                const fade = Math.max(0, 1 - sinceHarmony / 1.2);
+                ctx.globalAlpha = .28 * fade;
+                ctx.fillStyle = gold;
+                ctx.beginPath(); ctx.moveTo(nodes[0].x, nodes[0].y);
+                ctx.lineTo(nodes[1].x, nodes[1].y); ctx.lineTo(nodes[2].x, nodes[2].y);
+                ctx.closePath(); ctx.fill();
+                const cx = (nodes[0].x + nodes[1].x + nodes[2].x) / 3, cy = (nodes[0].y + nodes[1].y + nodes[2].y) / 3;
+                const reach = Math.max(worldWidth, worldHeight) * .7;
+                for (let ring = 0; ring < (low ? 1 : 3); ring++) {
+                    const k = (sinceHarmony - ring * .22) / 1.3;
+                    if (k <= 0 || k >= 1) continue;
+                    ctx.globalAlpha = (1 - k) * .8;
+                    ctx.strokeStyle = ring % 2 ? teal : gold;
+                    ctx.lineWidth = low ? 3 : 6 * (1 - k) + 2;
+                    ctx.beginPath(); ctx.arc(cx, cy, 40 + reach * k, 0, Math.PI * 2); ctx.stroke();
+                }
+            }
+            // Stage edges: a wide soft band and a thin core; gold once both ends are captured.
+            for (let i = 0; i < 3; i++) {
+                const a = nodes[i], b = nodes[(i + 1) % 3];
+                const lit = op.completed || (on(i) && on((i + 1) % 3));
+                const half = on(i) || on((i + 1) % 3);
+                if (!low) {
+                    ctx.globalAlpha = lit ? .3 : half ? .18 : .1;
+                    ctx.strokeStyle = lit ? gold : teal; ctx.lineWidth = 12;
+                    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+                }
+                ctx.globalAlpha = lit ? .95 : half ? .7 : .45;
+                ctx.strokeStyle = lit ? gold : teal; ctx.lineWidth = low ? 2 : 2.5;
+                ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+                // Ions run away from each captured flower along its two edges.
+                const ions = low ? 1 : 3;
+                for (const [from, to] of [[a, b, i], [b, a, (i + 1) % 3]].filter(e => on(e[2]) || op.completed)) {
+                    for (let n = 0; n < ions; n++) {
+                        const t = ((clock * .55 + n / ions + i * .17) % 1 + 1) % 1;
+                        const x = from.x + (to.x - from.x) * t, y = from.y + (to.y - from.y) * t;
+                        ctx.globalAlpha = .9 * Math.sin(Math.PI * t);
+                        ctx.fillStyle = gold;
+                        ctx.beginPath(); ctx.arc(x, y, low ? 3 : 4, 0, Math.PI * 2); ctx.fill();
+                    }
+                }
+            }
+            for (let i = 0; i < nodes.length; i++) {
+                const p = nodes[i];
+                ctx.save(); ctx.translate(p.x, p.y);
+                if (on(i)) {
+                    // Bloom: filled gold petals that keep turning, and a bright core.
+                    const spin = clock * .6;
+                    ctx.fillStyle = gold;
+                    for (let petal = 0; petal < 6; petal++) {
+                        const a = spin + petal * Math.PI / 3;
+                        ctx.globalAlpha = .26;
+                        ctx.beginPath(); ctx.ellipse(Math.cos(a) * r * .55, Math.sin(a) * r * .55,
+                            r * .55, r * .2, a, 0, Math.PI * 2); ctx.fill();
+                    }
+                    ctx.globalAlpha = 1;
+                    if (!low) { ctx.shadowColor = gold; ctx.shadowBlur = 18; }
+                    ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2); ctx.fill();
+                    ctx.shadowBlur = 0;
+                    ctx.strokeStyle = gold; ctx.lineWidth = low ? 3 : 4;
+                    ctx.beginPath(); ctx.arc(0, 0, r + 22, 0, Math.PI * 2); ctx.stroke();
+                } else if (!op.completed) {
+                    // Charging opens the petals; otherwise a beacon calls the player.
+                    const progress = chapterGardenCharge[i] / CHAPTER_RULES.gardenCharge;
+                    if (progress > 0) {
+                        ctx.globalAlpha = .2 + .35 * progress;
+                        ctx.fillStyle = teal;
+                        ctx.beginPath(); ctx.arc(0, 0, r * progress, 0, Math.PI * 2); ctx.fill();
+                    }
+                    ctx.strokeStyle = teal;
+                    if (low) {
+                        ctx.globalAlpha = .7; ctx.lineWidth = 3;
+                        ctx.beginPath(); ctx.arc(0, 0, r + 22, 0, Math.PI * 2); ctx.stroke();
+                    } else {
+                        for (let ring = 0; ring < 2; ring++) {
+                            const k = ((clock / 1.4 + ring * .5 + i * .23) % 1 + 1) % 1;
+                            ctx.globalAlpha = (1 - k) * .7; ctx.lineWidth = 3 * (1 - k) + 1;
+                            ctx.beginPath(); ctx.arc(0, 0, r + 14 + 40 * k, 0, Math.PI * 2); ctx.stroke();
+                        }
+                    }
+                    ctx.globalAlpha = .95; ctx.fillStyle = teal;
+                    ctx.font = "700 11px 'Orbitron', sans-serif"; ctx.textAlign = 'center';
+                    ctx.fillText(progress > 0 ? Math.round(progress * 100) + '%' : 'DOLDUR', 0, -r - 30);
+                }
+                ctx.restore();
+            }
+            ctx.restore();
+        }
         function drawChapterShowcase(ctx) {
             if(!chapterShowcase||!chapterEffectsAllowed())return;
             const op=chapterShowcase;
@@ -7448,25 +7549,7 @@
             if(op.id==='FOUNDRY'){
                 for(let i=0;i<2;i++) drawFoundryPress(ctx, op, i, elapsed, low);
             }else if(op.id==='GARDEN'){
-                const nodes=getGardenCenters();
-                ctx.strokeStyle='#86ffe0';ctx.lineWidth=low?2:4;
-                ctx.globalAlpha=op.completed?.9:.5;
-                ctx.beginPath();ctx.moveTo(nodes[0].x,nodes[0].y);
-                ctx.lineTo(nodes[1].x,nodes[1].y);
-                ctx.lineTo(nodes[2].x,nodes[2].y);
-                ctx.closePath();ctx.stroke();
-                for(let i=0;i<nodes.length;i++){
-                    const on=!!(op.flowerMask&(1<<i));
-                    ctx.strokeStyle=on?'#fff5b2':'#86ffe0';
-                    ctx.globalAlpha=on?1:.6;
-                    ctx.lineWidth=on?6:3;
-                    ctx.beginPath();ctx.arc(nodes[i].x,nodes[i].y,
-                        CHAPTER_RULES.gardenRadius+22,0,Math.PI*2);ctx.stroke();
-                    if(on){
-                        ctx.beginPath();ctx.arc(nodes[i].x,nodes[i].y,
-                            CHAPTER_RULES.gardenRadius+28,0,Math.PI*2);ctx.stroke();
-                    }
-                }
+                drawIonChorus(ctx, op, low);
             }else if(op.id==='RIFT'){
                 const gates=getRiftCenters();
                 ctx.strokeStyle='#e3a6ff';ctx.lineWidth=3;
