@@ -225,6 +225,39 @@ test('real browser game-over, menu return and restart remain fully navigable', a
   expect(errors).toEqual([]);
 });
 
+test('Odak 4.8 the report fits desktop windows and its lab opens on top', async ({ page, isMobile }) => {
+  test.skip(!!isMobile, 'desktop layout');
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  for (const [width, height] of [[1280, 720], [1536, 730], [1920, 1080]]) {
+    await page.setViewportSize({ width, height });
+    await gotoGame(page, '/index.html', { unlockAll: false });
+    await page.locator('#startBtn').click();
+    await page.evaluate(() => { wave = 9; score = 4321; totalTime = 300; triggerGameOver(); });
+    await expect(page.locator('#gameOverModal')).toBeVisible();
+    const fit = await page.evaluate(() => {
+      const modal = document.getElementById('gameOverModal');
+      const box = id => document.getElementById(id).getBoundingClientRect();
+      return { scroll: modal.scrollHeight - modal.clientHeight, buttons: box('openShopFromOverBtn').bottom,
+        main: box('reportMain').height };
+    });
+    const size = `${width}x${height}`;
+    expect(fit.scroll, `${size} the report itself does not scroll`).toBeLessThanOrEqual(1);
+    expect(fit.buttons, `${size} the buttons stay on screen`).toBeLessThanOrEqual(height);
+    expect(fit.main, `${size} the tab content keeps room`).toBeGreaterThan(150);
+    // A real click on the lab button shows the lab, not the report behind it.
+    await page.locator('#openShopFromOverBtn').click();
+    const topAtCenter = () => page.evaluate(() =>
+      document.elementFromPoint(innerWidth / 2, innerHeight / 2)?.closest('[id$="Modal"]')?.id);
+    await expect.poll(topAtCenter).toBe('shopModal');
+    // Leaving for the menu with the lab still open must show the menu, not the lab.
+    await page.evaluate(() => returnToMainMenu());
+    await expect(page.locator('#shopModal')).toBeHidden();
+    await expect.poll(topAtCenter).toBe('startModal');
+  }
+  expect(errors).toEqual([]);
+});
+
 test('Canvas produces nonblank pixels in menu and active combat', async ({ page }) => {
   await gotoGame(page,'/index.html');
   await expect.poll(() => page.evaluate(() => {

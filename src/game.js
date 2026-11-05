@@ -13023,6 +13023,10 @@
             document.getElementById('pauseModal').classList.remove('flex');
             document.getElementById('gameOverModal').classList.add('hidden');
             document.getElementById('gameOverModal').classList.remove('flex');
+            // Odak 4.8 · a lab left open from the report must not cover the menu.
+            const shopModal = document.getElementById('shopModal');
+            shopModal.classList.add('hidden');
+            shopModal.classList.remove('flex');
             document.getElementById('startModal').classList.remove('hidden');
             updateMenuCounters();
             scheduleMenuFit();
