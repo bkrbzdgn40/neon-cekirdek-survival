@@ -884,6 +884,25 @@
             saveMetaProgress();
             return true;
         }
+        // Odak 5.3 · the data capsule: cheaper than any costume, gives one you do not own yet.
+        // It never repeats; the new costume goes to the wardrobe and is not worn automatically.
+        const DATA_CAPSULE_COST = 300;
+        let lastCapsuleId = null;
+        function unownedCosmetics() {
+            return COSMETICS.filter(c => !ownedCosmetics.has(c.id));
+        }
+        function openDataCapsule(pick = Math.random) {
+            const pool = unownedCosmetics();
+            if (!pool.length || totalGold < DATA_CAPSULE_COST) return null;
+            const roll = Number(pick());
+            const index = Math.min(pool.length - 1, Math.max(0, Math.floor((Number.isFinite(roll) ? roll : 0) * pool.length)));
+            const item = pool[index];
+            totalGold -= DATA_CAPSULE_COST;
+            ownedCosmetics.add(item.id);
+            lastCapsuleId = item.id;
+            saveMetaProgress();
+            return item;
+        }
         // Wearing the worn one again takes it off (back to the standard look).
         function toggleCosmetic(id) {
             const item = COSMETIC_BY_ID.get(id);
@@ -13076,7 +13095,20 @@
             const owned = COSMETICS.filter(c => ownedCosmetics.has(c.id)).length;
             const count = document.getElementById('shopCosmeticCount');
             if (count) count.textContent = owned + '/' + COSMETICS.length;
-            container.innerHTML = Object.entries(COSMETIC_SLOTS).map(([slot, label]) =>
+            const left = COSMETICS.length - owned;
+            const fresh = lastCapsuleId ? COSMETIC_BY_ID.get(lastCapsuleId) : null;
+            const capsuleState = !left ? 'done' : totalGold >= DATA_CAPSULE_COST ? 'ready' : 'locked';
+            const capsule = '<div class="capsule-panel" data-state="' + capsuleState + '">' +
+                '<div class="capsule-info"><span class="capsule-title"><i class="fa-solid fa-cube"></i> VERİ KAPSÜLÜ</span>' +
+                '<span class="capsule-note">' + (left
+                    ? 'Sahip olmadığın ' + left + ' kostümden birini rastgele verir. Asla tekrar çıkmaz.'
+                    : 'Tüm kostümler sende. Kapsülde çıkacak bir şey kalmadı.') + '</span>' +
+                (fresh ? '<span id="capsuleResult" class="capsule-result"><span class="wardrobe-swatch">' + cosmeticSwatch(fresh) +
+                    '</span><span>ÇIKTI: <b>' + fresh.name + '</b> · ' + COSMETIC_SLOTS[fresh.slot] + '</span></span>' : '') +
+                '</div><button type="button" id="openCapsuleBtn" class="capsule-btn"' + (capsuleState === 'ready' ? '' : ' disabled') + '>' +
+                (left ? '<i class="fa-solid fa-coins"></i> ' + DATA_CAPSULE_COST.toLocaleString('tr-TR') + ' · AÇ' : 'TAMAMLANDI') +
+                '</button></div>';
+            container.innerHTML = capsule + Object.entries(COSMETIC_SLOTS).map(([slot, label]) =>
                 '<div class="wardrobe-slot"><span class="wardrobe-slot-title">' + label + '</span><div class="wardrobe-row">' +
                 COSMETICS.filter(c => c.slot === slot).map(c => {
                     const have = ownedCosmetics.has(c.id), worn = equippedCosmetics[slot] === c.id;
@@ -13085,10 +13117,18 @@
                         '<i class="fa-solid fa-coins"></i> ' + c.cost.toLocaleString('tr-TR');
                     const state = worn ? 'worn' : have ? 'owned' : afford ? 'buy' : 'locked';
                     return '<button type="button" class="wardrobe-item" data-cosmetic="' + c.id + '" data-state="' + state + '"' +
+                        (c.id === lastCapsuleId ? ' data-fresh="true"' : '') +
                         (state === 'locked' ? ' aria-disabled="true"' : '') + ' title="' + (worn ? 'Çıkarmak için tıkla' : c.name) + '">' +
                         '<span class="wardrobe-swatch">' + cosmeticSwatch(c) + '</span>' +
                         '<span class="wardrobe-name">' + c.name + '</span><span class="wardrobe-action">' + label + '</span></button>';
                 }).join('') + '</div></div>').join('');
+            container.querySelector?.('#openCapsuleBtn')?.addEventListener('click', () => {
+                if (!openDataCapsule()) return;
+                audio.init();
+                audio.playLevelUp();
+                renderShopItems();
+                updateMenuCounters();
+            });
             container.querySelectorAll?.('.wardrobe-item').forEach(btn => btn.addEventListener('click', () => {
                 const id = btn.dataset.cosmetic;
                 const ok = ownedCosmetics.has(id) ? toggleCosmetic(id) : buyCosmetic(id);

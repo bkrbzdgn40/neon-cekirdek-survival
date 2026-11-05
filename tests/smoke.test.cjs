@@ -8177,3 +8177,40 @@ test('Odak 5.2 costumes are bought, worn and saved, and never change the run', (
   assert.ok(worn.includes('fill:#ff6a3d'), 'core colour');
   assert.ok((worn.match(/lineTo/g) || []).length > (standard.match(/lineTo/g) || []).length, 'hexagon and comet trail draw lines');
 });
+
+test('Odak 5.3 the data capsule gives an unowned costume, never repeats and stops when all are owned', () => {
+  const store = {};
+  const x = JSON.parse(setup(store).run(`(()=>{
+    gameState='MENU';totalGold=299;
+    const poor=openDataCapsule(()=>0);
+    totalGold=300*20;buyCosmetic('core_gold');
+    const goldBefore=totalGold;
+    const first=openDataCapsule(()=>0);
+    const firstState={gold:goldBefore-totalGold,worn:equippedCosmetics[first.slot],last:lastCapsuleId};
+    renderShopItems();
+    const html=document.getElementById('shopCosmeticContainer').innerHTML;
+    const got=[first.id];
+    for(let i=0;i<20;i++){const it=openDataCapsule(()=>0.999999);if(!it)break;got.push(it.id);}
+    const afterAll={gold:totalGold,owned:ownedCosmetics.size,more:openDataCapsule(()=>0.5)};
+    renderShopItems();
+    const done=document.getElementById('shopCosmeticContainer').innerHTML;
+    return JSON.stringify({poor,first:first.id,firstState,got,afterAll,
+      fresh:(html.match(/data-fresh="true"/g)||[]).length,freshOn:/data-cosmetic="core_lava"[^>]*data-fresh/.test(html),
+      ready:/capsule-panel" data-state="ready"/.test(html),result:html.includes('ÇIKTI: <b>Lav Çekirdek</b>'),
+      doneState:/capsule-panel" data-state="done"/.test(done),disabled:/id="openCapsuleBtn"[^>]*disabled/.test(done)});})()`));
+  assert.equal(x.poor, null, 'not enough gold');
+  assert.equal(x.first, 'core_lava', 'owned costumes are skipped');
+  assert.deepEqual(x.firstState, { gold: 300, worn: 'core_gold', last: 'core_lava' }, 'costs 300 and does not change what is worn');
+  assert.equal(x.got.length, 15, 'the 15 unowned costumes come out once each');
+  assert.equal(new Set(x.got).size, 15, 'never a duplicate');
+  assert.ok(!x.got.includes('core_gold'));
+  assert.deepEqual(x.afterAll, { gold: 300 * 20 - 400 - 300 * 15, owned: 16, more: null });
+  assert.equal(x.fresh, 1);
+  assert.equal(x.freshOn, true, 'the new costume is marked in the grid');
+  assert.equal(x.ready, true);
+  assert.equal(x.result, true, 'the result names the costume');
+  assert.equal(x.doneState, true);
+  assert.equal(x.disabled, true, 'nothing left to give');
+  const again = JSON.parse(setup(store).run('JSON.stringify({owned:ownedCosmetics.size,gold:totalGold})'));
+  assert.deepEqual(again, { owned: 16, gold: 300 * 20 - 400 - 300 * 15 }, 'capsule results are saved');
+});
