@@ -3874,6 +3874,41 @@
             return RARITIES[0];
         }
 
+        // Odak 4.3 · cards that used to give the same value at every rarity.
+        // Index follows RARITIES: YAYGIN, NADİR, DESTANSI, EFSANEVİ. NADİR equals the
+        // old flat value, and a tier with no recorded pick (tests, debug) counts as NADİR.
+        const RARITY_CARD_VALUES = Object.freeze({
+            coolant: Object.freeze([.08, .10, .13, .16]),      // cooldown cut per tier
+            collector: Object.freeze([.12, .15, .19, .24]),    // extra XP per tier
+            circuit_weaver: Object.freeze([12, 16, 20, 24]),   // enemies one closure hits
+            phase_echo: Object.freeze([5, 6, 8, 10])           // enemies one echo lures
+        });
+        const RARITY_DEFAULT_INDEX = 1;
+        function rarityIndex(rarity) {
+            const index = RARITIES.findIndex(r => r.id === rarity?.id);
+            return index < 0 ? RARITY_DEFAULT_INDEX : index;
+        }
+        function rarityCardValue(id, rarity) {
+            return RARITY_CARD_VALUES[id][rarityIndex(rarity)];
+        }
+        function recordCardRarity(p, id, rarity) {
+            if (!p) return;
+            if (!p.cardRarities) p.cardRarities = {};
+            (p.cardRarities[id] ||= []).push(rarityIndex(rarity));
+        }
+        // One value per owned tier, in pick order.
+        function cardTierValues(p, id) {
+            const tier = Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.[id] || 0);
+            const picks = p?.cardRarities?.[id] || [];
+            const table = RARITY_CARD_VALUES[id];
+            return Array.from({ length: tier }, (_, i) => table[picks[i] ?? RARITY_DEFAULT_INDEX]);
+        }
+        // Caps (targets) use the rarest tier owned, not a sum.
+        function cardTierCap(p, id) {
+            const values = cardTierValues(p, id);
+            return values.length ? Math.max(...values) : RARITY_CARD_VALUES[id][RARITY_DEFAULT_INDEX];
+        }
+
         const EVOLUTION_DEFS = Object.freeze({
             circuit_weaver: { name: 'Yanan Çember', desc: 'Kapatılan devre 3,2 saniye daha elektrikli kalır; sınırdan geçen en fazla 16 düşmana bir kez zarar verir.' },
             phase_echo: { name: 'Çift Yankı', desc: 'Aynı anda iki Faz Yankısı aktif kalabilir; hologram süresi 4,1 saniyeye çıkar.' },
@@ -4062,8 +4097,9 @@
                 name: 'Devre Dokuyucu',
                 icon: 'fa-solid fa-draw-polygon',
                 color: '#ffe66d',
-                getDesc: () => `Hareketinle kapalı bir devre çiz: ${CIRCUIT_WEAVER.maxDuration} sn içinde sarı halkaya dön, içindeki en fazla 16 düşmanı vur. Atılım devreyi sıfırlar. 3. kademede sınırı elektrikli bırak.`,
-                apply: () => { /* Drawn movement path supplies the attack, not a weapon stat. */ }
+                getDesc: (r) => `Hareketinle kapalı bir devre çiz: ${CIRCUIT_WEAVER.maxDuration} sn içinde sarı halkaya dön, içindeki en fazla ${rarityCardValue('circuit_weaver', r)} düşmanı vur. Atılım devreyi sıfırlar. 3. kademede sınırı elektrikli bırak.`,
+                // The drawn path is the attack; rarity sets how many enemies a closure hits.
+                apply: (p, r) => recordCardRarity(p, 'circuit_weaver', r)
             },
             {
                 id: 'mine_trail',
@@ -4101,11 +4137,13 @@
                 name: 'Soğutucu',
                 icon: 'fa-solid fa-snowflake',
                 color: '#7dd3fc',
-                getDesc: () => 'Tüm bekleme sürelerini %10 kısaltır: Atılım, EMP, kalkan, Prizma ve zamanlı silahlar (disk, halka, devre, yankı).',
-                apply: (p) => {
-                    p.dashMaxCooldown = Math.max(COOLANT_RULES.dashMin, p.dashMaxCooldown * COOLANT_RULES.perTier);
-                    p.novaMaxCooldown = Math.max(COOLANT_RULES.novaMin, p.novaMaxCooldown * COOLANT_RULES.perTier);
-                    p.shieldMaxCooldown = Math.max(COOLANT_RULES.shieldMin, p.shieldMaxCooldown * COOLANT_RULES.perTier);
+                getDesc: (r) => `Tüm bekleme sürelerini %${Math.round(rarityCardValue('coolant', r) * 100)} kısaltır: Atılım, EMP, kalkan, Prizma ve zamanlı silahlar (disk, halka, devre, yankı).`,
+                apply: (p, r) => {
+                    recordCardRarity(p, 'coolant', r);
+                    const keep = 1 - rarityCardValue('coolant', r);
+                    p.dashMaxCooldown = Math.max(COOLANT_RULES.dashMin, p.dashMaxCooldown * keep);
+                    p.novaMaxCooldown = Math.max(COOLANT_RULES.novaMin, p.novaMaxCooldown * keep);
+                    p.shieldMaxCooldown = Math.max(COOLANT_RULES.shieldMin, p.shieldMaxCooldown * keep);
                 }
             },
             {
@@ -4114,8 +4152,8 @@
                 name: 'Toplayıcı',
                 icon: 'fa-solid fa-seedling',
                 color: '#86efac',
-                getDesc: () => 'Her XP küresi %15 daha fazla deneyim verir. Kademeler toplanır: 3. kademede +%45.',
-                apply: () => { /* XP bonus reads upgradeCounts.collector at pickup. */ }
+                getDesc: (r) => `Her XP küresi %${Math.round(rarityCardValue('collector', r) * 100)} daha fazla deneyim verir. Kademeler toplanır.`,
+                apply: (p, r) => recordCardRarity(p, 'collector', r)
             },
             {
                 id: 'phase_echo',
@@ -4124,8 +4162,8 @@
                 name: 'Faz Yankısı',
                 icon: 'fa-solid fa-clone',
                 color: '#6df7ff',
-                getDesc: () => 'Dash sonrasında geride bir hologram bırakır. Yakındaki en fazla 6 sıradan düşman kısa süreliğine holograma yönelir. Boss ve menzilli düşmanlar etkilenmez.',
-                apply: () => { /* Passive ability uses upgradeCounts, not combat stats. */ }
+                getDesc: (r) => `Dash sonrasında geride bir hologram bırakır. Yakındaki en fazla ${rarityCardValue('phase_echo', r)} sıradan düşman kısa süreliğine holograma yönelir. Boss ve menzilli düşmanlar etkilenmez.`,
+                apply: (p, r) => recordCardRarity(p, 'phase_echo', r)
             },
             {
                 id: 'multishot',
@@ -5325,7 +5363,7 @@
             sampleStep: 16, maxPoints: 72, maxDuration: 14,
             minLength: 340, minPoints: 12, closeRadius: 56,
             minArea: 8000, maxArea: 90000, maxJump: 90,
-            maxPulseTargets: 16, maxWireTargets: 16,
+            maxWireTargets: 16,
             cooldown: [0, 11, 9, 7], fieldSeconds: 3.2, fieldStep: .13
         });
         let circuitField = null;
@@ -5354,7 +5392,7 @@
             if (!tier || gameState !== 'PLAYING') return false;
             const impacted = [];
             for (const target of enemies) {
-                if (impacted.length >= CIRCUIT_WEAVER.maxPulseTargets) break;
+                if (impacted.length >= cardTierCap(p, 'circuit_weaver')) break;
                 if (target.dead || target.isBoss ||
                     !circuitContains(points, target.x, target.y)) continue;
                 impacted.push(target.id);
@@ -5836,8 +5874,8 @@
         // 10 % per tier (compounding); Collector (Toplayıcı) adds 15 % XP per
         // orb per tier. Dash/EMP/shield maxima change in apply(); timed weapons,
         // Prism and Phase Echo read getCooldownMult() when they start a cooldown.
-        const COOLANT_RULES = Object.freeze({ perTier: .9, dashMin: .8, novaMin: 4, shieldMin: 4, cryoRefund: 1 });
-        const COLLECTOR_RULES = Object.freeze({ perTier: .15, harvestEvery: 40 });
+        const COOLANT_RULES = Object.freeze({ dashMin: .8, novaMin: 4, shieldMin: 4, cryoRefund: 1 });
+        const COLLECTOR_RULES = Object.freeze({ harvestEvery: 40 });
         // Mayın Fırlatıcı: a dash end scatters three mines around the landing spot.
         function applyMineLauncher(p) {
             if (!p.synergies.has('mine_launcher')) return 0;
@@ -5869,7 +5907,7 @@
             return pulled;
         }
         function getCooldownMult(p = player) {
-            return Math.pow(COOLANT_RULES.perTier, Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.coolant || 0));
+            return cardTierValues(p, 'coolant').reduce((mult, cut) => mult * (1 - cut), 1);
         }
         function getPrismCooldown() {
             return PRISM_RULES.cooldown * getCooldownMult(player);
@@ -5884,7 +5922,7 @@
             return true;
         }
         function getCollectorXpMult(p = player) {
-            return 1 + COLLECTOR_RULES.perTier * Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.collector || 0);
+            return 1 + cardTierValues(p, 'collector').reduce((sum, bonus) => sum + bonus, 0);
         }
         function recordCollectorOrbs(p, count = 1) {
             if (!p.evolutions.has('collector')) return false;
@@ -5988,7 +6026,7 @@
         // projectile sources, no boss targeting changes or saved run state.
         const PHASE_ECHO = Object.freeze({
             eligible: ['SWARM', 'SPLITTER', 'TANK', 'SHIELD_BEARER'],
-            maxDecoys: 2, maxTargets: 6,
+            maxDecoys: 2,
             durations: [0, 2.6, 3.2, 4.1],
             cooldowns: [Infinity, 6, 4.5, 3.0],
             ranges: [0, 250, 265, 280]
@@ -6010,7 +6048,7 @@
                 Math.hypot(e.x - origin.x, e.y - origin.y) <= range)
                 .sort((a,b) => Math.hypot(a.x-origin.x,a.y-origin.y) -
                     Math.hypot(b.x-origin.x,b.y-origin.y) || a.id-b.id)
-                .slice(0, PHASE_ECHO.maxTargets);
+                .slice(0, cardTierCap(p, 'phase_echo'));
             // Nothing to misdirect? Do not consume a charge for an empty cast.
             if (!eligible.length) return false;
             p.phaseEchoReadyAt = totalTime + PHASE_ECHO.cooldowns[tier] * getCooldownMult(p);
@@ -9361,7 +9399,7 @@
             circuit: { tag: 'MODÜL', title: 'DEVRE ÖRÜCÜ', color: '#ffe66d', demo: 'circuit',
                 what: 'Yeni modülün: hareket ettikçe yere sarı bir devre çizersin.',
                 how: () => `Geniş bir tur at ve ${CIRCUIT_WEAVER.maxDuration} sn içinde sarı başlangıç halkasına dön. Halkadaki yay kalan süreyi gösterir. Atılım devreyi sıfırlar.`,
-                reward: 'Kapanan alanın içindeki en fazla 16 düşman vurulur.' }
+                reward: () => `Kapanan alanın içindeki en fazla ${cardTierCap(player, 'circuit_weaver')} düşman vurulur.` }
         });
         const GUIDE_QUEST_IDS = Object.freeze({ KILLS: 'quests', ORBS: 'quests' });
         let guidesSeen = new Set();
