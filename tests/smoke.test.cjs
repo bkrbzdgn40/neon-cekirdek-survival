@@ -7979,3 +7979,22 @@ test('Odak 4.6 ion chorus marks the harmony moment and draws less on low graphic
   assert.equal(x.at, 301);
   assert.ok(low > 0 && low < high, `low ${low} high ${high}`);
 });
+
+test('Odak 4.7 phase pincer records who landed or who was escaped, and low graphics draws less', () => {
+  let calls = 0;
+  const ctx = new Proxy({}, { get: () => () => { calls++; } });
+  const { run } = setup({}, { canvasContext: ctx });
+  const pincer = (escape) => JSON.parse(run(`(()=>{startNewGame();nextBossTime=1000;wave=13;waveTimer=2;totalTime=500;
+    player.x=640;player.y=420;enemies=[new Enemy(900,250,'SHOOTER'),new Enemy(420,620,'SHOOTER')];
+    for(const e of enemies)e.speed=0;updateArenaChapter(.02);const op=chapterShowcase;
+    if(${escape})player.x+=RIFT_PINCER.escapeRadius+20;
+    totalTime+=RIFT_PINCER.resolveAt+.01;updateArenaChapter(.02);
+    return JSON.stringify({evaded:!!op.evaded,resolved:Number.isFinite(op.resolvedAt),flanked:op.targets.map(t=>!!t.flanked)});})()`));
+  assert.deepEqual(pincer(false), { evaded: false, resolved: true, flanked: [true, true] });
+  assert.deepEqual(pincer(true), { evaded: true, resolved: true, flanked: [false, false] });
+  run(`startNewGame();nextBossTime=1000;wave=13;waveTimer=2;totalTime=600;player.x=640;player.y=420;
+    enemies=[new Enemy(900,250,'SHOOTER'),new Enemy(420,620,'SHOOTER')];updateArenaChapter(.02);totalTime+=1`);
+  const draw = (low) => { const before = calls; run(`drawRiftPincer(ctx,chapterShowcase,1,${low})`); return calls - before; };
+  const high = draw(false), low = draw(true);
+  assert.ok(low > 0 && low < high, `low ${low} high ${high}`);
+});

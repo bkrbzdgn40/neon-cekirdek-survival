@@ -7315,8 +7315,16 @@
             createFloatingText(player.x,player.y-65,'İYON KOROSU · REZONANS!',
                 '#86ffe0',17);
         }
+        // Odak 4.7 · shared by the resolve and the drawing.
+        const RIFT_PINCER = Object.freeze({ resolveAt: 2.2, lateWindow: .5, escapeRadius: 155, safeGap: 85 });
+        function riftPincerCancelled(target) {
+            const enemy = enemies.find(e => e.id === target.enemyId);
+            return !enemy || enemy.dead || enemy.isBoss || enemy.stunTimer > 0;
+        }
         function resolveRiftPincer(op) {
-            if(Math.hypot(player.x-op.anchorX,player.y-op.anchorY)>155){
+            op.resolvedAt=totalTime;
+            if(Math.hypot(player.x-op.anchorX,player.y-op.anchorY)>RIFT_PINCER.escapeRadius){
+                op.evaded=true;
                 chapterShowcaseStats.pincerEvades+=op.targets.length;
                 return;
             }
@@ -7324,10 +7332,11 @@
                 const enemy=enemies.find(e=>e.id===target.enemyId);
                 if(!enemy||enemy.dead||enemy.isBoss||enemy.stunTimer>0||
                     Math.hypot(player.x-target.x,player.y-target.y)<
-                    player.radius+enemy.radius+85){
+                    player.radius+enemy.radius+RIFT_PINCER.safeGap){
                     chapterShowcaseStats.pincerEvades++;
                     continue;
                 }
+                target.flanked=true;
                 enemy.x=target.x;enemy.y=target.y;
                 enemy.state='CHASE';
                 enemy.stunTimer=Math.max(enemy.stunTimer,.65);
@@ -7354,9 +7363,9 @@
                         if(elapsed<moment+FOUNDRY_PRESS.lateWindow)fireFoundryPress(i);
                     }
                 }
-            }else if(op.id==='RIFT'&&!op.completed&&elapsed>=2.2){
+            }else if(op.id==='RIFT'&&!op.completed&&elapsed>=RIFT_PINCER.resolveAt){
                 op.completed=true;
-                if(elapsed<2.7)resolveRiftPincer(op);
+                if(elapsed<RIFT_PINCER.resolveAt+RIFT_PINCER.lateWindow)resolveRiftPincer(op);
                 chapterShowcaseStats.completed++;
             }
             if(totalTime>=op.endAt){
@@ -7540,6 +7549,123 @@
             }
             ctx.restore();
         }
+        // Odak 4.7 · Faz Kıskacı. Before the snap: a circle the player must leave, a beam
+        // from each marked enemy to its hologram landing spot, and a closing countdown.
+        // After: rift tears where enemies landed, or shattering holograms if evaded.
+        function drawRiftPincer(ctx, op, elapsed, low) {
+            const violet = '#e3a6ff', safe = '#7dffb0', R = RIFT_PINCER;
+            const clock = PREFERS_REDUCED_VFX_MOTION ? 0 : totalTime;
+            ctx.save();
+            ctx.textAlign = 'center';
+            if (!op.completed) {
+                const k = Math.min(1, elapsed / R.resolveAt);
+                const out = Math.hypot(player.x - op.anchorX, player.y - op.anchorY) > R.escapeRadius;
+                const col = out ? safe : violet;
+                // Escape circle with dashes that run outward.
+                ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.globalAlpha = .55 + .35 * k;
+                ctx.setLineDash([14, 10]); ctx.lineDashOffset = -clock * 40;
+                ctx.beginPath(); ctx.arc(op.anchorX, op.anchorY, R.escapeRadius, 0, Math.PI * 2); ctx.stroke();
+                ctx.setLineDash([]); ctx.lineDashOffset = 0;
+                if (!low && !out) {
+                    // Four chevrons drifting outward: "leave this circle".
+                    const drift = (clock * 1.6) % 1;
+                    ctx.lineWidth = 3; ctx.globalAlpha = .8 * (1 - drift);
+                    for (let q = 0; q < 4; q++) {
+                        const a = q * Math.PI / 2 + Math.PI / 4;
+                        const d = R.escapeRadius - 34 + 26 * drift;
+                        const x = op.anchorX + Math.cos(a) * d, y = op.anchorY + Math.sin(a) * d;
+                        ctx.beginPath();
+                        ctx.moveTo(x + Math.cos(a + 2.4) * 9, y + Math.sin(a + 2.4) * 9);
+                        ctx.lineTo(x, y);
+                        ctx.lineTo(x + Math.cos(a - 2.4) * 9, y + Math.sin(a - 2.4) * 9);
+                        ctx.stroke();
+                    }
+                }
+                ctx.globalAlpha = 1; ctx.fillStyle = col;
+                ctx.font = "800 13px 'Orbitron', sans-serif";
+                ctx.fillText(out ? 'GÜVENDESİN' : 'UZAKLAŞ · ' + Math.max(0, R.resolveAt - elapsed).toFixed(1),
+                    op.anchorX, op.anchorY - R.escapeRadius - 12);
+                for (const target of op.targets) {
+                    const enemy = enemies.find(e => e.id === target.enemyId);
+                    const cancelled = riftPincerCancelled(target);
+                    ctx.globalAlpha = cancelled ? .3 : 1;
+                    // Beam from the enemy to where it will land.
+                    if (enemy && !cancelled) {
+                        ctx.strokeStyle = violet; ctx.lineWidth = 2;
+                        ctx.setLineDash([10, 8]); ctx.lineDashOffset = -clock * 70;
+                        ctx.beginPath(); ctx.moveTo(enemy.x, enemy.y); ctx.lineTo(target.x, target.y); ctx.stroke();
+                        ctx.setLineDash([]); ctx.lineDashOffset = 0;
+                        ctx.lineWidth = 2.5;
+                        ctx.beginPath(); ctx.arc(enemy.x, enemy.y, enemy.radius + 9, 0, Math.PI * 2); ctx.stroke();
+                        if (!low) {
+                            ctx.fillStyle = violet; ctx.font = "700 9px 'Orbitron', sans-serif";
+                            ctx.fillText('DURDUR', enemy.x, enemy.y - enemy.radius - 14);
+                        }
+                    }
+                    // Hologram: rotating diamond, scan lines inside, flickering ghost.
+                    ctx.save(); ctx.translate(target.x, target.y);
+                    ctx.strokeStyle = violet; ctx.lineWidth = 2.5;
+                    ctx.rotate(clock * .8);
+                    ctx.beginPath(); ctx.moveTo(0, -46); ctx.lineTo(46, 0); ctx.lineTo(0, 46); ctx.lineTo(-46, 0); ctx.closePath();
+                    ctx.stroke();
+                    if (!low) {
+                        ctx.save(); ctx.clip();
+                        ctx.rotate(-clock * .8);
+                        ctx.globalAlpha *= .35; ctx.lineWidth = 1.5;
+                        const scroll = (clock * 40) % 8;
+                        for (let y = -48 + scroll; y < 48; y += 8) {
+                            ctx.beginPath(); ctx.moveTo(-48, y); ctx.lineTo(48, y); ctx.stroke();
+                        }
+                        ctx.restore();
+                    }
+                    ctx.restore();
+                    const flicker = low ? .6 : .45 + .3 * Math.abs(Math.sin(clock * 23 + target.x));
+                    ctx.globalAlpha = (cancelled ? .3 : 1) * flicker;
+                    ctx.fillStyle = violet;
+                    ctx.beginPath(); ctx.arc(target.x, target.y, (enemy?.radius || 14), 0, Math.PI * 2); ctx.fill();
+                    // Countdown ring closes onto the spot.
+                    ctx.globalAlpha = cancelled ? .3 : .95; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3;
+                    ctx.beginPath(); ctx.arc(target.x, target.y, 30, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - k)); ctx.stroke();
+                    if (cancelled) {
+                        ctx.strokeStyle = safe; ctx.lineWidth = 4; ctx.globalAlpha = .9;
+                        ctx.beginPath(); ctx.moveTo(target.x - 16, target.y - 16); ctx.lineTo(target.x + 16, target.y + 16);
+                        ctx.moveTo(target.x + 16, target.y - 16); ctx.lineTo(target.x - 16, target.y + 16); ctx.stroke();
+                    }
+                }
+            } else if (Number.isFinite(op.resolvedAt)) {
+                const since = totalTime - op.resolvedAt;
+                for (const target of op.targets) {
+                    if (target.flanked) {
+                        // Rift tear: a slit that opens and closes where the enemy landed.
+                        const t = Math.min(1, since / .55);
+                        const open = Math.sin(Math.PI * t);
+                        if (open <= 0) continue;
+                        ctx.globalAlpha = .9 * open;
+                        ctx.fillStyle = violet;
+                        if (!low) { ctx.shadowColor = violet; ctx.shadowBlur = 22; }
+                        ctx.beginPath(); ctx.ellipse(target.x, target.y, 4 + 18 * open, 46, 0, 0, Math.PI * 2); ctx.fill();
+                        ctx.shadowBlur = 0; ctx.fillStyle = '#ffffff';
+                        ctx.beginPath(); ctx.ellipse(target.x, target.y, 2 + 5 * open, 34, 0, 0, Math.PI * 2); ctx.fill();
+                    } else if (since < .6) {
+                        // Evaded or cancelled: the hologram breaks into shards.
+                        const t = since / .6;
+                        ctx.globalAlpha = 1 - t; ctx.strokeStyle = violet; ctx.lineWidth = 2.5;
+                        for (let q = 0; q < (low ? 2 : 4); q++) {
+                            const a = q * Math.PI / 2 + Math.PI / 4;
+                            const d = 20 + 50 * t;
+                            const x = target.x + Math.cos(a) * d, y = target.y + Math.sin(a) * d;
+                            ctx.beginPath(); ctx.moveTo(x - 8, y); ctx.lineTo(x, y - 10); ctx.lineTo(x + 8, y); ctx.stroke();
+                        }
+                    }
+                }
+                if (op.evaded && since < 1) {
+                    ctx.globalAlpha = 1 - since; ctx.fillStyle = safe;
+                    ctx.font = "800 14px 'Orbitron', sans-serif";
+                    ctx.fillText('KISKAÇTAN KAÇTIN', player.x, player.y - 48);
+                }
+            }
+            ctx.restore();
+        }
         function drawChapterShowcase(ctx) {
             if(!chapterShowcase||!chapterEffectsAllowed())return;
             const op=chapterShowcase;
@@ -7551,26 +7677,7 @@
             }else if(op.id==='GARDEN'){
                 drawIonChorus(ctx, op, low);
             }else if(op.id==='RIFT'){
-                const gates=getRiftCenters();
-                ctx.strokeStyle='#e3a6ff';ctx.lineWidth=3;
-                ctx.globalAlpha=op.completed?.25:.95;
-                if(!op.completed)ctx.setLineDash([10,8]);
-                for(const target of op.targets){
-                    const from=target.x<worldWidth*.5?gates[0]:gates[1];
-                    ctx.beginPath();ctx.moveTo(from.x,from.y);
-                    ctx.lineTo(target.x,target.y);ctx.stroke();
-                    ctx.beginPath();
-                    for(let k=0;k<4;k++){
-                        const a=k*Math.PI/2;
-                        const x=target.x+Math.cos(a)*50;
-                        const y=target.y+Math.sin(a)*50;
-                        if(k===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
-                    }
-                    ctx.closePath();ctx.stroke();
-                    ctx.beginPath();ctx.arc(target.x,target.y,
-                        20+Math.max(0,2.2-elapsed)*8,0,Math.PI*2);ctx.stroke();
-                }
-                ctx.setLineDash([]);
+                drawRiftPincer(ctx, op, elapsed, low);
             }
             ctx.restore();
         }

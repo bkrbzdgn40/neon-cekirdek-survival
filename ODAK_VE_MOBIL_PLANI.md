@@ -479,7 +479,7 @@ En fazla 3 ücretsiz hak, koşu başına 1 altınlı dirilme (fiyat dalgayla art
 
 ### - [x] 4.5 Kızıl Makas görseli ve tehlikesi
 ### - [x] 4.6 İyon Korosu görseli
-### - [ ] 4.7 Faz Kıskacı görseli
+### - [x] 4.7 Faz Kıskacı görseli
 Biyom olayları animasyonlu tuval çizimi olur; dosya eklenmez, düşük grafikte sadeleşir.
 
 ## Özet takvim
