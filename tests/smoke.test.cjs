@@ -2038,18 +2038,6 @@ test('M4.1 selected chassis badges and mode labels stay short', () => {
 });
 
 
-test('M4.2 menu exposes unique chassis controls, details and six mechanic cards', () => {
-  for (const cls of ['VANGUARD','PHANTOM','TITAN'])
-    assert.equal((html.match(new RegExp('data-chassis="' + cls + '"','g'))||[]).length,1);
-  for (const id of ['tabProtocolContent','menuChassisDetail','menuChassisDetailTitle',
-    'menuChassisAdvice','menuChassisDifficulty','menuCorePreviewDot',
-    'menuLoadoutSummary','startBtn','tabCodexContent'])
-    assert.equal((html.match(new RegExp('id="' + id + '"','g'))||[]).length,1,id);
-  for (const label of ['HAREKET','ATILIM','EMP NOVA','MOMENTUM',
-    'SİBER CİNNET','DEFİBRİLATÖR','M · KONTROL MODU'])
-    assert.ok(html.includes(label),label);
-  assert.equal((html.match(/class="menu-protocol-v2 rounded-xl/g)||[]).length,6);
-});
 
 test('M4.2 selected chassis displays accurate contextual advantages', () => {
   const {run}=setup();
@@ -2103,47 +2091,9 @@ test('M4.2 displayed HP and revives equal actual new-run player stats', () => {
   assert.ok(result.VANGUARD.damage>result.PHANTOM.damage);
 });
 
-test('M4.2 keeps previous game and menu entry points intact', () => {
-  for(const id of ['openShopFromMenuBtn','tabProtocolBtn','tabCodexBtn',
-    'tabCodexContent','startBtn','selectedChassisBadge','menuHighScore',
-    'menuMaxWave','menuGoldText','shopGoldBalance'])
-    assert.equal((html.match(new RegExp('id="' + id + '"','g'))||[]).length,1,id);
-  for(const anchor of ['function startNewGame()','class CombatDirector',
-    'const EVOLUTION_DEFS','playThreatCue'])
-    assert.ok(html.includes(anchor),anchor);
-});
-
-test('M4.2 restores scrolling and removes redundant footer status', () => {
-  const tag=html.match(/<div id="startModal"[^>]+>/)?.[0]||'';
-  assert.ok(tag.includes('overflow-y-auto'));
-  assert.equal(tag.includes('lg:overflow-hidden'),false);
-  assert.equal(html.includes('100% DİNAMİK TAM EKRAN ARAYÜZ AKTİF'),false);
-  assert.ok(html.includes('xl:grid-cols-3 gap-2.5 items-stretch'));
-});
 
 
-test('M4.2.1 menu dashboard uses natural-height balanced columns', () => {
-  const dashboard=html.match(/<main id="preflightDashboard"[^>]*>/)?.[0]||'';
-  assert.ok(dashboard.includes('items-start'));
-  assert.equal(dashboard.includes('flex-1'),false);
-  assert.equal(dashboard.includes('items-stretch'),false);
-  const mainHeader=html.match(/<div id="startModal"[^>]*>[\s\S]{0,250}/)?.[0]||'';
-  assert.ok(mainHeader.includes('justify-center'));
-  assert.ok(html.includes('#preflightDashboard > section {height:auto;min-height:0;}'));
-});
 
-test('M4.2.1 readiness metrics appear once in the right-side preflight above Start', () => {
-  const a=html.indexOf('class="lg:col-span-7 flex flex-col');
-  const metrics=html.indexOf('id="preflightReadiness"');
-  const start=html.indexOf('id="startBtn"');
-  const left=html.indexOf('class="lg:col-span-5 flex flex-col');
-  assert.ok(left>0 && a>left);
-  assert.ok(metrics>a && start>metrics);
-  assert.equal((html.match(/id="menuLoadoutSummary"/g)||[]).length,1);
-  for(const id of ['menuHighScore','menuMaxWave','selectedChassisBadge',
-    'menuChassisDetail','tabProtocolContent','tabCodexContent','openShopFromMenuBtn'])
-    assert.equal((html.match(new RegExp('id="' + id + '"','g'))||[]).length,1,id);
-});
 
 test('M4.2.1 stat calculations still update after relocating readiness panel', () => {
   const {run}=setup();
@@ -2163,16 +2113,6 @@ test('M4.2.1 stat calculations still update after relocating readiness panel', (
   }
   assert.ok(values.TITAN.hp>values.VANGUARD.hp);
   assert.ok(values.VANGUARD.revives>values.PHANTOM.revives);
-});
-
-test('M4.2.1 both dashboard tabs and all game entry points are still wired', () => {
-  for(const name of ['tabProtocolBtn','tabCodexBtn','tabProtocolContent',
-    'tabCodexContent','startBtn','openShopFromMenuBtn'])
-    assert.equal((html.match(new RegExp('id="' + name + '"','g'))||[]).length,1,name);
-  assert.ok(html.includes("tabProtocolContent.classList.remove('hidden')"));
-  assert.ok(html.includes("tabCodexContent.classList.remove('hidden')"));
-  assert.ok(html.includes('overflow-y-auto'));
-  assert.equal(html.includes('lg:h-[100dvh]'),false);
 });
 
 
@@ -7770,4 +7710,34 @@ test('Odak 3.7 backups carry owned content and reject unknown ids', () => {
   assert.deepEqual(x.old, []);
   assert.equal(x.restored, true);
   assert.deepEqual(x.owned, ['PHANTOM', 'coolant']);
+});
+
+test('Odak 3.8 next goal walks collection, then lab, then the record', () => {
+  const { run } = setup({}, { unlockAll: false });
+  const x = JSON.parse(run(`(()=>{
+    const out=[];totalGold=0;out.push(getMenuNextGoal());
+    totalGold=1000;out.push(getMenuNextGoal());
+    CONTENT_UNLOCKS.forEach(c=>ownedContent.add(c.id));out.push(getMenuNextGoal());
+    META_SHOP_ITEMS.forEach(i=>metaUpgrades[i.key]=i.maxLevel);out.push(getMenuNextGoal());
+    return JSON.stringify(out.map(g=>({kind:g.kind,id:g.id,ready:g.ready})));})()`));
+  assert.deepEqual(x[0], { kind: 'content', id: 'coolant', ready: false });
+  // With 1000 gold the cheapest locked item is affordable, so the card says it is ready.
+  assert.equal(x[1].kind, 'content');
+  assert.equal(x[1].ready, true);
+  assert.equal(x[2].kind, 'lab');
+  assert.equal(x[3].kind, 'record');
+});
+
+test('Odak 3.8 the last run summary survives a reload and ignores broken saves', () => {
+  const store = {};
+  const { run } = setup(store);
+  run(`startNewGame();wave=7;score=4321;sessionGold=333;totalTime=125.4;triggerGameOver();`);
+  const reloaded = setup(store);
+  assert.deepEqual(JSON.parse(reloaded.run('JSON.stringify(lastRunSummary)')),
+    { score: 4321, wave: 7, seconds: 125, gold: 333, chassis: 'VANGUARD' });
+  assert.equal(reloaded.run('formatRunClock(125)'), '2:05');
+  const saved = JSON.parse(store['neonCekirdek.meta.v1']);
+  saved.lastRun = { score: -5, wave: 'x' };
+  store['neonCekirdek.meta.v1'] = JSON.stringify(saved);
+  assert.equal(setup(store).run('lastRunSummary'), null);
 });

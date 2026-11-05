@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 3.8 · Hangar ana menüsü
+- Menü üç sütun: solda kimlik ve şasi seçimi; ortada seçili şasinin canlı önizlemesi (`hangarPreview`; düşmanlar yaklaşır, çekirdek ateş eder) ve başlat; sağda sıradaki hedef, başlangıç gücü ve son operasyon. Sütunlar aynı çizgide bitiyor, 1280×800 ve 1920×1080'de kaydırma yok.
+- "Sıradaki hedef" en ucuz kilitli içeriği altın çubuğuyla gösteriyor, koleksiyon bitince Laboratuvara, o da bitince rekora geçiyor. Son koşu kayıtta (`lastRun`); ilk açılışta yerine 3 adımlık rehber çıkıyor.
+- Kontroller ve tehditler "Nasıl oynanır" penceresine taşındı (Escape kapatır). Altı yerleşim regex testi davranış testleriyle değiştirildi.
+
 ## Odak 3.7 · Altınla içerik açma
 - Siber Laboratuvarda yeni Koleksiyon bölümü: Hayalet (1.200) ve Titan (1.800) şasileri, Mayın İzi, Bumerang Disk, Şok Halkası, Soğutucu ve Toplayıcı (700–1.300) bir kez alınır. Toplam 7.800 altın.
 - Açılmamış silah ve pasifler yükseltme kartlarında çıkmaz. Kilitli şasi kartı fiyatı gösterir ve tıklanınca Laboratuvarı açar. Satın alınan şasi hemen seçilir.

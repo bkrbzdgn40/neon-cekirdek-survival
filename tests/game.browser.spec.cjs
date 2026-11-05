@@ -1050,7 +1050,11 @@ test('Odak 1.4 reaching wave 3 on a clean save opens EMP and Quests and spotligh
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await gotoGame(page,'/index.html',{unlockAll:false});
  await expect(page.locator('#startBtn')).toBeVisible();
- await expect(page.locator('#startModal [data-system="emp"]')).toBeHidden();
+ // Odak 3.8 · the control cards live in the How to play panel.
+ await page.locator('#howToBtn').click();
+ await expect(page.locator('#howToModal')).toBeVisible();
+ await expect(page.locator('#howToModal [data-system="emp"]')).toBeHidden();
+ await page.locator('#closeHowToBtn').click();
  await expect(page.locator('#menuUnlockHint')).toHaveText("Yeni protokol: Dalga 3'e ulaşınca açılır.");
  await page.locator('#startBtn').click();
  await expect(page.locator('#novaBtn')).toBeHidden();
@@ -1071,7 +1075,10 @@ test('Odak 1.4 reaching wave 3 on a clean save opens EMP and Quests and spotligh
  await page.evaluate(()=>{totalTime+=20;updateHUD();});
  await expect(nova).not.toHaveClass(/system-spotlight/);
  await page.reload({waitUntil:'domcontentloaded'});
- await expect(page.locator('#startModal [data-system="emp"]')).toBeVisible();
+ await page.locator('#howToBtn').click();
+ await expect(page.locator('#howToModal [data-system="emp"]')).toBeVisible();
+ await page.keyboard.press('Escape');
+ await expect(page.locator('#howToModal')).toBeHidden();
  await expect(page.locator('#menuUnlockHint')).toHaveText("Yeni protokol: Dalga 5'e ulaşınca açılır.");
  expect(errors).toEqual([]);
 });
@@ -1385,9 +1392,12 @@ test('Odak 2.7e touch screens get touch wording instead of keyboard hints',async
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await gotoGame(page,'/index.html');
  const shown=sel=>page.evaluate(sel=>[...document.querySelectorAll(sel)].some(el=>el.checkVisibility()),sel);
- // Menu: control cards and the shortcut footer.
+ // Menu: the shortcut footer, then the control cards in the How to play panel.
  expect(await shown('#startModal .key-hint')).toBe(!isMobile);
- expect(await shown('#startModal .touch-hint')).toBe(!!isMobile);
+ await page.locator('#howToBtn').click();
+ expect(await shown('#howToModal .key-hint')).toBe(!isMobile);
+ expect(await shown('#howToModal .touch-hint')).toBe(!!isMobile);
+ await page.locator('#closeHowToBtn').click();
  await page.locator('#startBtn').click();
  // Upgrade cards: [1] [2] [3] and the R reroll key are keyboard-only.
  await page.evaluate(()=>triggerLevelUp());
@@ -1487,5 +1497,49 @@ test('Odak 3.7 a locked chassis opens the lab, and buying it selects it',async({
  await expect(titan).toHaveAttribute('data-locked','false');
  await expect(titan).toHaveClass(/active/);
  await expect(page.locator('#selectedChassisBadge')).toHaveText('TİTAN');
+ expect(errors).toEqual([]);
+});
+
+test('Odak 3.8 hangar fills desktop screens, keeps columns level and draws a live preview',async({page,isMobile})=>{
+ test.skip(!!isMobile,'desktop layout');
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ for(const [width,height] of [[1280,800],[1920,1080]]){
+  await page.setViewportSize({width,height});
+  await gotoGame(page,'/index.html',{unlockAll:false});
+  await expect(page.locator('#startBtn')).toBeVisible();
+  await page.waitForTimeout(400);
+  const m=await page.evaluate(()=>{
+   const box=el=>el.getBoundingClientRect();
+   const bottoms=[...document.querySelectorAll('#preflightDashboard > section')].map(el=>Math.round(box(el).bottom));
+   const modal=document.getElementById('startModal');
+   const c=document.getElementById('hangarCanvas');
+   const px=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
+   let lit=0;for(let i=3;i<px.length;i+=16)if(px[i]>0)lit++;
+   return {bottoms,scrolls:modal.scrollHeight>modal.clientHeight+1&&getComputedStyle(modal).overflowY!=='hidden',
+     start:box(document.getElementById('startBtn')).bottom,lit};
+  });
+  expect(m.bottoms.length,`${width}x${height}`).toBe(3);
+  expect(Math.max(...m.bottoms)-Math.min(...m.bottoms),`${width}x${height} columns end together`).toBeLessThanOrEqual(2);
+  expect(m.scrolls,`${width}x${height} needs no scrolling`).toBe(false);
+  expect(m.start).toBeLessThanOrEqual(height);
+  expect(m.lit,'the hangar canvas draws the chassis').toBeGreaterThan(50);
+ }
+ // The goal card points at the cheapest locked item; the last run card fills after a run.
+ await expect(page.locator('#menuNextGoalBody')).toContainText('Soğutucu');
+ await expect(page.locator('#menuLastRunBody')).toHaveAttribute('data-empty','true');
+ await page.locator('#startBtn').click();
+ await page.evaluate(()=>{wave=4;score=1234;sessionGold=210;triggerGameOver();});
+ await page.locator('#backToMenuBtn').click();
+ await expect(page.locator('#menuLastRunBody')).toHaveAttribute('data-empty','false');
+ await expect(page.locator('#menuLastRunBody')).toContainText('1.234');
+ await expect(page.locator('#menuLastRunBody')).toContainText('+210');
+ // How to play: both tabs still switch inside the panel.
+ await page.locator('#howToBtn').click();
+ await expect(page.locator('#tabProtocolContent')).toBeVisible();
+ await page.locator('#tabCodexBtn').click();
+ await expect(page.locator('#tabCodexContent')).toBeVisible();
+ await expect(page.locator('#tabProtocolContent')).toBeHidden();
+ await page.locator('#closeHowToBtn').click();
+ await expect(page.locator('#howToModal')).toBeHidden();
  expect(errors).toEqual([]);
 });
