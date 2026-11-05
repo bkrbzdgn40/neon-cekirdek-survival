@@ -731,8 +731,8 @@
               what: 'Seni kendine çeken bir yerçekimi kuyusu açar.',
               counter: 'Çekime karşı yürü ve sürünün içine çekilme; uzaktan erit.' },
             { id: 'ELITE', name: 'ELİT', color: '#ffd166', sides: 7, tag: 'ELİT',
-              what: 'Altın haleli, güçlendirilmiş düşman: daha çok can ve hasar.',
-              counter: 'Öldürünce sandık bırakabilir; odaklan ama çevreni kolla.' },
+              what: 'Altın haleli, güçlendirilmiş düşman. Her elit bir özellik taşır: Kalkanlı, Bölünen, Hızlandırıcı, Hırsız, Yansıtıcı.',
+              counter: 'Başındaki etiketi oku: kalkanı durmadan vur, hırsızı önce düşür, hızlandırıcıyı sürüden ayır.' },
             { id: 'BOSS_DESTROYER', name: 'MEGA-ÇEKİRDEK YIKICI', color: '#ff0055', sides: 8, tag: 'BOSS',
               what: 'Çevresine halka halinde mermi yaylımları saçar.',
               counter: 'Halkaların boşluğunu bul ve oradan geç.' },
@@ -3159,6 +3159,98 @@
         }
 
         let enemyIdCounter = 1;
+        // Odak 5.9 · every elite carries one readable trait; new traits open with the waves.
+        const ELITE_AFFIXES = Object.freeze([
+            Object.freeze({ id: 'SHIELDED', name: 'KALKANLI', color: '#5ec8ff', from: 1 }),
+            Object.freeze({ id: 'SPLITTING', name: 'BÖLÜNEN', color: '#ff8ad8', from: 4 }),
+            Object.freeze({ id: 'HASTE', name: 'HIZLANDIRICI', color: '#7dffb0', from: 6 }),
+            Object.freeze({ id: 'THIEF', name: 'HIRSIZ', color: '#c49bff', from: 8 }),
+            Object.freeze({ id: 'REFLECT', name: 'YANSITICI', color: '#ffb35c', from: 10 })
+        ]);
+        const ELITE_AFFIX_RULES = Object.freeze({
+            shieldShare: 0.30, shieldIdle: 3, shieldRegen: 0.20,
+            splitCount: 2, splitHpShare: 0.35, splitXpShare: 0.6,
+            hasteRadius: 180, hasteMult: 1.3, hasteTick: 0.25,
+            thiefRadius: 150, thiefPull: 260, thiefPayout: 1.5,
+            reflectEvery: 5, reflectGap: 0.4, reflectSpeed: 320
+        });
+        function pickEliteAffix(w = wave) {
+            const pool = ELITE_AFFIXES.filter(a => a.from <= w);
+            return pool.length ? pool[Math.floor(rng() * pool.length)] : null;
+        }
+        function applyEliteAffix(e, affix) {
+            e.affix = affix;
+            if (!affix) return;
+            if (affix.id === 'SHIELDED') { e.affixShieldMax = e.maxHp * ELITE_AFFIX_RULES.shieldShare; e.affixShield = e.affixShieldMax; e.affixShieldIdle = 0; }
+            if (affix.id === 'THIEF') e.stolenXp = 0;
+            if (affix.id === 'REFLECT') { e.reflectHits = 0; e.reflectReadyAt = 0; }
+            if (affix.id === 'HASTE') e.hasteTick = 0;
+        }
+        function updateEliteAffix(e, dt) {
+            const R = ELITE_AFFIX_RULES;
+            switch (e.affix.id) {
+                case 'SHIELDED':
+                    e.affixShieldIdle += dt;
+                    if (e.affixShieldIdle >= R.shieldIdle)
+                        e.affixShield = Math.min(e.affixShieldMax, e.affixShield + e.affixShieldMax * R.shieldRegen * dt);
+                    break;
+                case 'HASTE':
+                    e.hasteTick -= dt;
+                    if (e.hasteTick > 0) break;
+                    e.hasteTick = R.hasteTick;
+                    for (const other of enemies) {
+                        if (other === e || other.dead || other.isBoss) continue;
+                        if (Math.hypot(other.x - e.x, other.y - e.y) < R.hasteRadius) other.affixHasteUntil = totalTime + R.hasteTick + 0.15;
+                    }
+                    break;
+                case 'THIEF':
+                    for (const orb of orbs) {
+                        if (orb.dead || orb.isGold || orb.magnetized) continue;
+                        const dx = e.x - orb.x, dy = e.y - orb.y, d = Math.hypot(dx, dy);
+                        if (d > R.thiefRadius) continue;
+                        if (d < e.radius + 6) { orb.dead = true; e.stolenXp += orb.value; continue; }
+                        orb.x += dx / d * R.thiefPull * dt;
+                        orb.y += dy / d * R.thiefPull * dt;
+                    }
+                    break;
+            }
+        }
+        // Runs on every hit after damage modifiers; returns the damage left for HP.
+        function eliteAffixOnHit(e, damage) {
+            const R = ELITE_AFFIX_RULES;
+            if (e.affix.id === 'SHIELDED') {
+                e.affixShieldIdle = 0;
+                const absorbed = Math.min(e.affixShield, damage);
+                e.affixShield -= absorbed;
+                return damage - absorbed;
+            }
+            if (e.affix.id === 'REFLECT' && ++e.reflectHits >= R.reflectEvery && totalTime >= e.reflectReadyAt) {
+                e.reflectHits = 0;
+                e.reflectReadyAt = totalTime + R.reflectGap;
+                const a = Math.atan2(player.y - e.y, player.x - e.x);
+                enemyProjectiles.push(new EnemyProjectile(e.x, e.y, Math.cos(a) * R.reflectSpeed, Math.sin(a) * R.reflectSpeed,
+                    6, Math.round(12 * Math.min(2.7, 1 + (wave - 1) * 0.08)), e.affix.color));
+            }
+            return damage;
+        }
+        function eliteAffixOnDeath(e) {
+            const R = ELITE_AFFIX_RULES;
+            if (e.affix.id === 'SPLITTING') {
+                for (let i = 0; i < R.splitCount && enemies.length < MAX_ACTIVE_ENEMIES; i++) {
+                    const copy = new Enemy(e.x + (i ? 18 : -18), e.y, e.type, false);
+                    copy.maxHp = copy.hp = Math.max(1, Math.round(e.maxHp * R.splitHpShare));
+                    copy.radius *= 0.8;
+                    copy.xpValue = Math.round(copy.xpValue * R.splitXpShare);
+                    enemies.push(copy);
+                }
+            }
+            if (e.affix.id === 'THIEF' && e.stolenXp > 0) {
+                const payout = Math.round(e.stolenXp * R.thiefPayout);
+                emitEnergyOrb(e.x, e.y, payout, false);
+                createFloatingText(e.x, e.y - 34, `ÇALINAN XP ×1.5 · +${payout}`, e.affix.color, 14);
+            }
+        }
+
         class Enemy {
             constructor(x, y, type, isElite = false, tacticalMeta = null) {
                 this.id = enemyIdCounter++;
@@ -3330,12 +3422,19 @@
                     this.scoreValue *= 3;
                 }
                 this.xpValue = Math.round(this.xpValue * lateXpMult(wave));
+                applyEliteAffix(this, this.isElite ? pickEliteAffix(wave) : null);
+                if (this.affix && gameState === 'PLAYING' && player)
+                    createFloatingText(x, y - 30, `ELİT · ${this.affix.name}`, this.affix.color, 14);
 
                 this.hp = this.maxHp;
             }
 
             update(dt) {
                 const steeringStartX = this.x, steeringStartY = this.y;
+                // A nearby HIZLANDIRICI elite speeds this foe up for this frame only.
+                const affixHaste = (this.affixHasteUntil || 0) > totalTime ? ELITE_AFFIX_RULES.hasteMult : 1;
+                this.speed *= affixHaste;
+                if (this.affix) updateEliteAffix(this, dt);
                 if (this.isBoss) {
                     this.bossEntranceAge = Math.min(.8, this.bossEntranceAge + dt);
                     this.bossHitFlash = Math.max(0, this.bossHitFlash - dt*3.8);
@@ -3614,6 +3713,7 @@
                 this.pushVx *= Math.pow(0.04, dt);
                 this.pushVy *= Math.pow(0.04, dt);
                 this.rotation += (this.isBoss ? (this.enraged ? 2.2 : 1.3) : 2.5) * dt;
+                this.speed /= affixHaste;
             }
 
             updateBossPhases(dt, dx, dy) {
@@ -3658,7 +3758,8 @@
             }
 
             takeDamage(amount, knockVx = 0, knockVy = 0, isCrit = false, triggerChain = true, forceChain = false) {
-                let finalDmg = amount * playerLatePowerMult();
+                const lateMult = playerLatePowerMult();
+                let finalDmg = amount * lateMult;
                 if (this.type === 'SHIELD_BEARER' && !isCrit) {
                     finalDmg *= 0.55;
                 }
@@ -3680,6 +3781,10 @@
                     }
                 }
 
+                // Chain arcs start from this hit without the late multiplier: each arc applies it once.
+                const chainBase = finalDmg / lateMult;
+                const preShield = finalDmg;
+                if (this.affix) finalDmg = eliteAffixOnHit(this, finalDmg);
                 this.hp -= finalDmg;
                 if (this.isBoss) {
                     this.bossHitFlash = 1;
@@ -3698,7 +3803,7 @@
                 createFloatingText(
                     this.x + (Math.random() - 0.5) * 16,
                     this.y - this.radius - 6,
-                    Math.round(finalDmg).toString() + (isCrit ? '!' : ''),
+                    preShield > 0 && finalDmg < 0.5 ? 'KALKAN' : Math.round(finalDmg).toString() + (isCrit ? '!' : ''),
                     isCrit ? '#ffe600' : '#ffffff',
                     isCrit ? 17 : 13
                 );
@@ -3728,7 +3833,7 @@
                                 nextTarget.x, nextTarget.y, isCrit || evolvedArc);
                             if(lastTarget===this) audio.playWeaponHit('arc',isCrit,false);
                             advanceQuest('CHAIN',1);
-                            nextTarget.takeDamage(finalDmg * getLegacyWeaponValue('lightning', 'arcDamage'), 0, 0, false, false);
+                            nextTarget.takeDamage(chainBase * getLegacyWeaponValue('lightning', 'arcDamage'), 0, 0, false, false);
                             lastTarget = nextTarget;
                             jumps--;
                         } else {
@@ -3861,6 +3966,8 @@
                     }
                 }
 
+                if (this.affix) eliteAffixOnDeath(this);
+
                 if (this.type === 'SPLITTER') {
                     const splitCount = wave >= 7 ? 3 : 2;
                     for (let i = 0; i < splitCount; i++) {
@@ -3921,6 +4028,17 @@
                     ctx.stroke();
                     ctx.setLineDash([]);
                 }
+                if (this.affix) {
+                    // Shield shows as the share of the ring still standing.
+                    const share = this.affix.id === 'SHIELDED' ? this.affixShield / Math.max(1, this.affixShieldMax) : 1;
+                    if (share > 0.01) {
+                        ctx.beginPath();
+                        ctx.arc(0, 0, this.radius + 13, -this.rotation, -this.rotation + Math.PI * 2 * share);
+                        ctx.strokeStyle = this.affix.color;
+                        ctx.lineWidth = this.affix.id === 'SHIELDED' ? 3.5 : 1.8;
+                        ctx.stroke();
+                    }
+                }
 
                 if (this.isBoss) {
                     drawBossIdentity(ctx, this);
@@ -3942,6 +4060,14 @@
                     ctx.fillRect(this.x - bw / 2, this.y - this.radius - 13, bw, bh);
                     ctx.fillStyle = this.isElite ? '#ffe600' : this.color;
                     ctx.fillRect(this.x - bw / 2, this.y - this.radius - 13, bw * Math.max(0, this.hp / this.maxHp), bh);
+                }
+                if (this.affix) {
+                    ctx.save();
+                    ctx.font = "800 10px 'Orbitron','Segoe UI',system-ui,sans-serif";
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = this.affix.color;
+                    ctx.fillText(this.affix.name, this.x, this.y - this.radius - 18);
+                    ctx.restore();
                 }
             }
         }
