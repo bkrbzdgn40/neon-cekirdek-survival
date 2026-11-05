@@ -7775,3 +7775,82 @@ test('Odak 4.1 a slow 12 s loop now closes the circuit; a 16 s loop still times 
   assert.deepEqual(loop(12), { fired: 1, closures: 1 });
   assert.deepEqual(loop(16), { fired: 0, closures: 0 });
 });
+
+test('Odak 4.2 the first quest pauses once for its guide, then never again after a reload', () => {
+  const store = {};
+  const { run } = setup(store, { guides: true });
+  const x = JSON.parse(run(`(()=>{startNewGame();guideQueue=[];generateNextQuest('KILLS');
+    const queued=guideQueue.map(g=>g.id);updateGame(.5);const early=gameState;
+    totalTime=1.3;updateGame(.016);const shown=gameState,id=activeGuide&&activeGuide.id;
+    const text=document.getElementById('guideHow').textContent;
+    const frozen=totalTime;keys.KeyW=true;
+    closeGuide();const after=gameState;
+    return JSON.stringify({queued,early,shown,id,text:text.length>20,frozen,after,seen:[...guidesSeen]});})()`));
+  assert.deepEqual(x.queued, ['quests']);
+  assert.equal(x.early, 'PLAYING');
+  assert.equal(x.shown, 'GUIDE');
+  assert.equal(x.id, 'quests');
+  assert.equal(x.text, true);
+  assert.equal(x.after, 'PLAYING');
+  assert.deepEqual(x.seen, ['quests']);
+  assert.deepEqual(JSON.parse(store['neonCekirdek.meta.v1']).guides, ['quests']);
+  const again = setup(store, { guides: true });
+  assert.equal(again.run(`startNewGame();guideQueue=[];generateNextQuest('ORBS');totalTime=2;updateGame(.016);gameState+':'+guideQueue.length`), 'PLAYING:0');
+});
+
+test('Odak 4.2 guides wait their turn, skip vanished targets and read live rules', () => {
+  const { run } = setup({}, { guides: true });
+  const x = JSON.parse(run(`(()=>{startNewGame();guidesSeen.add('quests');guideQueue=[];
+    // A target that is already gone is dropped but stays unseen.
+    requestGuide('conduits',()=>null);totalTime=5;const skipped=processGuideQueue();
+    const unseen=!guidesSeen.has('conduits');
+    // Two at once: the second waits for the gap after the first closes.
+    const zone={x:200,y:150,dead:false};
+    requestGuide('conduits',()=>zone.dead?null:{x:zone.x,y:zone.y,r:80});
+    requestGuide('circuit',()=>({x:player.x,y:player.y,r:76}));
+    const dup=requestGuide('conduits');
+    processGuideQueue();const first=activeGuide.id;
+    const spot=document.getElementById('guideSpotlight').style.left;
+    closeGuide();totalTime+=1;const tooSoon=processGuideQueue();
+    totalTime+=GUIDE_RULES.gap;processGuideQueue();const second=activeGuide&&activeGuide.id;closeGuide();
+    resetGuidesSeen();
+    return JSON.stringify({skipped,unseen,dup,first,spot,tooSoon,second,reset:guidesSeen.size,
+      circuit:guideText(GUIDE_DEFS.circuit.how),defend:guideText(GUIDE_DEFS.DEFEND.how),
+      vault:guideText(GUIDE_DEFS.arena_VAULT.how),scale:viewScale});})()`));
+  assert.equal(x.skipped, false);
+  assert.equal(x.unseen, true);
+  assert.equal(x.dup, false);
+  assert.equal(x.first, 'conduits');
+  // Spotlight sits on the object in screen pixels: (world x - r) * viewScale.
+  assert.ok(Math.abs(parseFloat(x.spot) - (200 - 80) * x.scale) < 1e-6);
+  assert.equal(x.tooSoon, false);
+  assert.equal(x.second, 'circuit');
+  assert.equal(x.reset, 0);
+  assert.match(x.circuit, /14 sn içinde/);
+  assert.match(x.defend, /8'e dolunca/);
+  assert.match(x.vault, /4,1 sn kal/);
+});
+
+test('Odak 4.2 conduits, field devices, quests and the circuit pick queue their guide', () => {
+  const { run } = setup({}, { guides: true });
+  const x = JSON.parse(run(`(()=>{startNewGame();guideQueue=[];
+    conduitSpawnTimer=0;systemIntroSeen.add('conduits');updateGame(.016);
+    wave=8;fieldDeviceLastWave=0;activeBosses=[];nextBossTime=totalTime+60;
+    systemIntroSeen.add('fieldDevices');combatDirector.activeArenaEvent=null;const placed=maybeSpawnFieldDevice();
+    generateNextQuest('DEFEND');
+    const q=guideQueue.map(g=>g.id);
+    const defend=guideQueue.find(g=>g.id==='DEFEND');
+    const defendBox=defend&&guideTargetBox(defend.target).box;
+    return JSON.stringify({placed,q,defend:!!defendBox&&defendBox.round,ids:Object.keys(GUIDE_DEFS).length});})()`));
+  assert.equal(x.placed, true);
+  assert.ok(x.q.includes('conduits'));
+  assert.ok(x.q.includes('fieldDevices'));
+  assert.ok(x.q.includes('DEFEND'), x.q.join(','));
+  assert.equal(x.defend, true);
+  assert.equal(x.ids, 16);
+  const circuit = run(`(()=>{startNewGame();guideQueue=[];gameState='LEVEL_UP';
+    const upg=UPGRADES_POOL.find(u=>u.id==='circuit_weaver');
+    currentUpgradeChoices=[{upg,rarity:RARITIES[0]}];selectUpgradeOption(0);
+    return guideQueue.map(g=>g.id).join(',');})()`);
+  assert.equal(circuit, 'circuit');
+});

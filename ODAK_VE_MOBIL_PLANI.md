@@ -468,7 +468,7 @@ Sorulacak beş soru:
 ### - [x] 4.1 Devre süresi ve sayaç
 Devre penceresi 9 → 14 sn, kapanma yarıçapı 42 → 56. Başlangıç halkasında geri sayım yayı ve "BAŞLANGICA DÖN" yazısı.
 
-### - [ ] 4.2 Görev rehberi
+### - [x] 4.2 Görev rehberi
 Her görev/olay ilk görüldüğünde oyunu durduran tek seferlik rehber: hedef vurgulanır, canlı mini-demo oynar.
 
 ## Özet takvim

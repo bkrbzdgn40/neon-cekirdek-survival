@@ -2094,3 +2094,46 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
 
 /* Odak 3.10 · wave condition progress uses the wave colour, not gold */
 .hangar-goal-bar.is-wave > span { background: linear-gradient(90deg, #7e22ce, #c084fc); }
+
+/* Odak 4.2 · one-time objective guide */
+.guide-modal { --guide-color: #00f3ff; background: rgba(2, 6, 23, .62); }
+.guide-modal[data-spot="true"] { background: transparent; }
+.guide-spotlight {
+  position: absolute; border: 2px solid var(--guide-color); border-radius: 14px; pointer-events: none;
+  box-shadow: 0 0 0 200vmax rgba(2, 6, 23, .62), 0 0 26px var(--guide-color);
+  animation: guide-pulse 1.4s ease-in-out infinite;
+}
+.guide-spotlight[data-round="true"] { border-radius: 50%; }
+@keyframes guide-pulse { 50% { box-shadow: 0 0 0 200vmax rgba(2, 6, 23, .62), 0 0 46px var(--guide-color); } }
+.guide-panel {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(370px, calc(100vw - 32px)); max-height: calc(100vh - 24px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px; padding: 18px;
+  background: rgba(3, 7, 18, .96); border: 1px solid var(--guide-color); border-radius: 16px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, .7);
+}
+.guide-panel[data-side="left"] { left: max(16px, 6vw); transform: translateY(-50%); }
+.guide-panel[data-side="right"] { left: auto; right: max(16px, 6vw); transform: translateY(-50%); }
+.guide-panel[data-side="center"] { top: auto; bottom: max(16px, 8vh); transform: translateX(-50%); }
+.guide-tag { font-size: 10px; font-weight: 700; letter-spacing: .18em; color: var(--guide-color); }
+.guide-title { font-size: 18px; font-weight: 900; color: #fff; line-height: 1.2; }
+.guide-demo { width: 100%; height: auto; aspect-ratio: 2 / 1; border-radius: 10px; border: 1px solid rgba(148, 163, 184, .22); }
+.guide-rows { display: grid; gap: 8px; margin: 0; }
+.guide-rows > div { display: grid; grid-template-columns: 64px 1fr; gap: 8px; }
+.guide-rows dt { font-size: 10px; font-weight: 700; color: var(--guide-color); padding-top: 2px; }
+.guide-rows dd { margin: 0; font-size: 13px; line-height: 1.45; color: #e2e8f0; }
+.guide-close {
+  padding: 12px; border-radius: 12px; border: 0; cursor: pointer;
+  background: var(--guide-color); color: #020617; font-size: 13px; font-weight: 800; letter-spacing: .06em;
+}
+.guide-close span { opacity: .6; font-size: 10px; margin-left: 4px; }
+.guide-close:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.guide-foot { margin: 0; font-size: 10.5px; color: #94a3b8; text-align: center; }
+@media (max-height: 560px) {
+  .guide-panel { padding: 12px; gap: 6px; }
+  .guide-demo { width: auto; max-height: 28vh; align-self: center; }
+  .guide-rows dd { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .guide-spotlight { animation: none; } }
+/* Odak 4.2 · touch screens have no space bar */
+@media (pointer: coarse) { .guide-close span { display: none; } }

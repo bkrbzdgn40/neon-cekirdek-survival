@@ -65,6 +65,8 @@ function setup(stored = {}, options = {}) {
   };
   // Odak 1.2: existing tests exercise every system; locked tests pass unlockAll:false.
   if (options.unlockAll !== false) sandbox.window.NEON_UNLOCK_ALL = true;
+  // Odak 4.2: one-time guides pause the run; only guide tests turn them on.
+  if (options.guides !== true) sandbox.window.NEON_GUIDES = false;
   vm.createContext(sandbox);
   vm.runInContext(gameCode, sandbox, { timeout: options.timeout || 4000 });
   sandbox.window.onload();
