@@ -292,6 +292,15 @@
                         <p id="menuChassisDetail" class="text-xs leading-relaxed text-gray-200">İlk dalgalarda daha yüksek hasar verir. Fazladan diriliş hakkı, hata yaptığında koşuyu kurtarmana yardım eder.</p>
                         <p id="menuChassisAdvice" class="text-[11px] text-cyan-200/80 mt-1.5">Öneri: İlk önce bir silah, ardından savunma modülü seç.</p>
                     </div>
+                    <!-- Odak 5.7: contracts sit in the centre so the right column stays short -->
+                    <section id="neonContractPanel" class="rounded-xl p-3.5 sm:p-4 text-left">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                            <div class="font-cyber text-xs font-bold text-cyan-200"><i class="fa-solid fa-file-signature mr-2"></i>NEON SÖZLEŞMESİ</div>
+                            <span class="text-[10px] font-cyber text-gray-400">İSTEĞE BAĞLI RİSK / ÖDÜL</span>
+                        </div>
+                        <p class="text-[11px] text-gray-400 mb-2.5">Koşunun karakterini seç. Standart dışı protokoller skor katsayısını ve savaş ritmini değiştirir.</p>
+                        <div id="neonContractOptions" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+                    </section>
                     <!-- Main dashboard actions: directly after the preparation content -->
                     <div class="pt-3 border-t border-gray-800 flex flex-col sm:flex-row gap-3.5">
                         <button id="openShopFromMenuBtn" type="button" class="cyber-action-btn sm:w-2/5 py-4 xl:py-5 px-5 bg-gray-900 hover:bg-gray-800 font-cyber font-bold text-xs sm:text-sm tracking-wider text-yellow-300 border border-yellow-400/70 flex items-center justify-center gap-2.5 cursor-pointer shadow-[0_0_20px_rgba(255,230,0,0.15)]">
@@ -324,14 +333,6 @@
                         <div class="font-cyber text-xs font-bold text-cyan-300"><i class="fa-solid fa-clock-rotate-left mr-2" aria-hidden="true"></i>SON OPERASYON</div>
                         <div id="menuLastRunBody"></div>
                     </div>
-                    <section id="neonContractPanel" class="rounded-xl p-3.5 sm:p-4 text-left">
-                        <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                            <div class="font-cyber text-xs font-bold text-cyan-200"><i class="fa-solid fa-file-signature mr-2"></i>NEON SÖZLEŞMESİ</div>
-                            <span class="text-[10px] font-cyber text-gray-400">İSTEĞE BAĞLI RİSK / ÖDÜL</span>
-                        </div>
-                        <p class="text-[11px] text-gray-400 mb-2.5">Koşunun karakterini seç. Standart dışı protokoller skor katsayısını ve savaş ritmini değiştirir.</p>
-                        <div id="neonContractOptions" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-2"></div>
-                    </section>
                     <button id="howToBtn" type="button" class="hangar-howto-btn rounded-xl px-4 py-3 font-cyber text-xs font-bold tracking-wider text-cyan-200 flex items-center justify-between gap-2 cursor-pointer">
                         <span><i class="fa-solid fa-circle-question mr-2" aria-hidden="true"></i>NASIL OYNANIR</span>
                         <span class="text-[10px] text-gray-400">KONTROLLER · TEHDİTLER</span>
