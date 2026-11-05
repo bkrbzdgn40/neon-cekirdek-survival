@@ -2239,3 +2239,42 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
 @keyframes capsuleReveal { from { opacity: 0; transform: translateY(4px) scale(.96); } to { opacity: 1; transform: none; } }
 @media (max-width: 640px) { .capsule-panel { flex-direction: column; align-items: stretch; } }
 @media (prefers-reduced-motion: reduce) { .capsule-result { animation: none; } }
+
+/* Odak 5.5 · report next goal and record */
+.report-goal { margin-top: 14px; padding: 12px 16px; border-radius: 12px; background: #0e1a2c; border: 1px solid #2e4057; display: grid; gap: 6px; }
+.report-goal.hidden { display: none; }
+.report-goal[data-ready="true"] { border-color: #34d399; background: linear-gradient(135deg, #0b2420, #0e1a2c); }
+.report-goal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.report-goal-kicker { font: 800 10px 'Orbitron', sans-serif; letter-spacing: .12em; color: #fcd34d; }
+.report-goal-title { font: 800 15px 'Orbitron', sans-serif; }
+.report-goal-note { font-size: 12px; color: #a9bccd; }
+.report-goal-bar { display: flex; height: 8px; border-radius: 999px; background: #1b2a40; overflow: hidden; }
+.report-goal-bar .is-before { background: #b45309; }
+.report-goal-bar .is-gain { background: linear-gradient(90deg, #facc15, #fde68a); box-shadow: 0 0 10px #facc1588; }
+.report-goal-bar.is-wave .is-before { background: linear-gradient(90deg, #7c3aed, #c084fc); }
+.report-goal-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; font: 700 10px 'Orbitron', sans-serif; color: #9fb9c7; }
+.report-goal-meta em { font-style: normal; color: #fde68a; }
+.report-goal-meta b { color: #e6f7ff; }
+.report-goal[data-ready="true"] .report-goal-meta b { color: #6ee7b7; }
+.report-goal-btn { justify-self: start; margin-top: 2px; padding: 8px 12px; border-radius: 9px; border: 0; cursor: pointer;
+    font: 800 11px 'Orbitron', sans-serif; color: #052e22; background: #34d399; }
+.report-goal-btn:hover { background: #6ee7b7; }
+.report-goal-btn:focus-visible { outline: 2px solid #defbff; outline-offset: 2px; }
+.report-record:not(.hidden) { animation: recordGlow 1.6s ease-in-out 3; }
+@keyframes recordGlow { 0%, 100% { box-shadow: 0 0 0 #ffd16600; } 50% { box-shadow: 0 0 22px #ffd166aa; transform: scale(1.03); } }
+@media (prefers-reduced-motion: reduce) { .report-record:not(.hidden) { animation: none; } }
+@media (max-height: 820px) and (min-width: 900px) { .report-goal { margin-top: 10px; padding: 8px 14px; gap: 4px; } }
+/* Short desktop windows: the goal is one line so the open tab keeps its room. */
+@media (min-width: 721px) and (min-height: 560px) and (max-height: 960px) {
+    .report-goal { display: flex; align-items: center; gap: 14px; margin-top: 10px; padding: 7px 14px; }
+    .report-goal-head .shop-content-type { display: none; }
+    .report-goal-title { font-size: 13px; white-space: nowrap; }
+    .report-goal-bar { flex: 1 1 120px; }
+    .report-goal-meta { flex-wrap: nowrap; white-space: nowrap; }
+    .report-goal-btn { margin: 0; padding: 6px 10px; flex: none; }
+}
+@media (min-width: 721px) and (min-height: 560px) and (max-height: 760px) {
+    .report-hero { padding-bottom: 10px; }
+    .report-kpi-grid { margin-top: 10px; }
+    .report-goal { margin-top: 8px; padding-block: 5px; }
+}

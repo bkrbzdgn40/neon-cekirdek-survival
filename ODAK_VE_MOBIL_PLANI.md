@@ -506,6 +506,9 @@ Daha ucuz kapsül, sahip olunmayan kostümlerden birini rastgele verir; asla tek
 ### - [ ] 5.4 Yeni şasi
 Kapalı test verisi bekliyor: hangi şasinin ne kadar seçildiğine göre 1–2 rol eklenir.
 
+### - [x] 5.5 Koşu sonu hedefi
+Rapor, sıradaki hedefi bu koşunun altınıyla gösterir ("bir koşu daha yeter" / "yaklaşık N koşu"); hazırsa doğrudan laboratuvarda açar. Yeni rekor eski skoru ve farkı yazar, parlar ve ses çalar.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

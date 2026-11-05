@@ -1708,3 +1708,30 @@ test('Odak 5.3 the data capsule in the lab hands out a new costume to wear', asy
   expect(new Set(owned).size).toBe(2);
   expect(errors).toEqual([]);
 });
+
+test('Odak 5.5 the report shows the next goal and a new record, and its lab button opens the item', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await gotoGame(page, '/index.html', { unlockAll: false });
+  await page.evaluate(() => { savedMaxWave = 5; savedHighScore = 500; saveMetaProgress(); updateMenuCounters(); });
+  await page.locator('#startBtn').click();
+  await expect.poll(() => page.evaluate(() => gameState)).toBe('PLAYING');
+  await page.evaluate(() => { wave = 5; score = 900; sessionGold = 700; totalGold = 750; triggerGameOver(); });
+  await expect(page.locator('#gameOverModal')).toBeVisible();
+  const goal = page.locator('#reportNextGoal');
+  await expect(goal).toBeVisible();
+  await expect(goal).toHaveAttribute('data-ready', 'true');
+  await expect(goal).toContainText('Soğutucu');
+  await expect(goal).toContainText('BU KOŞU +700');
+  await expect(page.locator('#newRecordBadge')).toBeVisible();
+  await expect(page.locator('#newRecordText')).toHaveText('YENİ KİŞİSEL REKOR · +400 (ESKİSİ 500)');
+  // The goal button opens the lab; buying there moves the report to the next goal.
+  await page.locator('#reportGoalOpenBtn').click();
+  await expect(page.locator('#shopModal')).toBeVisible();
+  await page.locator('.shop-collection-card[data-content="coolant"] .buy-content-btn').click();
+  await page.locator('#closeShopBtn').click();
+  await expect(page.locator('#gameOverModal')).toBeVisible();
+  await expect(goal).not.toContainText('Soğutucu');
+  await expect(goal).toHaveAttribute('data-ready', 'false');
+  expect(errors).toEqual([]);
+});

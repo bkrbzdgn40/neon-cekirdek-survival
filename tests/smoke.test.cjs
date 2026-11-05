@@ -8214,3 +8214,33 @@ test('Odak 5.3 the data capsule gives an unowned costume, never repeats and stop
   const again = JSON.parse(setup(store).run('JSON.stringify({owned:ownedCosmetics.size,gold:totalGold})'));
   assert.deepEqual(again, { owned: 16, gold: 300 * 20 - 400 - 300 * 15 }, 'capsule results are saved');
 });
+
+test('Odak 5.5 the report ends on the next goal and names a new record', () => {
+  const { run } = setup({}, { unlockAll: false });
+  const x = JSON.parse(run(`(()=>{
+    const end=(w,s,runGold,balance)=>{startNewGame();wave=w;score=s;totalTime=60;sessionGold=runGold;totalGold=balance;triggerGameOver();
+      const box=document.getElementById('reportNextGoal');
+      return {kind:box.dataset.kind,ready:box.dataset.ready,html:box.innerHTML,
+        record:document.getElementById('newRecordText').textContent};};
+    const first=end(2,500,40,90);
+    const close=end(5,900,200,500);
+    const far=end(5,300,100,400);
+    const ready=end(5,300,100,800);
+    return JSON.stringify({first,close,far,ready});})()`));
+  assert.equal(x.first.kind, 'wave', 'nothing is buyable before wave 3');
+  assert.match(x.first.html, /Soğutucu/);
+  assert.match(x.first.html, /DALGA 2 \/ 3/);
+  assert.match(x.first.html, /1 DALGA DAHA/);
+  assert.equal(x.first.record, 'İLK REKORUN KAYDEDİLDİ');
+  assert.equal(x.close.kind, 'content');
+  assert.match(x.close.html, /BU KOŞU \+200/);
+  assert.match(x.close.html, /BİR KOŞU DAHA YETER/);
+  assert.match(x.close.html, /is-before" style="width:43%/, 'gold before this run');
+  assert.match(x.close.html, /is-gain" style="width:28%/, 'gold from this run');
+  assert.equal(x.close.record, 'YENİ KİŞİSEL REKOR · +400 (ESKİSİ 500)');
+  assert.match(x.far.html, /KALAN 300 ALTIN · YAKLAŞIK 3 KOŞU/);
+  assert.equal(x.far.record, '', 'a lower score is no record');
+  assert.equal(x.ready.ready, 'true');
+  assert.match(x.ready.html, /HAZIR/);
+  assert.match(x.ready.html, /id="reportGoalOpenBtn"/);
+});
