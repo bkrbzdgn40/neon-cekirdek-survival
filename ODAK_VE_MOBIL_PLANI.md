@@ -521,6 +521,9 @@ Düşman XP'si dalgayla büyür (dalga başına +%8, en çok ×3,5). Koşuda top
 ### - [x] 5.9 Elit özellikleri
 Her elit bir özellik taşır ve başında etiketiyle görünür: Kalkanlı (dalga 1), Bölünen (4), Hızlandırıcı (6), Hırsız (8), Yansıtıcı (10). Özellik seed'e bağlı seçilir.
 
+### - [x] 5.10 Eserler
+Boss sandığı 3 eserden birini seçtirir; eser koşu boyunca kalır ve oyun tarzını değiştirir (8 eser, her biri koşuda bir kez). Seviye kartları ekranı ESER SEÇ moduna geçer; yeniden seçme ve atlama kapalıdır.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

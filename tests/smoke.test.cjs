@@ -8476,3 +8476,119 @@ test('Odak 5.9 chain arcs apply the late power multiplier once', () => {
   assert.equal(x.rich.first, Math.round(x.plain.first * 1.3));
   assert.ok(Math.abs(x.rich.arc - x.plain.arc * 1.3) <= 1, JSON.stringify(x));
 });
+
+test('Odak 5.10 a boss chest opens a hand of three relics and each relic comes once', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); gameState = 'PLAYING';
+    const box = document.getElementById('upgradeCardsContainer'), cards = [];
+    box.appendChild = c => cards.push(c);
+    const chest = new LootChest(player.x, player.y, 'boss'); chest.update(1 / 60);
+    const queued = pendingRelicChoices;
+    gameState = 'PLAYING'; closeUpgradeModal(); gameState = 'PLAYING';
+    updateGame(1 / 60);
+    const hand = currentUpgradeChoices.map(c => c.upg.id);
+    const view = { state: gameState, open: relicChoiceOpen, roles: cards.map(c => c._attrs['data-role']),
+      title: document.getElementById('upgradeModalTitle').textContent, tools: document.getElementById('upgradeToolsRow').hidden,
+      markup: cards[0].innerHTML };
+    // Reroll and skip do nothing while the relic hand is open.
+    const gold = totalGold = 999; document.getElementById('skipUpgradeBtn'); const skipped = skipUpgradeChoice();
+    selectUpgradeOption(1);
+    const after = { state: gameState, open: relicChoiceOpen, relics: [...player.relics], gold: totalGold,
+      title: document.getElementById('upgradeModalTitle').textContent, tools: document.getElementById('upgradeToolsRow').hidden };
+    // Own all but one: the next hand has only the last relic; then no hand at all.
+    const missing = RELICS.find(r => !player.relics.has(r.id)).id;
+    for (const r of RELICS) if (r.id !== missing) player.relics.add(r.id);
+    pendingRelicChoices = 1; gameState = 'PLAYING'; openRelicChoice();
+    const last = currentUpgradeChoices.map(c => c.upg.id);
+    selectUpgradeOption(0);
+    const full = new LootChest(player.x, player.y, 'boss'); gameState = 'PLAYING'; full.update(1 / 60);
+    return JSON.stringify({ queued, hand, view, skipped, after, last, fullQueue: pendingRelicChoices, owned: player.relics.size });
+  })()`));
+  assert.equal(x.queued, 1);
+  assert.equal(x.hand.length, 3);
+  assert.equal(new Set(x.hand).size, 3);
+  assert.equal(x.view.state, 'LEVEL_UP');
+  assert.equal(x.view.open, true);
+  assert.deepEqual(x.view.roles, ['relic', 'relic', 'relic']);
+  assert.equal(x.view.title, 'ESER SEÇ');
+  assert.equal(x.view.tools, true);
+  assert.ok(x.view.markup.includes('BOSS ÖDÜLÜ') && x.view.markup.includes('ESERİ AL'), x.view.markup);
+  assert.equal(x.skipped, false);
+  assert.deepEqual(x.after.relics, [x.hand[1]]);
+  assert.equal(x.after.state, 'PLAYING');
+  assert.equal(x.after.open, false);
+  assert.equal(x.after.title, 'SİBER YÜKSELTME SEÇ');
+  assert.equal(x.after.tools, false);
+  assert.equal(x.last.length, 1);
+  assert.equal(x.fullQueue, 0);
+  assert.equal(x.owned, 8);
+});
+
+test('Odak 5.10 every relic changes how the run plays', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); gameState = 'PLAYING'; wave = 5; player.x = 600; player.y = 400;
+    const out = {};
+    const foe = (x, y) => { const e = new Enemy(x, y, 'TANK'); e.hp = e.maxHp = 1e6; e.speed = 0; enemies.push(e); return e; };
+    const lost = e => Math.round(1e6 - e.hp);
+    // Patlayan Şarjör: the 10th salvo's shell bursts on hit.
+    player.relics = new Set(['BURST_MAG']); enemies = []; bullets = [];
+    const target = foe(760, 400), side = foe(790, 440);
+    player.shotCounter = 9; player.critChance = 0; player.autoShoot();
+    out.burstShell = bullets.filter(b => b.relicBurst).length;
+    const b = bullets.find(b => b.relicBurst); relicBurstAt(b, target);
+    out.burstSide = lost(side) > 0;
+    player.shotCounter = 10; bullets = []; player.autoShoot(); out.burstOff = bullets.filter(b => b.relicBurst).length;
+    // Ayna Namlu: one shell flies backwards.
+    player.relics = new Set(['MIRROR_SHOT']); bullets = []; player.multishot = 1; player.autoShoot();
+    out.mirror = bullets.map(b => Math.sign(Math.round(b.vx))).sort();
+    // Son Direniş: low HP fires twice as fast.
+    const fireDrop = (relic, hpShare) => { player.relics = new Set(relic ? ['LAST_STAND'] : []); player.hp = player.maxHp * hpShare;
+      player.fireTimer = 10; player.momentum = 0; player.update(0.1); return 10 - player.fireTimer; };
+    out.lastStand = +(fireDrop(true, 0.2) / fireDrop(false, 0.2)).toFixed(2);
+    out.lastStandHigh = +(fireDrop(true, 0.9) / fireDrop(false, 0.9)).toFixed(2);
+    player.hp = player.maxHp;
+    // Altın Kan: a gold orb heals.
+    player.relics = new Set(['GOLD_HEAL']); player.hp = 50; const g = new EnergyOrb(player.x, player.y, 1, true); g.update(1 / 60);
+    out.goldHeal = player.hp - 50;
+    // Kombo Hasadı: combo 20+ doubles the XP orb.
+    player.relics = new Set(['COMBO_HARVEST']); orbs = [];
+    combo = 25; const h1 = new Enemy(300, 300, 'TANK'); const xp1 = h1.xpValue; h1.die();
+    combo = 2; const h2 = new Enemy(300, 300, 'TANK'); const xp2 = h2.xpValue; h2.die();
+    out.harvest = [orbs[0].value / xp1, orbs[1].value / xp2];
+    // Kritik Fırtına: a crit arcs with no ion module.
+    player.relics = new Set(['CRIT_STORM']); player.chainLightning = 0; enemies = [];
+    const c1 = foe(300, 300), c2 = foe(340, 300), c3 = foe(380, 300);
+    c1.takeDamage(100, 0, 0, true, true); out.critStorm = [lost(c2) > 0, lost(c3) > 0];
+    player.critStormReadyAt = 0; const before = lost(c2); c1.takeDamage(100, 0, 0, false, true);
+    out.critStormNoCrit = lost(c2) === before;
+    // Kor İzi: dashing leaves embers that burn.
+    player.relics = new Set(['EMBER_DASH']); enemies = []; relicEmbers = [];
+    const burn = foe(600, 400); player.isDashing = true; updateRelicEffects(1 / 60);
+    out.embers = relicEmbers.length; out.emberBurn = lost(burn) > 0;
+    player.isDashing = false; totalTime += 3; updateRelicEffects(1 / 60); out.embersGone = relicEmbers.length;
+    // Yankı Novası: the nova fires again after 0.6 s.
+    player.relics = new Set(['NOVA_ECHO']); enemies = []; const n = foe(650, 400);
+    player.novaCooldown = 0; player.triggerNova(); const first = lost(n);
+    totalTime += 0.7; updateRelicEffects(1 / 60); const second = lost(n) - first;
+    out.echo = +(second / first).toFixed(2);
+    out.echoNeedsEmp = RELICS.find(r => r.id === 'NOVA_ECHO').offerable.toString().includes('emp');
+    return JSON.stringify(out);
+  })()`));
+  assert.equal(x.burstShell, 1);
+  assert.equal(x.burstSide, true);
+  assert.equal(x.burstOff, 0);
+  assert.deepEqual(x.mirror, [-1, 1]);
+  assert.ok(Math.abs(x.lastStand - 2) < 0.05, String(x.lastStand));
+  assert.ok(Math.abs(x.lastStandHigh - 1) < 0.03, String(x.lastStandHigh));
+  assert.equal(x.goldHeal, 2);
+  assert.deepEqual(x.harvest, [2, 1]);
+  assert.deepEqual(x.critStorm, [true, true]);
+  assert.equal(x.critStormNoCrit, true);
+  assert.equal(x.embers, 1);
+  assert.equal(x.emberBurn, true);
+  assert.equal(x.embersGone, 0);
+  assert.ok(Math.abs(x.echo - 0.5) < 0.02, String(x.echo));
+  assert.equal(x.echoNeedsEmp, true);
+});
