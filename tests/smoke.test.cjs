@@ -7762,3 +7762,16 @@ test('Odak 3.10 collection items need their wave before gold can buy them', () =
   assert.deepEqual(x.dative, ["3'e", "4'e", "6'ya", "10'a"]);
   assert.equal(x.hint, "Yeni protokol: Dalga 5'e ulaşınca açılır.");
 });
+
+test('Odak 4.1 a slow 12 s loop now closes the circuit; a 16 s loop still times out', () => {
+  const { run } = setup();
+  const loop = (seconds) => JSON.parse(run(`(()=>{startNewGame();player.upgradeCounts.circuit_weaver=1;player.refreshBuildTraits();
+    player.x=300;player.y=200;recordCircuitWeaverMotion(player,0,false);const route=[];
+    for(let n=1;n<=6;n++)route.push([300+20*n,200]);for(let n=1;n<=6;n++)route.push([420,200+20*n]);
+    for(let n=1;n<=6;n++)route.push([420-20*n,320]);for(let n=1;n<=6;n++)route.push([300,320-20*n]);
+    let fired=0;const step=${seconds}/route.length;
+    for(const [x,y] of route){player.x=x;player.y=y;totalTime+=step;if(recordCircuitWeaverMotion(player,20,false))fired++;}
+    return JSON.stringify({fired,closures:player.buildStats.circuitClosures});})()`));
+  assert.deepEqual(loop(12), { fired: 1, closures: 1 });
+  assert.deepEqual(loop(16), { fired: 0, closures: 0 });
+});

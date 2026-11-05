@@ -1,5 +1,9 @@
 # Değişiklik Günlüğü
 
+## Odak 4.1 · Devre süresi ve sayaç
+- Devre Örücü penceresi 9 → 14 sn, en fazla 72 nokta, kapanma yarıçapı 56 px (oyuncular süreyi yetiştiremiyordu).
+- Sarı başlangıç halkasında kalan süre yayı (son %25 kırmızı) ve yol yarılanınca "BAŞLANGICA DÖN" yazısı.
+
 ## Odak 3.10 · Koleksiyonda dalga şartı
 - Koleksiyon içeriği önce rekor dalga şartı ister, sonra altınla alınır: Soğutucu 3, Titan 4, Toplayıcı 5, Mayın İzi 6, Hayalet 7, Bumerang Disk 8, Şok Halkası 10.
 - Şartı sağlanmamış kart ve kilitli şasi rozeti "DALGA 7'YE ULAŞ · 1.200 ALTIN" gibi yazar. "Sıradaki hedef" alınabilecek içerik yoksa en yakın dalga şartını mor çubukla gösterir.

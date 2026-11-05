@@ -4059,7 +4059,7 @@
                 name: 'Devre Dokuyucu',
                 icon: 'fa-solid fa-draw-polygon',
                 color: '#ffe66d',
-                getDesc: () => 'Hareketinle kapalı bir devre çiz: içindeki en fazla 16 düşmanı vur. Dash devreyi sıfırlar. 3. kademede sınırı elektrikli bırak.',
+                getDesc: () => `Hareketinle kapalı bir devre çiz: ${CIRCUIT_WEAVER.maxDuration} sn içinde sarı halkaya dön, içindeki en fazla 16 düşmanı vur. Atılım devreyi sıfırlar. 3. kademede sınırı elektrikli bırak.`,
                 apply: () => { /* Drawn movement path supplies the attack, not a weapon stat. */ }
             },
             {
@@ -5315,9 +5315,10 @@
         // M5.16: CIRCUIT WEAVER. The player draws a closed loop with movement.
         // Completing it detonates a bounded area, and the third tier leaves a
         // short-lived live wire that damages a crossing enemy only once.
+        // Odak 4.1 · playtesters ran out of time: 9 → 14 s, 48 → 72 points, 42 → 56 px to close.
         const CIRCUIT_WEAVER = Object.freeze({
-            sampleStep: 16, maxPoints: 48, maxDuration: 9,
-            minLength: 340, minPoints: 12, closeRadius: 42,
+            sampleStep: 16, maxPoints: 72, maxDuration: 14,
+            minLength: 340, minPoints: 12, closeRadius: 56,
             minArea: 8000, maxArea: 90000, maxJump: 90,
             maxPulseTargets: 16, maxWireTargets: 16,
             cooldown: [0, 11, 9, 7], fieldSeconds: 3.2, fieldStep: .13
@@ -5501,6 +5502,20 @@
                 ctx.beginPath();
                 ctx.arc(start.x,start.y,CIRCUIT_WEAVER.closeRadius,0,Math.PI*2);
                 ctx.stroke();
+                // Odak 4.1 · time left to close the loop, and where to go.
+                const left = Math.max(0, 1 - (totalTime - player.circuitStartedAt) / CIRCUIT_WEAVER.maxDuration);
+                ctx.globalAlpha = .95;
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = left < .25 ? '#ff5c7a' : '#ffe66d';
+                ctx.beginPath();
+                ctx.arc(start.x,start.y,CIRCUIT_WEAVER.closeRadius+6,-Math.PI/2,-Math.PI/2+Math.PI*2*left);
+                ctx.stroke();
+                if (player.circuitLength >= CIRCUIT_WEAVER.minLength * .5) {
+                    ctx.fillStyle = '#ffe66d';
+                    ctx.font = "700 11px 'Orbitron', sans-serif";
+                    ctx.textAlign = 'center';
+                    ctx.fillText('BAŞLANGICA DÖN', start.x, start.y - CIRCUIT_WEAVER.closeRadius - 14);
+                }
                 ctx.restore();
             }
             if (circuitFlash) {
