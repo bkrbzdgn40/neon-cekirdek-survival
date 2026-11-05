@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 5.5 · Koşu sonu hedefi
+- Koşu raporunda SIRADAKİ HEDEF kartı: en yakın açılım, bu koşuda kazanılan altın ayrı renkle, "BİR KOŞU DAHA YETER" ya da "YAKLAŞIK N KOŞU" tahmini.
+- Hedef hazırsa kart LABORATUVARDA AÇ düğmesiyle doğrudan ilgili bölüme götürür; laboratuvardan dönünce kart güncellenir.
+- Yeni rekor rozeti artık farkı ve eski skoru yazar ("+1.380 (ESKİSİ 2.100)"), parlar ve ses çalar. Kısa masaüstü pencerelerde kart tek satıra iner.
+
 ## Odak 5.3 · Veri Kapsülü
 - Gardırobun başına VERİ KAPSÜLÜ eklendi: 300 altına, sahip olmadığın kostümlerden birini rastgele verir. Aynı kostüm asla tekrar çıkmaz.
 - Çıkan kostüm kapsülün altında gösterilir ve ızgarada parlar; otomatik giyilmez, GİY ile takarsın. 16 kostümün hepsi sende olunca kapsül kapanır.

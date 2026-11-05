@@ -11639,6 +11639,60 @@
                 color: look.color, cost: look.cost, ready: totalGold >= look.cost };
             return { kind: 'record', title: 'Rekorunu geç', label: 'USTALIK', color: '#67e8f9', cost: 0, ready: false };
         }
+        // Odak 5.5 · the report ends on the next goal, measured against this run's gold.
+        function newRecordLabel(isNew, score, previous) {
+            if (!isNew) return '';
+            if (previous <= 0) return 'İLK REKORUN KAYDEDİLDİ';
+            return 'YENİ KİŞİSEL REKOR · +' + Math.round(score - previous).toLocaleString('tr-TR') +
+                ' (ESKİSİ ' + Math.round(previous).toLocaleString('tr-TR') + ')';
+        }
+        function reportNextGoalMarkup(goal, runGold) {
+            if (!goal) return '';
+            const head = '<div class="report-goal-head"><span class="report-goal-kicker"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> SIRADAKİ HEDEF</span>' +
+                '<span class="shop-content-type">' + reportEscape(goal.label) + '</span></div>' +
+                '<div class="report-goal-title" style="color:' + goal.color + '">' + reportEscape(goal.title) + '</div>';
+            const bar = (before, gained, cls) => '<div class="report-goal-bar' + cls + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' +
+                Math.round(before + gained) + '"><span class="is-before" style="width:' + before + '%"></span>' +
+                '<span class="is-gain" style="width:' + gained + '%"></span></div>';
+            if (goal.kind === 'record') {
+                return head + '<p class="report-goal-note">Koleksiyon tamam. Rekor ' + savedHighScore.toLocaleString('tr-TR') +
+                    ' · en uzak dalga ' + savedMaxWave + '. Sözleşmelerle daha yükseğe çık.</p>';
+            }
+            if (goal.kind === 'wave') {
+                const pct = Math.min(100, Math.round(100 * savedMaxWave / Math.max(1, goal.wave)));
+                const left = Math.max(0, goal.wave - savedMaxWave);
+                return head + bar(pct, 0, ' is-wave') +
+                    '<div class="report-goal-meta"><span>DALGA ' + Math.min(savedMaxWave, goal.wave) + ' / ' + goal.wave + '</span>' +
+                    '<b>' + left + ' DALGA DAHA · SONRA ' + goal.cost.toLocaleString('tr-TR') + ' ALTIN</b></div>';
+            }
+            const cost = Math.max(1, goal.cost);
+            const gained = Math.max(0, Math.min(runGold, totalGold));
+            const before = Math.max(0, totalGold - gained);
+            const beforePct = Math.min(100, Math.round(100 * before / cost));
+            const gainPct = Math.max(0, Math.min(100, Math.round(100 * Math.min(totalGold, cost) / cost)) - beforePct);
+            const remaining = Math.max(0, goal.cost - totalGold);
+            let status;
+            if (goal.ready) status = 'HAZIR';
+            else if (gained > 0 && remaining <= gained) status = 'BİR KOŞU DAHA YETER';
+            else if (gained > 0) status = 'KALAN ' + remaining.toLocaleString('tr-TR') + ' ALTIN · YAKLAŞIK ' + Math.ceil(remaining / gained) + ' KOŞU';
+            else status = 'KALAN ' + remaining.toLocaleString('tr-TR') + ' ALTIN';
+            return head + bar(beforePct, gainPct, '') +
+                '<div class="report-goal-meta"><span>' + Math.min(totalGold, goal.cost).toLocaleString('tr-TR') + ' / ' + goal.cost.toLocaleString('tr-TR') +
+                (gained > 0 ? ' · <em>BU KOŞU +' + gained.toLocaleString('tr-TR') + '</em>' : '') + '</span><b>' + status + '</b></div>' +
+                (goal.ready ? '<button type="button" id="reportGoalOpenBtn" class="report-goal-btn"><i class="fa-solid fa-flask" aria-hidden="true"></i> LABORATUVARDA AÇ</button>' : '');
+        }
+        function renderReportNextGoal(runGold) {
+            const box = document.getElementById('reportNextGoal');
+            if (!box) return null;
+            const goal = getMenuNextGoal();
+            box.innerHTML = reportNextGoalMarkup(goal, runGold);
+            box.dataset.kind = goal.kind;
+            box.dataset.ready = goal.ready ? 'true' : 'false';
+            box.classList.remove('hidden');
+            box.querySelector?.('#reportGoalOpenBtn')?.addEventListener('click', () =>
+                openShop('GAME_OVER', goal.kind === 'content' ? 'collection' : goal.kind === 'cosmetic' ? 'cosmetic' : undefined));
+            return goal;
+        }
         function formatRunClock(seconds) {
             const m = Math.floor(seconds / 60), sec = seconds % 60;
             return m + ':' + String(sec).padStart(2, '0');
@@ -12996,6 +13050,7 @@
             audio.playExplosion(true);
 
             let isNewRecord = false;
+            const previousHighScore = savedHighScore;
             if (score > savedHighScore) {
                 savedHighScore = score;
                 isNewRecord = true;
@@ -13015,6 +13070,10 @@
             combatDirector?.playerLearner.save();
 
             document.getElementById('newRecordBadge').classList.toggle('hidden', !isNewRecord);
+            const recordText = document.getElementById('newRecordText');
+            if (recordText) recordText.textContent = newRecordLabel(isNewRecord, score, previousHighScore);
+            if (isNewRecord && previousHighScore > 0) audio.playJackpot();
+            renderReportNextGoal(sessionGold);
             document.getElementById('finalScoreText').textContent = score.toLocaleString('tr-TR');
             document.getElementById('finalWaveText').textContent = wave;
             document.getElementById('finalTimeText').textContent = formatTime(totalTime);
@@ -13034,8 +13093,8 @@
             const shopModal = document.getElementById('shopModal');
             shopModal.classList.remove('hidden');
             shopModal.classList.add('flex');
-            if (focus === 'collection') {
-                const section = document.getElementById('shopCollectionSection');
+            if (focus === 'collection' || focus === 'cosmetic') {
+                const section = document.getElementById(focus === 'cosmetic' ? 'shopCosmeticSection' : 'shopCollectionSection');
                 if (section && section.scrollIntoView) section.scrollIntoView({ block: 'start' });
             }
         }
@@ -13087,6 +13146,8 @@
             shopModal.classList.add('hidden');
             shopModal.classList.remove('flex');
             updateMenuCounters();
+            // Back on the report: what was bought changes the next goal.
+            if (gameState === 'GAME_OVER') renderReportNextGoal(sessionGold);
         }
 
         function renderShopCosmetics() {
