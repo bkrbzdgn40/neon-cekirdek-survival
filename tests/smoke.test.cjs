@@ -6326,7 +6326,7 @@ test('M5.17 chapter announces wave transitions with readable HUD names and statu
 
 test('M5.17 foundry warns before the heat pulse and damages at most twelve normal enemies once',()=>{
  const {run}=setup();
- const s=JSON.parse(run("(()=>{startNewGame();wave=6;nextBossTime=500;totalTime=0;updateArenaChapter(.1);const y=worldHeight*.32;player.y=y;enemies=Array.from({length:18},(_,i)=>new Enemy(220+i*18,y,'TANK'));for(const e of enemies)e.hp=e.maxHp=2000;const boss=new Enemy(220,y,'BOSS_DESTROYER');boss.hp=boss.maxHp=2000;enemies.push(boss);const hp=player.hp;totalTime=1.2;updateArenaChapter(.1);const warned=enemies.filter(e=>e.hp<2000).length;totalTime=1.6;updateArenaChapter(.1);const once=enemies.filter(e=>e.hp<2000).length;const mid=player.hp;updateArenaChapter(.1);const twice=enemies.filter(e=>e.hp<2000).length;return JSON.stringify({hp,warned,once,twice,mid,bossHp:boss.hp,stats:getArenaChapterSnapshot()});})()"));
+ const s=JSON.parse(run("(()=>{startNewGame();wave=6;nextBossTime=500;totalTime=0;updateArenaChapter(.1);const L=chapterFoundryLayout;const at=foundryRailPositions(L)[0];const put=(o,along)=>{if(L.axis==='y'){o.x=along;o.y=at;}else{o.x=at;o.y=along;}return o;};put(player,200);enemies=Array.from({length:18},(_,i)=>put(new Enemy(0,0,'TANK'),220+i*18));for(const e of enemies)e.hp=e.maxHp=2000;const boss=put(new Enemy(0,0,'BOSS_DESTROYER'),220);boss.hp=boss.maxHp=2000;enemies.push(boss);const hp=player.hp;totalTime=1.2;updateArenaChapter(.1);const warned=enemies.filter(e=>e.hp<2000).length;totalTime=1.6;updateArenaChapter(.1);const once=enemies.filter(e=>e.hp<2000).length;const mid=player.hp;updateArenaChapter(.1);const twice=enemies.filter(e=>e.hp<2000).length;return JSON.stringify({hp,warned,once,twice,mid,bossHp:boss.hp,stats:getArenaChapterSnapshot()});})()"));
  assert.equal(s.warned,0);
  assert.equal(s.once,12);
  assert.equal(s.twice,12);
@@ -6420,7 +6420,7 @@ test('M5.17 arena chapters render distinct canvas geometry at low graphics witho
 
 test('M5.18 foundry offers a full warning on entry and after a suppressed boss or mission',()=>{
  const {run}=setup();
- const s=JSON.parse(run("(()=>{startNewGame();nextBossTime=500;wave=6;totalTime=1.7;player.y=worldHeight*.32;const hp=player.hp;updateArenaChapter(.02);const start=getArenaChapterSnapshot();totalTime=3.2;updateArenaChapter(.02);const first=player.hp;combatDirector.activeArenaEvent={kind:'STORM'};totalTime=3.7;updateArenaChapter(.02);const blocked=getArenaChapterSnapshot();combatDirector.activeArenaEvent=null;totalTime=4.7;updateArenaChapter(.02);const restart=getArenaChapterSnapshot();const protectedHp=player.hp;player.invulnTimer=0;totalTime=6.2;updateArenaChapter(.02);return JSON.stringify({hp,start,first,blocked,restart,protectedHp,finalHp:player.hp,stats:getArenaChapterSnapshot()});})()"));
+ const s=JSON.parse(run("(()=>{startNewGame();nextBossTime=500;wave=6;totalTime=1.7;const hp=player.hp;updateArenaChapter(.02);const start=getArenaChapterSnapshot();{const L=chapterFoundryLayout;const at=foundryRailPositions(L)[0];const put=(o,along)=>{if(L.axis==='y'){o.x=along;o.y=at;}else{o.x=at;o.y=along;}return o;};put(player,300);}totalTime=3.2;updateArenaChapter(.02);const first=player.hp;combatDirector.activeArenaEvent={kind:'STORM'};totalTime=3.7;updateArenaChapter(.02);const blocked=getArenaChapterSnapshot();combatDirector.activeArenaEvent=null;totalTime=4.7;updateArenaChapter(.02);const restart=getArenaChapterSnapshot();{const L=chapterFoundryLayout;const at=foundryRailPositions(L)[0];const put=(o,along)=>{if(L.axis==='y'){o.x=along;o.y=at;}else{o.x=at;o.y=along;}return o;};put(player,300);}const protectedHp=player.hp;player.invulnTimer=0;totalTime=6.2;updateArenaChapter(.02);return JSON.stringify({hp,start,first,blocked,restart,protectedHp,finalHp:player.hp,stats:getArenaChapterSnapshot()});})()"));
  assert.equal(s.start.foundryPhase,0);
  assert.equal(s.start.foundryReadyIn,1.5);
  assert.equal(s.first,s.hp-9);
@@ -6457,8 +6457,8 @@ test('M5.18 mobile status and honest cooldown arcs expose terrain mechanics',()=
  
 test('M5.19 announced foundry rails make cautious ranged units sidestep without speed buffs',()=>{
  const {run}=setup();
- const s=JSON.parse(run("(()=>{startNewGame();wave=6;nextBossTime=500;totalTime=101;updateArenaChapter(.02);const y=worldHeight*.32;const e=new Enemy(390,y+10,'SHOOTER');const from={x:e.x,y:e.y};e.x+=19;e.y-=6;steerFoundryRangedEnemy(e,from.x,from.y);const after={x:e.x,y:e.y},before={x:from.x+19,y:from.y-6};const distance=Math.hypot(e.x-from.x,e.y-from.y);const count=chapterStats.foundryDodges;totalTime+=1.7;const danger=new Enemy(390,y+10,'SHOOTER');const orig={x:danger.x+19,y:danger.y-6};danger.x+=19;danger.y-=6;steerFoundryRangedEnemy(danger,390,y+10);return JSON.stringify({from,after,before,distance,count,dangerX:danger.x,origX:orig.x,dangerY:danger.y,origY:orig.y});})()"));
- assert.ok(s.after.y>s.before.y,'warning-phase shooter must steer away from rail');
+ const s=JSON.parse(run("(()=>{startNewGame();wave=6;nextBossTime=500;totalTime=101;updateArenaChapter(.02);const L=chapterFoundryLayout;const h=L.axis==='y';const at=foundryRailPositions(L)[0];const pos=(along,across)=>h?{x:along,y:across}:{x:across,y:along};const move=(o,along,across)=>{if(h){o.x+=along;o.y+=across;}else{o.x+=across;o.y+=along;}};const acr=o=>h?o.y:o.x;const start=pos(390,at+10);const e=new Enemy(start.x,start.y,'SHOOTER');const from={x:e.x,y:e.y};move(e,19,-6);steerFoundryRangedEnemy(e,from.x,from.y);const after=acr(e),before=at+10-6;const distance=Math.hypot(e.x-from.x,e.y-from.y);const count=chapterStats.foundryDodges;totalTime+=1.7;const danger=new Enemy(start.x,start.y,'SHOOTER');move(danger,19,-6);const orig={x:danger.x,y:danger.y};steerFoundryRangedEnemy(danger,start.x,start.y);return JSON.stringify({after,before,distance,count,dangerX:danger.x,origX:orig.x,dangerY:danger.y,origY:orig.y});})()"));
+ assert.ok(s.after>s.before,'warning-phase shooter must steer away from rail');
  assert.ok(Math.abs(s.distance-Math.hypot(19,6))<0.01,'no additional displacement');
  assert.equal(s.count,1);
  assert.equal(s.dangerX,s.origX,'danger-phase enemy does not dodge mid-pulse');
@@ -6531,11 +6531,12 @@ test('M5.20 signature operations start on each middle wave, once per wave',()=>{
 test('M5.20 giant presses telegraph before bounded once-only hits',()=>{
  const {run}=setup();
  const press=(moveAway)=>JSON.parse(run(`(()=>{startNewGame();wave=7;waveTimer=2;nextBossTime=1000;totalTime=100;updateArenaChapter(.02);
-   const x0=worldWidth*.28;enemies=Array.from({length:15},()=>new Enemy(x0,worldHeight*.5,'TANK'));for(const e of enemies)e.hp=e.maxHp=5000;
-   player.x=x0;const hp=player.hp;totalTime=101.4;updateArenaChapter(.02);const before={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits};
-   totalTime=101.9;updateArenaChapter(.02);const first={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits,mask:chapterShowcase.pulseMask,aim:chapterShowcase.pressX[1]===x0};
+   const p0=chapterShowcase.press[0];const put=(o,p,along)=>{if(p.axis==='x'){o.x=p.at;o.y=along;}else{o.y=p.at;o.x=along;}return o;};
+   enemies=Array.from({length:15},()=>put(new Enemy(0,0,'TANK'),p0,worldHeight*.5));for(const e of enemies)e.hp=e.maxHp=5000;
+   put(player,p0,300);const hp=player.hp;const aimAt={x:player.x,y:player.y};totalTime=101.4;updateArenaChapter(.02);const before={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits};
+   totalTime=101.9;updateArenaChapter(.02);const first={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits,mask:chapterShowcase.pulseMask,aim:(()=>{const p=chapterShowcase.press[1];return Math.abs(p.at-(p.axis==='x'?aimAt.x:aimAt.y))<1;})()};
    updateArenaChapter(.02);const repeated={hp:player.hp,hits:chapterShowcaseStats.pressEnemyHits};
-   player.invulnTimer=0;if(${moveAway})player.x=x0+200;totalTime=103.9;updateArenaChapter(.02);
+   player.invulnTimer=0;if(${moveAway}){const p=chapterShowcase.press[1];if(p.axis==='x')player.x+=p.at>worldWidth/2?-200:200;else player.y+=p.at>worldHeight/2?-200:200;}totalTime=103.9;updateArenaChapter(.02);
    const after={hp:player.hp,mask:chapterShowcase.pulseMask};return JSON.stringify({hp,before,first,repeated,after});})()`));
  const x=press(true);
  assert.equal(x.before.hp,x.hp);
@@ -6550,6 +6551,37 @@ test('M5.20 giant presses telegraph before bounded once-only hits',()=>{
  assert.equal(x.after.hp,x.hp-20);
  const stay=press(false);
  assert.equal(stay.after.hp,stay.hp-40);
+});
+
+// Odak 4.9 · each foundry pulse rolls a direction and two lanes that never sit side by
+// side, the same seed gives the same sequence, and the lanes really do the damage.
+test('Odak 4.9 foundry rails pick a random direction and lanes each pulse',()=>{
+ const {run}=setup();
+ const roll=(seed)=>JSON.parse(run(`(()=>{startNewGame();setRunSeed(${seed});wave=6;nextBossTime=1e6;totalTime=0;chapterFoundryAnchor=null;chapterFoundryLayout=null;updateArenaChapter(.02);
+   const rows=[];for(let i=0;i<40;i++){totalTime=i*CHAPTER_RULES.foundryCycle+.05;updateArenaChapter(.02);rows.push({...getArenaChapterSnapshot().foundryLanes,slots:[...chapterFoundryLayout.slots]});}
+   return JSON.stringify(rows);})()`));
+ const a=roll(7),b=roll(7),c=roll(99);
+ assert.deepEqual(a,b,'same seed, same rails');
+ assert.notDeepEqual(a,c,'another seed, other rails');
+ const axes=new Set(a.map(r=>r.axis));
+ assert.deepEqual([...axes].sort(),['x','y'],'both horizontal and vertical rails appear');
+ assert.ok(new Set(a.map(r=>r.slots.join())).size>=4,'lanes move around');
+ for(const r of a)assert.ok(Math.abs(r.slots[0]-r.slots[1])>=2,'a safe lane always lies between or beside the rails');
+ // A vertical layout hits the player standing in its column, not one beside it.
+ const hit=JSON.parse(run("(()=>{startNewGame();wave=6;nextBossTime=1e6;totalTime=0;updateArenaChapter(.02);chapterFoundryLayout.axis='x';const at=foundryRailPositions(chapterFoundryLayout);player.x=at[0];player.y=worldHeight*.2;const hp=player.hp;totalTime=1.6;updateArenaChapter(.02);const inLane=hp-player.hp;player.invulnTimer=0;totalTime=6.05;updateArenaChapter(.02);chapterFoundryLayout.axis='x';const next=foundryRailPositions(chapterFoundryLayout);player.x=(next[0]+next[1])/2;const hp2=player.hp;totalTime=7.6;updateArenaChapter(.02);return JSON.stringify({inLane,between:hp2-player.hp});})()"));
+ assert.equal(hit.inLane,9);
+ assert.equal(hit.between,0);
+});
+
+test('Odak 4.9 Kizil Makas presses come from a random side and the second follows the player',()=>{
+ const {run}=setup();
+ const rows=JSON.parse(run(`(()=>{const rows=[];for(let seed=1;seed<=24;seed++){startNewGame();setRunSeed(seed);wave=7;waveTimer=2;nextBossTime=1e6;totalTime=100;chapterShowcaseAttemptedWave=0;updateArenaChapter(.02);
+   const p0={...chapterShowcase.press[0]};player.x=worldWidth*.6;player.y=worldHeight*.4;player.invulnTimer=1e6;totalTime=101.85;updateArenaChapter(.02);const p1={...chapterShowcase.press[1]};
+   rows.push({p0,p1,aimed:Math.abs(p1.at-(p1.axis==='x'?player.x:player.y))<1});}return JSON.stringify(rows);})()`));
+ assert.deepEqual([...new Set(rows.map(r=>r.p0.axis))].sort(),['x','y'],'first press runs both ways');
+ assert.deepEqual([...new Set(rows.map(r=>r.p1.axis))].sort(),['x','y'],'second press runs both ways');
+ assert.ok(new Set(rows.map(r=>Math.round(r.p0.at/40))).size>=5,'first press lands in different places');
+ assert.ok(rows.every(r=>r.aimed),'second press locks onto the player');
 });
 
 test('M5.20 ion chorus needs two distinct flowers and keeps bosses immune',()=>{

@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 4.9 · Kızıl Makas yatay raylar ve rastgele çeneler
+- Dökümhanenin ısı rayları da artık dişli çelik çeneler: uyarıda çeneler kapanır, sayaç geri sayar, darbede kıvılcım ve hafif sarsıntı olur, sonra hat soğuyarak söner.
+- Her darbe yönünü (yatay ya da dikey) ve beş hattan ikisini rastgele seçer; iki hat hiç yan yana gelmez, aralarında ya da yanlarında her zaman güvenli bir hat kalır. Uyarı süresi 1,5 sn aynı.
+- Kızıl Makas olayında ilk pres rastgele yön ve yerde; ikincisi ilk pres indiğinde rastgele bir yön seçip oyuncunun durduğu hatta kilitlenir.
+
 ## Odak 4.8 · Rapor ve laboratuvar ekrana sığar
 - Rapordaki SİBER LABORATUVAR butonu çalışıyordu ama laboratuvar raporun arkasında açılıyordu; artık önde açılır.
 - Ana menüye dönünce arkada açık kalan laboratuvar kapanır. Menüde görülen kaydırma çubuğu bu gizli laboratuvardı.

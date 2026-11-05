@@ -485,7 +485,7 @@ Biyom olayları animasyonlu tuval çizimi olur; dosya eklenmez, düşük grafikt
 ### - [x] 4.8 Rapor ve laboratuvar ekrana sığar
 Laboratuvar raporun üstünde açılır; menüye dönünce açık kalan laboratuvar kapanır. Masaüstünde rapor pencereye sığar, sadece sekme içeriği kayar.
 
-### - [ ] 4.9 Kızıl Makas yatay raylar ve rastgele çeneler
+### - [x] 4.9 Kızıl Makas yatay raylar ve rastgele çeneler
 Biyomun yatay ısı rayları da dişli çenelerle canlanır; olayda preslerin yönü ve yeri rastgele seçilir, uyarı süresi aynı kalır.
 
 ### - [ ] 4.10 İyon Korosu ve Faz Kıskacı ikinci tur
