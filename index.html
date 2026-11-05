@@ -488,7 +488,11 @@
                         </div>
                     </div>
 
-            <div class="flex justify-end">
+            <div class="flex flex-wrap items-center justify-end gap-3">
+                <span id="guideResetNote" class="text-[11px] text-cyan-200/80" role="status"></span>
+                <button id="guideResetBtn" type="button" class="px-4 py-3 rounded-xl font-cyber text-xs font-bold tracking-wider border border-gray-700 text-gray-300 bg-gray-900 hover:bg-gray-800 cursor-pointer">
+                    <i class="fa-solid fa-rotate-left mr-1" aria-hidden="true"></i> REHBERLERİ YENİDEN GÖSTER
+                </button>
                 <button id="closeHowToBtn" type="button" class="cyber-btn px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 font-cyber font-bold text-white border border-cyan-300 cursor-pointer">
                     ANLADIM <i class="fa-solid fa-check ml-1"></i>
                 </button>
@@ -563,6 +567,23 @@
             <div id="upgradeCardsContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 pb-2" role="group" aria-label="Yükseltme seçenekleri">
                 <!-- Dynamically populated via JS -->
             </div>
+        </div>
+    </div>
+
+    <!-- Odak 4.2 · one-time objective guide: spotlight on the real object plus a looping demo. -->
+    <div id="guideModal" class="guide-modal fixed inset-0 z-30 hidden" role="dialog" aria-modal="true" aria-labelledby="guideTitle" data-spot="false">
+        <div id="guideSpotlight" class="guide-spotlight hidden" aria-hidden="true"></div>
+        <div id="guidePanel" class="guide-panel" data-side="center">
+            <div id="guideTag" class="guide-tag font-cyber">İLK KEZ · GÖREV</div>
+            <h2 id="guideTitle" class="guide-title font-cyber">GÖREVLER</h2>
+            <canvas id="guideDemo" class="guide-demo" width="600" height="300" aria-hidden="true"></canvas>
+            <dl class="guide-rows">
+                <div><dt class="font-cyber">NE?</dt><dd id="guideWhat"></dd></div>
+                <div><dt class="font-cyber">NASIL?</dt><dd id="guideHow"></dd></div>
+                <div><dt class="font-cyber">KAZANÇ</dt><dd id="guideReward"></dd></div>
+            </dl>
+            <button id="guideCloseBtn" type="button" class="guide-close font-cyber">ANLADIM, DEVAM <span>[BOŞLUK]</span></button>
+            <p class="guide-foot">Her rehber bir kez çıkar. Nasıl Oynanır ekranından hepsini yeniden açabilirsin.</p>
         </div>
     </div>
 

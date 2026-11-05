@@ -720,6 +720,7 @@
                 unlockSpotlightPending = data.unlockSpotlight === true;
                 ownedContent = new Set(parseOwnedContent(data.owned) || []);
                 lastRunSummary = parseLastRunSummary(data.lastRun);
+                guidesSeen = new Set(parseGuidesSeen(data.guides));
                 if (data.upgrades && typeof data.upgrades === 'object') {
                     for (const [key, max] of Object.entries(META_UPGRADE_LIMITS)) {
                         metaUpgrades[key] = safeSaveInteger(data.upgrades[key], metaUpgrades[key], max);
@@ -743,6 +744,7 @@
                     unlockSpotlight: unlockSpotlightPending,
                     owned: [...ownedContent],
                     lastRun: lastRunSummary,
+                    guides: [...guidesSeen],
                     upgrades: { ...metaUpgrades }
                 }));
             } catch (error) {
@@ -1197,6 +1199,7 @@
             const type=forcedType&&candidates.includes(forcedType)?forcedType:
                 chooseQuestType(candidates);
             activeQuest=createQuest(type);
+            requestQuestGuide(activeQuest);
             questHistory.push(type);
             if(questHistory.length>3) questHistory.shift();
             questStats.offered++;
@@ -4395,6 +4398,8 @@
                     continue;
                 const d=spawnFieldDevice(kind,x,y);
                 if(d){
+                    requestGuide('fieldDevices',()=>d.state==='idle'&&fieldDevices.includes(d)?
+                        {x:d.x,y:d.y,r:42}:null);
                     // From wave 8 onward the volatile variant forms a paired
                     // chain-reactor puzzle, never more than two devices.
                     if(kind==='CAPACITOR'&&wave>=8){
@@ -8891,6 +8896,10 @@
                 const eventX=farEnough?x:fallbackX,eventY=farEnough?y:fallbackY;
                 const finalX=kind==='CORRIDOR'?Math.max(154,Math.min(worldWidth-154,eventX)):eventX;
                 this.activeArenaEvent=new ArenaEvent(kind,finalX,eventY);
+                const guideEvent=this.activeArenaEvent;
+                requestGuide('arena_'+kind,()=>guideEvent.dead?null:kind==='CORRIDOR'?
+                    {x:guideEvent.x,y:guideEvent.y,w:300,h:100}:
+                    {x:guideEvent.x,y:guideEvent.y,r:guideEvent.radius+14});
                 audio.playThreatCue('event');
                 this.arenaEventIndex++;
                 this.nextArenaAt = totalTime + ARENA_EVENT_GAP;
@@ -9287,11 +9296,324 @@
             return true;
         }
 
+        // Odak 4.2 · one-time guides. The first time an objective appears, the game
+        // pauses, the real object is ringed on screen and a small looping demo shows
+        // how to finish it. Text reads the live rules, so it can't go stale.
+        const GUIDE_RULES = Object.freeze({ firstAt: 1.2, gap: 4 });
+        const ARENA_GUIDE_HOW = (kind) => () =>
+            `${kind === 'CORRIDOR' ? 'Şeridin' : 'Halkanın'} içine gir ve ${String(ARENA_EVENT_SPECS[kind].duration).replace('.', ',')} sn kal. Dışarı çıkarsan çubuk geri iner. Gitmezsen ${ARENA_EVENT_LIFETIME} sn sonra kaybolur, ceza yok.`;
+        const GUIDE_DEFS = Object.freeze({
+            quests: { tag: 'GÖREV', title: 'GÖREVLER', color: '#75f7ac', demo: 'hud', demoLabel: 'AV',
+                what: 'Görev çipi şu anki görevini gösterir. Biri bitince hemen yenisi gelir.',
+                how: 'Yazanı yap: düşman öldür, XP küresi topla, bir noktada dur. Sayaç çipte ilerler.',
+                reward: 'Altın (koşu bitse de kalır) ve Cinnet. Altınla Laboratuvarda kalıcı güç alırsın.' },
+            DEFEND: { tag: 'GÖREV', title: 'SİNYAL NOKTASINI SAVUN', color: '#65f7dc', demo: 'zone',
+                what: 'Haritada turkuaz bir halka belirdi: sinyal noktası.',
+                how: () => `Halkanın içinde dur. Sayaç ${waveDative(DEFEND_RULES.target)} dolunca biter; yakında düşman varken daha hızlı dolar. Dışarı çıkarsan yavaşça geri iner.`,
+                reward: 'Altın ve Cinnet.' },
+            RESCUE: { tag: 'GÖREV', title: 'VERİ KAPSÜLLERİNİ KURTAR', color: '#ffacb8', demo: 'pickup',
+                what: 'Haritada pembe bir veri kapsülü belirdi.',
+                how: 'Üstünden geçerek topla. Biri alınınca sıradaki başka yerde çıkar; 2 tane yeter.',
+                reward: 'Altın ve Cinnet.' },
+            CHAIN: { tag: 'GÖREV', title: 'ZİNCİR SIÇRAMASI', color: '#9fc4ff', demo: 'hud', demoLabel: 'ZİNCİR',
+                what: 'Zincir şimşeğinin bir düşmandan diğerine her atlaması sayılır.',
+                how: 'Kalabalık gruplara ateş et; düşmanlar birbirine yakınken şimşek daha çok sıçrar.',
+                reward: 'Altın ve Cinnet.' },
+            NO_HIT: { tag: 'GÖREV', title: 'HASAR ALMA', color: '#d4b3ff', demo: 'hud', demoLabel: 'TEMİZ',
+                what: 'Belirtilen süre boyunca hiç vurulmaman gerekiyor.',
+                how: 'Mermilerden ve düşmanlardan uzak dur, gerekirse atıl. Vurulursan sayaç sıfırdan başlar.',
+                reward: 'Altın ve Cinnet.' },
+            ELITE_HUNT: { tag: 'GÖREV', title: 'ELİT AVI', color: '#ffe08a', demo: 'hud', demoLabel: 'ELİT',
+                what: 'Bazı düşmanlar elittir: daha büyük, daha dayanıklı ve daha parlaktır.',
+                how: 'Elit düşman çıkınca ateşini ona çevir ve öldür.',
+                reward: 'Altın ve Cinnet. Elitler ayrıca bol XP bırakır.' },
+            COMBO: { tag: 'GÖREV', title: 'KOMBO', color: '#ffc36b', demo: 'hud', demoLabel: 'KOMBO',
+                what: 'Kombo, ara vermeden art arda yaptığın öldürmeleri sayar.',
+                how: 'Durmadan öldür. Kombo çipindeki çubuk biterse kombo sıfırlanır; hedef sayıya ulaş.',
+                reward: 'Altın ve Cinnet.' },
+            conduits: { tag: 'SAHA', title: 'İKMAL HALKASI', color: '#00ff66', demo: 'zone',
+                what: 'Sahada yeşil bir enerji halkası belirdi. 14 sn sonra söner.',
+                how: 'İçine gir ve 1–2 sn kal. Şarj dolunca halka patlar. Erken çıkarsan şarj yavaşça düşer.',
+                reward: 'Çevredeki düşmanlara güçlü patlama, 4,5 sn hız, Cinnet ve XP küreleri.' },
+            fieldDevices: { tag: 'SAHA', title: 'SAHA CİHAZI', color: '#ffb15e', demo: 'device',
+                what: 'Sahaya bir cihaz kondu: turuncu Kararsız Reaktör ya da mavi Graviton Direği.',
+                how: 'Cihaza ateş et. Reaktör kısa bir gecikmeyle patlar; yakınındaysan sana da vurur. Graviton çevresindeki düşmanları yavaşlatır.',
+                reward: 'Reaktör kalabalığa büyük hasar verir. Graviton kaçmak ya da toplu vurmak için zaman kazandırır.' },
+            arena_RELAY: { tag: 'OLAY', title: 'VERİ AKTARIMI', color: '#00f3ff', demo: 'zone',
+                what: 'Mavi bir veri halkası belirdi. Girmek bedava.', how: ARENA_GUIDE_HOW('RELAY'),
+                reward: 'XP ve Cinnet.' },
+            arena_VAULT: { tag: 'OLAY', title: 'RİSKLİ KASA', color: '#ffe600', demo: 'zone',
+                what: 'Sarı kasa halkası. İçine girdiğin an 12 can ödersin; canın azsa açılmaz.', how: ARENA_GUIDE_HOW('VAULT'),
+                reward: 'Altın ve +6 can.' },
+            arena_STORM: { tag: 'OLAY', title: 'ENERJİ FIRTINASI', color: '#a5b4fc', demo: 'zone',
+                what: 'Lila fırtına halkası. İçindeyken momentumun azalır.', how: ARENA_GUIDE_HOW('STORM'),
+                reward: 'Bitince +35 momentum ve XP.' },
+            arena_REACTOR: { tag: 'OLAY', title: 'HASARLI REAKTÖR', color: '#fb923c', demo: 'zone',
+                what: 'Turuncu reaktör halkası. İçine girdiğin an 10 can ödersin.', how: ARENA_GUIDE_HOW('REACTOR'),
+                reward: 'Altın ve 5 sn hız.' },
+            arena_CORRIDOR: { tag: 'OLAY', title: 'GÜVENLİ KORİDOR', color: '#6ee7b7', demo: 'zone', shape: 'rect',
+                what: 'Yeşil bir şerit. İçindeyken sana gelen düşman mermileri silinir.', how: ARENA_GUIDE_HOW('CORRIDOR'),
+                reward: 'Cinnet ve momentum.' },
+            arena_ANOMALY: { tag: 'OLAY', title: 'AKI ANOMALİSİ', color: '#e879f9', demo: 'zone', shape: 'donut',
+                what: 'Mor halka, ortası boş. Tam merkezde ilerleme saymaz.',
+                how: () => `Halkanın üstünde ${String(ARENA_EVENT_SPECS.ANOMALY.duration).replace('.', ',')} sn kal ama merkeze girme. Dışarı çıkarsan çubuk hızlı geri iner.`,
+                reward: '2 sn dokunulmazlık ve Cinnet.' },
+            circuit: { tag: 'MODÜL', title: 'DEVRE ÖRÜCÜ', color: '#ffe66d', demo: 'circuit',
+                what: 'Yeni modülün: hareket ettikçe yere sarı bir devre çizersin.',
+                how: () => `Geniş bir tur at ve ${CIRCUIT_WEAVER.maxDuration} sn içinde sarı başlangıç halkasına dön. Halkadaki yay kalan süreyi gösterir. Atılım devreyi sıfırlar.`,
+                reward: 'Kapanan alanın içindeki en fazla 16 düşman vurulur.' }
+        });
+        const GUIDE_QUEST_IDS = Object.freeze({ KILLS: 'quests', ORBS: 'quests' });
+        let guidesSeen = new Set();
+        let guideQueue = [];
+        let activeGuide = null;
+        let lastGuideClosedAt = -Infinity;
+        let guideDemoStartedAt = 0;
+
+        function guidesEnabled() { return window.NEON_GUIDES !== false; }
+        function parseGuidesSeen(list) {
+            return Array.isArray(list) ? list.filter(id => typeof id === 'string' && Object.hasOwn(GUIDE_DEFS, id)) : [];
+        }
+        function resetGuideQueue() {
+            guideQueue = [];
+            lastGuideClosedAt = -Infinity;
+            if (activeGuide) hideGuideModal();
+            activeGuide = null;
+        }
+        // target: () => {x, y, r} or {x, y, w, h} in world units, {el: id} for HUD, or null when gone.
+        function requestGuide(id, target = null) {
+            if (!guidesEnabled() || !Object.hasOwn(GUIDE_DEFS, id) || guidesSeen.has(id) ||
+                activeGuide?.id === id || guideQueue.some(g => g.id === id)) return false;
+            guideQueue.push({ id, target });
+            return true;
+        }
+        function requestQuestGuide(quest) {
+            if (!quest) return;
+            requestGuide('quests', () => ({ el: 'questHudBox' }));
+            const id = GUIDE_QUEST_IDS[quest.type] || quest.type;
+            if (id === 'quests') return;
+            requestGuide(id, () => {
+                if (activeQuest !== quest) return null;
+                if (!quest.point) return { el: 'questHudBox' };
+                return { x: quest.point.x, y: quest.point.y, r: (quest.radius || 23) + 14 };
+            });
+        }
+        function guideTargetBox(target) {
+            if (typeof target !== 'function') return { ok: true, box: null };
+            const t = target();
+            if (!t) return { ok: false, box: null };
+            if (t.el) {
+                const rect = document.getElementById(t.el)?.getBoundingClientRect?.();
+                if (!rect || rect.width <= 0) return { ok: true, box: null };
+                return { ok: true, box: { x: rect.left - 8, y: rect.top - 8, w: rect.width + 16, h: rect.height + 16, round: false } };
+            }
+            if (!Number.isFinite(t.x) || !Number.isFinite(t.y)) return { ok: false, box: null };
+            const halfW = (t.w ? t.w / 2 : t.r) * viewScale, halfH = (t.h ? t.h / 2 : t.r) * viewScale;
+            return { ok: true, box: { x: t.x * viewScale - halfW, y: t.y * viewScale - halfH, w: halfW * 2, h: halfH * 2, round: !t.w } };
+        }
+        // Called by updateGame. True when a guide just paused the frame.
+        function processGuideQueue() {
+            if (!guideQueue.length || gameState !== 'PLAYING' || totalTime < GUIDE_RULES.firstAt ||
+                totalTime - lastGuideClosedAt < GUIDE_RULES.gap) return false;
+            while (guideQueue.length) {
+                const next = guideQueue.shift();
+                const { ok, box } = guideTargetBox(next.target);
+                // A target that already vanished is skipped, not marked seen: it gets its turn next time.
+                if (ok) { showGuide(next.id, next.target, box); return true; }
+            }
+            return false;
+        }
+        function guideText(value) { return typeof value === 'function' ? value() : value; }
+        function showGuide(id, target = null, box = guideTargetBox(target).box) {
+            const def = GUIDE_DEFS[id];
+            if (!def) return false;
+            clearGameplayInput();
+            gameState = 'GUIDE';
+            activeGuide = { id, def, target };
+            guidesSeen.add(id);
+            saveMetaProgress();
+            guideDemoStartedAt = performance.now();
+            const modal = document.getElementById('guideModal');
+            if (!modal) return true;
+            modal.style?.setProperty?.('--guide-color', def.color);
+            const set = (elId, text) => { const el = document.getElementById(elId); if (el) el.textContent = text; };
+            set('guideTag', 'İLK KEZ · ' + def.tag);
+            set('guideTitle', def.title);
+            set('guideWhat', guideText(def.what));
+            set('guideHow', guideText(def.how));
+            set('guideReward', guideText(def.reward));
+            const spot = document.getElementById('guideSpotlight');
+            const panel = document.getElementById('guidePanel');
+            const width = window.innerWidth || worldWidth * viewScale;
+            let side = 'center';
+            if (spot && box) {
+                spot.style.left = box.x + 'px'; spot.style.top = box.y + 'px';
+                spot.style.width = box.w + 'px'; spot.style.height = box.h + 'px';
+                spot.dataset.round = box.round ? 'true' : 'false';
+                spot.classList.remove('hidden');
+                const centerX = box.x + box.w / 2;
+                side = box.round || box.w > 200 ? (centerX > width / 2 ? 'left' : 'right') : 'center';
+            } else if (spot) spot.classList.add('hidden');
+            modal.dataset.spot = box ? 'true' : 'false';
+            if (panel) panel.dataset.side = side;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.getElementById('guideCloseBtn')?.focus?.();
+            requestAnimationFrame(drawGuideDemo);
+            return true;
+        }
+        function hideGuideModal() {
+            const modal = document.getElementById('guideModal');
+            modal?.classList.add('hidden');
+            modal?.classList.remove('flex');
+        }
+        function closeGuide() {
+            if (gameState !== 'GUIDE' || !activeGuide) return false;
+            hideGuideModal();
+            activeGuide = null;
+            lastGuideClosedAt = totalTime;
+            gameState = 'PLAYING';
+            return true;
+        }
+        function resetGuidesSeen() {
+            guidesSeen = new Set();
+            saveMetaProgress();
+            const note = document.getElementById('guideResetNote');
+            if (note) note.textContent = 'Tamam. Rehberler sıradaki koşuda yeniden çıkacak.';
+        }
+
+        // Looping mini demo: a 4.2 s scene of the objective being completed.
+        const GUIDE_DEMO_LOOP = 4.2;
+        function drawGuideDemo(now) {
+            if (!activeGuide) return;
+            const c = document.getElementById('guideDemo');
+            const g = c?.getContext?.('2d');
+            if (!g) return;
+            const W = 300, H = 150, col = activeGuide.def.color;
+            g.setTransform(c.width / W, 0, 0, c.height / H, 0, 0);
+            const t = ((now - guideDemoStartedAt) / 1000) % GUIDE_DEMO_LOOP;
+            const ease = (v) => v < 0 ? 0 : v > 1 ? 1 : v * v * (3 - 2 * v);
+            const dot = (x, y, r, fill, glow = 10) => {
+                g.shadowColor = fill; g.shadowBlur = glow; g.fillStyle = fill;
+                g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.shadowBlur = 0;
+            };
+            const player = (x, y) => { dot(x, y, 7, '#00f3ff', 14); dot(x, y, 3, '#ffffff', 0); };
+            const label = (text, x, y, fill = col) => {
+                g.fillStyle = fill; g.font = "700 11px 'Orbitron', sans-serif"; g.textAlign = 'center'; g.fillText(text, x, y);
+            };
+            g.clearRect(0, 0, W, H);
+            g.fillStyle = '#050816'; g.fillRect(0, 0, W, H);
+            g.strokeStyle = 'rgba(0,243,255,.06)'; g.lineWidth = 1;
+            for (let x = 0; x < W; x += 20) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+            for (let y = 0; y < H; y += 20) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+            const kind = activeGuide.def.demo, cx = W * .62, cy = H * .52;
+
+            if (kind === 'zone') {
+                const shape = activeGuide.def.shape || 'ring';
+                const walk = ease(t / 1.1), fill = ease((t - 1.1) / 2.2), done = t > 3.3;
+                const px = 30 + (cx + (shape === 'donut' ? 30 : 0) - 30) * walk, py = cy + 26 * (1 - walk);
+                g.strokeStyle = col; g.lineWidth = 2.5; g.globalAlpha = done ? .35 : .9;
+                g.fillStyle = col + '22';
+                g.beginPath();
+                if (shape === 'rect') g.rect(cx - 90, cy - 28, 180, 56); else g.arc(cx, cy, 48, 0, Math.PI * 2);
+                g.fill(); g.stroke();
+                if (shape === 'donut') { g.fillStyle = '#050816'; g.beginPath(); g.arc(cx, cy, 16, 0, Math.PI * 2); g.fill(); g.stroke(); }
+                g.globalAlpha = 1;
+                if (fill > 0 && !done && shape === 'rect') {
+                    g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(cx - 90, cy - 44, 180, 6);
+                    g.fillStyle = '#ffffff'; g.fillRect(cx - 90, cy - 44, 180 * fill, 6);
+                } else if (fill > 0 && !done) {
+                    g.strokeStyle = '#ffffff'; g.lineWidth = 4;
+                    g.beginPath(); g.arc(cx, cy, 58, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fill); g.stroke();
+                }
+                if (done) {
+                    const k = ease((t - 3.3) / .6);
+                    g.strokeStyle = col; g.globalAlpha = 1 - k; g.lineWidth = 3;
+                    g.beginPath(); g.arc(cx, cy, 50 + 70 * k, 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1;
+                    label('TAMAM!', cx, H - 8, '#ffffff');
+                } else label(fill > 0 ? 'İÇİNDE KAL' : 'HALKAYA GİR', cx, H - 8);
+                player(px, py);
+            } else if (kind === 'pickup') {
+                const a = { x: W * .45, y: H * .38 }, b = { x: W * .8, y: H * .68 };
+                const first = t < 1.8, k1 = ease(t / 1.4), k2 = ease((t - 1.9) / 1.4);
+                const px = first ? 28 + (a.x - 28) * k1 : a.x + (b.x - a.x) * k2;
+                const py = first ? H * .7 + (a.y - H * .7) * k1 : a.y + (b.y - a.y) * k2;
+                if (first) dot(a.x, a.y, 9, col, 16); else if (t > 1.9) dot(b.x, b.y, 9, col, 16);
+                if (t > 1.4 && t < 1.9) label('1/2', a.x, a.y - 16, '#ffffff');
+                if (t > 3.3) label('2/2 · TAMAM!', b.x - 20, b.y - 18, '#ffffff');
+                else label('KAPSÜLÜN ÜSTÜNDEN GEÇ', W / 2, 18);
+                player(px, py);
+            } else if (kind === 'circuit') {
+                const rx = 70, ry = 38, ccx = W * .52, ccy = H * .5;
+                const loop = ease(t / 2.8), closed = t >= 2.8;
+                const angleAt = (k) => Math.PI * .75 + Math.PI * 2 * k;
+                const pos = (k) => ({ x: ccx + Math.cos(angleAt(k)) * rx * 1.6, y: ccy + Math.sin(angleAt(k)) * ry });
+                const start = pos(0);
+                for (const [ex, ey] of [[ccx - 25, ccy], [ccx + 30, ccy - 6], [ccx + 4, ccy + 10]]) {
+                    dot(ex, ey, 5, closed && t < 3.6 ? '#ffffff' : '#ff3d6e', 8);
+                }
+                if (closed) {
+                    g.fillStyle = col + (t < 3.6 ? '55' : '22');
+                    g.beginPath(); g.ellipse(ccx, ccy, rx * 1.6, ry, 0, 0, Math.PI * 2); g.fill();
+                }
+                g.strokeStyle = col; g.lineWidth = 3; g.beginPath();
+                for (let k = 0; k <= loop; k += .02) { const p = pos(k); k === 0 ? g.moveTo(p.x, p.y) : g.lineTo(p.x, p.y); }
+                g.stroke();
+                g.strokeStyle = col; g.lineWidth = 2; g.globalAlpha = .8;
+                g.beginPath(); g.arc(start.x, start.y, 13, 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1;
+                if (!closed) {
+                    const left = 1 - loop * .6;
+                    g.strokeStyle = left < .25 ? '#ff5c7a' : col; g.lineWidth = 3;
+                    g.beginPath(); g.arc(start.x, start.y, 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left); g.stroke();
+                    label(loop > .5 ? 'BAŞLANGICA DÖN' : 'TUR AT', W / 2, 18);
+                } else label('DEVRE KAPANDI · VURUŞ!', W / 2, 18, '#ffffff');
+                const p = closed ? start : pos(loop);
+                player(p.x, p.y);
+            } else if (kind === 'device') {
+                const dx = W * .7, dy = H * .5, fire = t > .5 && t < 1.5, boom = t >= 1.9;
+                if (fire) for (let i = 0; i < 3; i++) {
+                    const k = ((t - .5) * 2.4 + i / 3) % 1;
+                    dot(48 + (dx - 48) * k, dy, 2.5, '#00f3ff', 6);
+                }
+                if (!boom) {
+                    const flash = t > 1.5 && Math.floor(t * 12) % 2 === 0;
+                    g.fillStyle = flash ? '#ffffff' : '#ffb15e';
+                    g.save(); g.translate(dx, dy); g.rotate(Math.PI / 4); g.fillRect(-9, -9, 18, 18); g.restore();
+                    label(t > 1.5 ? 'PATLAMAK ÜZERE' : 'CİHAZA ATEŞ ET', W / 2, 18);
+                } else {
+                    const k = ease((t - 1.9) / .7);
+                    g.fillStyle = 'rgba(255,177,94,' + (.35 * (1 - k)) + ')';
+                    g.beginPath(); g.arc(dx, dy, 18 + 58 * k, 0, Math.PI * 2); g.fill();
+                    g.strokeStyle = '#ffb15e'; g.globalAlpha = 1 - k; g.lineWidth = 3;
+                    g.beginPath(); g.arc(dx, dy, 18 + 58 * k, 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1;
+                    label('BÜYÜK PATLAMA', W / 2, 18, '#ffffff');
+                }
+                for (const [ex, ey] of [[dx - 34, dy - 30], [dx + 36, dy + 22], [dx + 28, dy - 34]]) {
+                    if (!boom || t < 2.1) dot(ex, ey, 5, '#ff3d6e', 8);
+                }
+                player(40, dy);
+            } else {
+                const target = 5, count = Math.min(target, Math.floor(t / .62));
+                const ex = W * .66 + Math.sin(t * 3) * 30, ey = H * .6;
+                if (count < target && (t % .62) < .48) dot(ex, ey, 6, '#ff3d6e', 8);
+                else if (count <= target) { g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.beginPath(); g.arc(ex, ey, 10, 0, Math.PI * 2); g.stroke(); }
+                const chip = { x: W / 2 - 70, y: 12, w: 140, h: 24 };
+                g.fillStyle = 'rgba(15,23,42,.92)'; g.strokeStyle = col; g.lineWidth = 1.5;
+                g.beginPath(); g.roundRect ? g.roundRect(chip.x, chip.y, chip.w, chip.h, 6) : g.rect(chip.x, chip.y, chip.w, chip.h);
+                g.fill(); g.stroke();
+                label((activeGuide.def.demoLabel || 'GÖREV') + ' · ' + count + '/' + target, W / 2, 28, count >= target ? '#ffffff' : col);
+                if (count >= target) label('+ ALTIN', W / 2, 54, '#ffe600');
+                player(W * .25, H * .6);
+            }
+            requestAnimationFrame(drawGuideDemo);
+        }
+
         function updateGame(dt) {
             if (hitStopTimer > 0) {
                 hitStopTimer -= dt;
                 return;
             }
+            if (processGuideQueue()) return;
 
             weaponImpactFrameCount = 0;
             motionFxFrameCount = 0;
@@ -9368,7 +9690,9 @@
                 if (conduitZones.length < CONDUIT_RULES.maxZones) {
                     const cx = 110 + rng() * Math.max(100, worldWidth - 220);
                     const cy = 110 + rng() * Math.max(100, worldHeight - 220);
-                    conduitZones.push(new ConduitZone(cx, cy));
+                    const zone = new ConduitZone(cx, cy);
+                    conduitZones.push(zone);
+                    requestGuide('conduits', () => zone.dead ? null : { x: zone.x, y: zone.y, r: zone.radius + 14 });
                 }
             }
 
@@ -10870,6 +11194,7 @@
             spawnTimer = 0.5;
             conduitSpawnTimer = CONDUIT_RULES.firstSpawn;
             resetSystemIntros();
+            resetGuideQueue();
             hudRefreshAccumulator = 0;
             bulletCollisionGrid.clear();
             hitStopTimer = 0;
@@ -10944,6 +11269,8 @@
             if (currentLvl >= MAX_MODULE_TIER || !isUpgradeOfferable(upg, player)) return;
             upg.apply(player, rarity);
             player.upgradeCounts[upg.id] = nextLvl;
+            if (upg.id === 'circuit_weaver' && nextLvl === 1) requestGuide('circuit', () => player ?
+                { x: player.x, y: player.y, r: CIRCUIT_WEAVER.closeRadius + 20 } : null);
             normalizePlayerBuildPower(player);
             player.refreshBuildTraits();
 
@@ -12015,6 +12342,9 @@
             } else if (gameState === 'PAUSED' && (e.code === 'Escape' || e.code === 'KeyP')) {
                 e.preventDefault();
                 togglePause();
+            } else if (gameState === 'GUIDE' && ['Space', 'Enter', 'NumpadEnter', 'Escape'].includes(e.code)) {
+                e.preventDefault();
+                closeGuide();
             }
         });
 
@@ -12264,6 +12594,8 @@
             return true;
         }
         document.getElementById('howToBtn')?.addEventListener('click', openHowTo);
+        document.getElementById('guideCloseBtn')?.addEventListener('click', closeGuide);
+        document.getElementById('guideResetBtn')?.addEventListener('click', resetGuidesSeen);
         document.getElementById('closeHowToBtn')?.addEventListener('click', closeHowTo);
         window.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && closeHowTo()) event.stopImmediatePropagation?.();

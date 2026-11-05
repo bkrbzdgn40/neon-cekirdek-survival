@@ -14,8 +14,10 @@ function gameUrl(url = '/index.html', { unlockAll = true } = {}) {
 }
 
 async function gotoGame(page, url = '/index.html',
-  { unlockAll = true, waitUntil = 'domcontentloaded', autoGraphics = false } = {}) {
+  { unlockAll = true, waitUntil = 'domcontentloaded', autoGraphics = false, guides = false } = {}) {
   if (!autoGraphics) await page.addInitScript(() => { window.NEON_GRAPHICS_AUTO = false; });
+  // Odak 4.2 · one-time guides pause the run; only guide specs pass { guides: true }.
+  if (!guides) await page.addInitScript(() => { window.NEON_GUIDES = false; });
   return page.goto(gameUrl(url, { unlockAll }), { waitUntil });
 }
 

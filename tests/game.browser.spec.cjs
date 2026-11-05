@@ -1545,3 +1545,52 @@ test('Odak 3.8 hangar fills desktop screens, keeps columns level and draws a liv
  await expect(page.locator('#howToModal')).toBeHidden();
  expect(errors).toEqual([]);
 });
+
+test('Odak 4.2 the first objective pauses once for a guide with a spotlight and a live demo', async ({ page, isMobile }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await gotoGame(page, '/index.html', { guides: true });
+  await page.locator('#startBtn').click();
+  const modal = page.locator('#guideModal');
+  await expect(modal).toBeVisible({ timeout: 8000 });
+  await expect(page.locator('#guideTitle')).toHaveText('GÖREVLER');
+  // Phones hide the quest chip in portrait, so only desktop rings it.
+  if (!isMobile) await expect(page.locator('#guideSpotlight')).toBeVisible();
+  // The run is frozen while the guide is open.
+  const frozenAt = await page.evaluate(() => (gameState === 'GUIDE' ? totalTime : -1));
+  expect(frozenAt).toBeGreaterThan(1);
+  await page.waitForTimeout(400);
+  expect(await page.evaluate(() => totalTime)).toBe(frozenAt);
+  // The demo canvas animates: lit pixels change between frames.
+  const sample = () => page.evaluate(() => {
+    const c = document.getElementById('guideDemo');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let lit = 0, sum = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 240) { lit++; sum += i; }
+    return { lit, sum };
+  });
+  const a = await sample(); await page.waitForTimeout(700); const b = await sample();
+  expect(a.lit).toBeGreaterThan(50);
+  expect(b.sum).not.toBe(a.sum);
+  // The panel fits the screen and does not cover the spotlit chip.
+  const panel = await page.locator('#guidePanel').boundingBox();
+  const view = page.viewportSize();
+  expect(panel.y).toBeGreaterThanOrEqual(0);
+  expect(panel.y + panel.height).toBeLessThanOrEqual(view.height + 1);
+  if (!isMobile) {
+    const spot = await page.locator('#guideSpotlight').boundingBox();
+    expect(panel.y).toBeGreaterThan(spot.y + spot.height);
+  }
+  await page.locator('#guideCloseBtn').click();
+  await expect(modal).toBeHidden();
+  expect(await page.evaluate(() => gameState)).toBe('PLAYING');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem(META_SAVE_KEY)).guides)).toContain('quests');
+  // Reloading never shows it again; the how-to button brings guides back.
+  await page.reload();
+  expect(await page.evaluate(() => guidesSeen.has('quests'))).toBe(true);
+  await page.locator('#howToBtn').click();
+  await page.locator('#guideResetBtn').click();
+  await expect(page.locator('#guideResetNote')).toContainText('yeniden');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem(META_SAVE_KEY)).guides)).toEqual([]);
+  expect(errors).toEqual([]);
+});

@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 4.2 · Tek seferlik görev rehberi
+- Görev, ikmal halkası, saha cihazı, 6 arena olayı ve Devre Örücü ilk göründüğünde oyun durur: gerçek nesne ekranda halkayla vurgulanır, yanında döngülü canlı mini demo ve NE / NASIL / KAZANÇ satırları çıkar.
+- Video yok: demo oyunun kendi çizimi, metin canlı kuralları okur (süreler değişince rehber de değişir). Her rehber bir kez çıkar, kayıtta `guides` olarak tutulur; Nasıl Oynanır ekranında "Rehberleri yeniden göster" var.
+- Sıra: koşunun ilk 1,2 sn sonrası, iki rehber arası en az 4 sn; hedefi kaybolan rehber atlanır ama görülmüş sayılmaz. Testler rehberi `NEON_GUIDES=false` ile kapatır.
+
 ## Odak 4.1 · Devre süresi ve sayaç
 - Devre Örücü penceresi 9 → 14 sn, en fazla 72 nokta, kapanma yarıçapı 56 px (oyuncular süreyi yetiştiremiyordu).
 - Sarı başlangıç halkasında kalan süre yayı (son %25 kırmızı) ve yol yarılanınca "BAŞLANGICA DÖN" yazısı.
