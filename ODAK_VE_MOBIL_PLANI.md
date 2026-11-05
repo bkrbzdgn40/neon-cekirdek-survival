@@ -424,9 +424,11 @@ Kullanıcı kararı (2026-11-05): Laboratuvar bitince 40.000 altın boşta kalı
 
 Ölçüm (ölümsüz bot, 20 dk, 2 tohum): Açgözlülük 8'de koşu başına 4.300–5.500 altın, Laboratuvarın tamamı ≈15.600. Altın küresi ve sandık altını dalga 20'den sonra büyümez; Açgözlülük kademe başına +%10 altın verir, XP'ye etkisi kalkar. Sonuç: koşu başına ≈350–700 altın.
 
-### - [ ] 3.7 Altınla içerik açma
+### - [x] 3.7 Altınla içerik açma
 
 Hayalet ve Titan şasileri ile Faz 3'te eklenen silah ve pasifler Laboratuvarda altınla açılır. Dalgayla açılan sistemler (Faz 1) değişmez. `?unlock=all` hepsini açar.
+
+Sonuç: 7 içerik (`CONTENT_UNLOCKS`), toplam 7.800 altın. Hayalet 1.200, Titan 1.800, Mayın İzi 900, Bumerang Disk 1.100, Şok Halkası 1.300, Soğutucu 700, Toplayıcı 800. Kilitli şasi kartı fiyatını gösterir, tıklanınca Laboratuvarın Koleksiyon bölümü açılır.
 
 ### - [ ] 3.8 Hangar ana menüsü
 

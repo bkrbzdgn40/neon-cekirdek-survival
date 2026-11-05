@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 3.7 · Altınla içerik açma
+- Siber Laboratuvarda yeni Koleksiyon bölümü: Hayalet (1.200) ve Titan (1.800) şasileri, Mayın İzi, Bumerang Disk, Şok Halkası, Soğutucu ve Toplayıcı (700–1.300) bir kez alınır. Toplam 7.800 altın.
+- Açılmamış silah ve pasifler yükseltme kartlarında çıkmaz. Kilitli şasi kartı fiyatı gösterir ve tıklanınca Laboratuvarı açar. Satın alınan şasi hemen seçilir.
+- Kayıt ve yedek `owned` listesini taşıyor; eski kayıt ve yedekler boş listeyle açılır, bilinmeyen kimlik içeren yedek reddedilir. `?unlock=all` her şeyi açar.
+
 ## Odak 3.6 · Altın geliri ayarı
 - Altın küresi ve sandık altını dalga 20'den sonra büyümüyor (`GOLD_ECONOMY.waveCap`). Önceden dalga 75'te küre başına 39 altın düşüyordu, şimdi en fazla 12.
 - Açgözlülük kademe başına +%10 altın veriyor; XP artışı kalktı (kendini besleyen döngüydü). Açgözlülük 8'de 20 dk'lık koşu 4.300–5.500 altından ≈650'ye indi.
