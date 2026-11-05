@@ -436,6 +436,14 @@ Ortada seçili şasi canlı ve büyük, solda şasi seçimi, sağda "sıradaki h
 
 Sonuç: üç sütun aynı çizgide bitiyor (fark ≤2 px). Ortada canvas önizleme (DÜŞÜK grafikte ve azaltılmış harekette tek kare), sağda sıradaki hedef, başlangıç gücü ve son operasyon. Kontroller ve tehditler "Nasıl oynanır" penceresinde. Altı eski yerleşim regex testi silindi, yerine davranış testleri geldi.
 
+### - [x] 3.9 Alan savunma görevi
+
+Kullanıcı geri bildirimi: ilk dalgalarda düşmanlar alana varmadan ölüyor, savunma ilerlemesi geri sayıyordu (ilerleme yakında düşman şartına bağlıydı). Yeni kural (`DEFEND_RULES`): alanda durmak her zaman ilerletir, yakında düşman varsa 1,6 kat hızlı; geri sayım yalnız alan dışında, 0,4 hızla. Hedef 5 → 8 sn. Gerçek koşuda (dalga 3, 4 tohum) 5,2–6,9 sn'de tamamlanıyor.
+
+### - [ ] 3.10 Koleksiyonda dalga şartı
+
+Koleksiyon içeriği önce bir dalga şartı ister, sonra altınla alınır. Şart sağlanmadan kart "Dalga X'e ulaş" der ve satın alınamaz.
+
 ---
 
 ## Faz 4 · Kapalı test kapısı (oyunculara sunmadan önce)
