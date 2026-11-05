@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 4.10 · İyon Bahçesi ve Yarık Geçidi canlanır
+- İyon Bahçesi: polenler yukarı süzülür, çiçekleri yumuşak kökler bağlar ve hazır çiçekten köke ışık akar. Çiçekler nefes alır; hazırken açık durur ve dalga yayar, dolarken iyice açılıp iyonları çekirdeğine çeker, harcanınca tomurcuk olur, patlarken parlar.
+- Yarık Geçidi: geçitler içe kıvrılan kollarıyla dönen birer girdap olur ve toz yutar. Hazır geçit nefes verir, ışınlanmada iki geçit birden parlar, bağlantı çizgisinde enerji paketleri akar.
+- İyon Korosu sahnesinin kenarları titreşen ses dalgası olur, uyumda çiçekler altın taç yaprak saçar. Faz Kıskacı çemberini iki kıskaç çenesi saran ve geri sayımla kapanan bir halka sarar; ışında paketler akar, inişte yarıktan kıymıklar saçılır, kaçınca yeşil halka çıkar. "DURDUR" yazısı artık can çubuğunun üstünde kalır.
+
 ## Odak 4.9 · Kızıl Makas yatay raylar ve rastgele çeneler
 - Dökümhanenin ısı rayları da artık dişli çelik çeneler: uyarıda çeneler kapanır, sayaç geri sayar, darbede kıvılcım ve hafif sarsıntı olur, sonra hat soğuyarak söner.
 - Her darbe yönünü (yatay ya da dikey) ve beş hattan ikisini rastgele seçer; iki hat hiç yan yana gelmez, aralarında ya da yanlarında her zaman güvenli bir hat kalır. Uyarı süresi 1,5 sn aynı.

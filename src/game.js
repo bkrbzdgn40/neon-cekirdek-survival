@@ -7361,6 +7361,17 @@
                 stunned++;
             }
             chapterShowcaseStats.ionStuns+=stunned;
+            // Odak 4.10 · captured flowers throw gold petals.
+            const petals=graphicsQuality==='low'?4:graphicsQuality==='medium'?8:14;
+            const nodes=getGardenCenters();
+            for(let i=0;i<nodes.length;i++){
+                if(!(op.flowerMask&(1<<i)))continue;
+                for(let k=0;k<petals;k++){
+                    const a=k*Math.PI*2/petals+rng()*.4,speed=120+rng()*180;
+                    emitParticle(new Particle(nodes[i].x,nodes[i].y,Math.cos(a)*speed,Math.sin(a)*speed,
+                        k%2?'#fff5b2':'#86ffe0',2.5+rng()*2,.6+rng()*.4));
+                }
+            }
             shockwaves.push(new Shockwave(worldWidth*.5,worldHeight*.5,
                 Math.min(worldWidth,worldHeight)*.58,'#86ffe0',.8));
             createFloatingText(player.x,player.y-65,'İYON KOROSU · REZONANS!',
@@ -7376,6 +7387,7 @@
             op.resolvedAt=totalTime;
             if(Math.hypot(player.x-op.anchorX,player.y-op.anchorY)>RIFT_PINCER.escapeRadius){
                 op.evaded=true;
+                shockwaves.push(new Shockwave(player.x,player.y,90,'#7dffb0',.35));
                 chapterShowcaseStats.pincerEvades+=op.targets.length;
                 return;
             }
@@ -7397,6 +7409,13 @@
                 chapterShowcaseStats.pincerFlanks++;
                 shockwaves.push(new Shockwave(enemy.x,enemy.y,108,
                     '#e3a6ff',.45));
+                // Odak 4.10 · shards burst out of the tear.
+                const shards=graphicsQuality==='low'?4:graphicsQuality==='medium'?8:12;
+                for(let k=0;k<shards;k++){
+                    const a=k*Math.PI*2/shards+rng()*.5,speed=140+rng()*200;
+                    emitParticle(new Particle(target.x,target.y,Math.cos(a)*speed,Math.sin(a)*speed,
+                        k%3?'#e3a6ff':'#ffffff',2+rng()*2,.4+rng()*.3));
+                }
             }
         }
         function updateChapterShowcase() {
@@ -7584,7 +7603,18 @@
                 }
                 ctx.globalAlpha = lit ? .95 : half ? .7 : .45;
                 ctx.strokeStyle = lit ? gold : teal; ctx.lineWidth = low ? 2 : 2.5;
-                ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(a.x, a.y);
+                if (low) ctx.lineTo(b.x, b.y);
+                else {
+                    // Odak 4.10 · the edge sings: a wave pinned at both flowers, louder once lit.
+                    const amp = lit ? 7 : half ? 4 : 2, len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+                    const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+                    for (let q = 1; q <= 24; q++) {
+                        const t = q / 24, off = Math.sin(t * Math.PI * 7 - clock * 6 + i) * amp * Math.sin(Math.PI * t);
+                        ctx.lineTo(a.x + (b.x - a.x) * t + nx * off, a.y + (b.y - a.y) * t + ny * off);
+                    }
+                }
+                ctx.stroke();
                 // Ions run away from each captured flower along its two edges.
                 const ions = low ? 1 : 3;
                 for (const [from, to] of [[a, b, i], [b, a, (i + 1) % 3]].filter(e => on(e[2]) || op.completed)) {
@@ -7660,6 +7690,24 @@
                 ctx.setLineDash([14, 10]); ctx.lineDashOffset = -clock * 40;
                 ctx.beginPath(); ctx.arc(op.anchorX, op.anchorY, R.escapeRadius, 0, Math.PI * 2); ctx.stroke();
                 ctx.setLineDash([]); ctx.lineDashOffset = 0;
+                // Odak 4.10 · two pincer claws close around the circle as the snap nears.
+                const span = (.3 + .62 * k) * Math.PI, turn = clock * .5;
+                ctx.strokeStyle = k > .8 ? '#ffffff' : violet; ctx.globalAlpha = .5 + .45 * k;
+                ctx.lineWidth = low ? 4 : 6; ctx.lineCap = 'round';
+                for (let claw = 0; claw < 2; claw++) {
+                    const mid = turn + claw * Math.PI;
+                    ctx.beginPath(); ctx.arc(op.anchorX, op.anchorY, R.escapeRadius + 12, mid - span / 2, mid + span / 2); ctx.stroke();
+                    if (!low) {
+                        // A tooth at each tip points inward.
+                        for (const tip of [mid - span / 2, mid + span / 2]) {
+                            const ox = op.anchorX + Math.cos(tip) * (R.escapeRadius + 12), oy = op.anchorY + Math.sin(tip) * (R.escapeRadius + 12);
+                            ctx.beginPath(); ctx.moveTo(ox, oy);
+                            ctx.lineTo(op.anchorX + Math.cos(tip) * (R.escapeRadius - 8), op.anchorY + Math.sin(tip) * (R.escapeRadius - 8));
+                            ctx.stroke();
+                        }
+                    }
+                }
+                ctx.lineCap = 'butt';
                 if (!low && !out) {
                     // Four chevrons drifting outward: "leave this circle".
                     const drift = (clock * 1.6) % 1;
@@ -7689,11 +7737,21 @@
                         ctx.setLineDash([10, 8]); ctx.lineDashOffset = -clock * 70;
                         ctx.beginPath(); ctx.moveTo(enemy.x, enemy.y); ctx.lineTo(target.x, target.y); ctx.stroke();
                         ctx.setLineDash([]); ctx.lineDashOffset = 0;
+                        if (!low) {
+                            // Phase packets ride the beam toward the landing spot.
+                            ctx.fillStyle = '#ffffff';
+                            for (let n = 0; n < 3; n++) {
+                                const t = ((clock * 1.2 + n / 3) % 1 + 1) % 1;
+                                ctx.globalAlpha = Math.sin(Math.PI * t);
+                                ctx.beginPath(); ctx.arc(enemy.x + (target.x - enemy.x) * t, enemy.y + (target.y - enemy.y) * t, 2.5, 0, Math.PI * 2); ctx.fill();
+                            }
+                            ctx.globalAlpha = 1;
+                        }
                         ctx.lineWidth = 2.5;
                         ctx.beginPath(); ctx.arc(enemy.x, enemy.y, enemy.radius + 9, 0, Math.PI * 2); ctx.stroke();
                         if (!low) {
                             ctx.fillStyle = violet; ctx.font = "700 9px 'Orbitron', sans-serif";
-                            ctx.fillText('DURDUR', enemy.x, enemy.y - enemy.radius - 14);
+                            ctx.fillText('DURDUR', enemy.x, enemy.y - enemy.radius - 30);
                         }
                     }
                     // Hologram: rotating diamond, scan lines inside, flickering ghost.
@@ -7940,85 +7998,230 @@
                     ctx.restore();
                 }
             } else if(arenaChapter==='GARDEN'){
-                const nodes=getGardenCenters();
-                for(let index=0;index<nodes.length;index++){
-                    const node=nodes[index];
-                    const r=CHAPTER_RULES.gardenRadius;
-                    ctx.save();
-                    ctx.translate(node.x,node.y);
-                    ctx.strokeStyle=d.color;
-                    const readyIn=Math.max(0,chapterGardenReady[index]-totalTime);
-                    ctx.globalAlpha=active ? (readyIn>0?.28:.85) : .25;
-                    ctx.lineWidth=2;
-                    for(let petal=0;petal<6;petal++){
-                        ctx.beginPath();
-                        const a=petal*Math.PI/3+clock*.15;
-                        ctx.ellipse(Math.cos(a)*r*.46,Math.sin(a)*r*.46,
-                            r*.5,r*.22,a,0,Math.PI*2);
-                        ctx.stroke();
-                    }
-                    ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke();
-                    const progress=chapterGardenCharge[index]/CHAPTER_RULES.gardenCharge;
-                    if(progress>0){
-                        ctx.lineWidth=5;ctx.strokeStyle=d.accent;
-                        ctx.beginPath();ctx.arc(0,0,r+6,-Math.PI/2,
-                            -Math.PI/2+Math.PI*2*progress);ctx.stroke();
-                    }
-                    if(active&&readyIn===0&&chapterGardenContested[index]>0){
-                        ctx.globalAlpha=.85;
-                        ctx.lineWidth=4;ctx.strokeStyle='#ffc078';
-                        ctx.setLineDash([8,6]);
-                        ctx.beginPath();ctx.arc(0,0,r+13,0,Math.PI*2);ctx.stroke();
-                        ctx.setLineDash([]);
-                    }
-                    if(readyIn>0){
-                        ctx.globalAlpha=active?.8:.2;
-                        ctx.lineWidth=4;ctx.strokeStyle=d.accent;
-                        ctx.beginPath();ctx.arc(0,0,r+6,-Math.PI/2,
-                            -Math.PI/2+Math.PI*2*(1-readyIn/CHAPTER_RULES.gardenCooldown));
-                        ctx.stroke();
-                    }
-                    ctx.restore();
-                }
+                drawGardenFloor(ctx, d, active, low, clock);
             } else if(arenaChapter==='RIFT'){
-                const nodes=getRiftCenters();
+                drawRiftFloor(ctx, d, active, low, clock);
+            }
+            ctx.restore();
+        }
+        // Odak 4.10 · cheap stable noise for motes: the same index always gives the same value.
+        function biomeNoise(i, salt) {
+            const v = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+            return v - Math.floor(v);
+        }
+        function biomeMoteCount(low) {
+            return low ? 0 : graphicsQuality === 'medium' ? 14 : 28;
+        }
+        // Odak 4.10 · İyon Bahçesi floor. Pollen drifts up, soft roots join the flowers,
+        // each flower breathes; a ready flower sends ripples, a charging one opens and
+        // pulls ions into its core, a spent one closes into a bud and flashes when it bursts.
+        function drawGardenFloor(ctx, d, active, low, clock) {
+            const nodes = getGardenCenters(), r = CHAPTER_RULES.gardenRadius;
+            const cx = (nodes[0].x + nodes[1].x + nodes[2].x) / 3, cy = (nodes[0].y + nodes[1].y + nodes[2].y) / 3;
+            ctx.save();
+            // Pollen.
+            const motes = biomeMoteCount(low);
+            for (let i = 0; i < motes; i++) {
+                const speed = 10 + biomeNoise(i, 1) * 22, span = worldHeight + 40;
+                const y = worldHeight + 20 - ((clock * speed + biomeNoise(i, 2) * span) % span);
+                const x = biomeNoise(i, 3) * worldWidth + Math.sin(clock * .7 + i) * 16;
+                ctx.globalAlpha = (active ? .35 : .15) * (.5 + .5 * biomeNoise(i, 4));
+                ctx.fillStyle = i % 3 ? d.color : d.accent;
+                ctx.beginPath(); ctx.arc(x, y, 1.4 + biomeNoise(i, 5) * 1.8, 0, Math.PI * 2); ctx.fill();
+            }
+            // Roots: soft curves that bow toward the middle of the garden (the showcase draws its own stage).
+            ctx.strokeStyle = d.color; ctx.lineWidth = 2;
+            for (let i = 0; i < (chapterShowcase ? 0 : 3); i++) {
+                const a = nodes[i], b = nodes[(i + 1) % 3];
+                const mx = (a.x + b.x) / 2 + (cx - (a.x + b.x) / 2) * .35, my = (a.y + b.y) / 2 + (cy - (a.y + b.y) / 2) * .35;
+                ctx.globalAlpha = active ? .13 : .06;
+                ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(mx, my, b.x, b.y); ctx.stroke();
+                if (!low && active) {
+                    // A sparkle travels the root away from a ready flower.
+                    const readyA = chapterGardenReady[i] <= totalTime;
+                    if (readyA) {
+                        const t = ((clock * .35 + i * .31) % 1 + 1) % 1, u = 1 - t;
+                        const x = u * u * a.x + 2 * u * t * mx + t * t * b.x, y = u * u * a.y + 2 * u * t * my + t * t * b.y;
+                        ctx.globalAlpha = .7 * Math.sin(Math.PI * t); ctx.fillStyle = d.accent;
+                        ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+                    }
+                }
+            }
+            for (let index = 0; index < nodes.length; index++) {
+                const node = nodes[index];
+                const readyIn = Math.max(0, chapterGardenReady[index] - totalTime);
+                const progress = chapterGardenCharge[index] / CHAPTER_RULES.gardenCharge;
+                const since = CHAPTER_RULES.gardenCooldown - readyIn;
+                const ready = readyIn === 0;
                 ctx.save();
-                ctx.strokeStyle=d.color;
-                ctx.lineWidth=2;
-                ctx.globalAlpha=active ? .42 : .17;
-                ctx.setLineDash([8,12]);
-                ctx.beginPath();ctx.moveTo(nodes[0].x,nodes[0].y);
-                ctx.lineTo(nodes[1].x,nodes[1].y);ctx.stroke();
-                ctx.setLineDash([]);
-                for(let i=0;i<2;i++){
-                    const node=nodes[i],r=CHAPTER_RULES.riftRadius;
-                    ctx.save();ctx.translate(node.x,node.y);
-                    ctx.strokeStyle=i?d.accent:d.color;
-                    ctx.globalAlpha=active ? .85 : .3;
-                    for(let ring=0;ring<(low?2:3);ring++){
-                        const a=clock*(i?-.8:.8)+ring*.72;
-                        ctx.lineWidth=ring?1.5:3;
-                        ctx.beginPath();ctx.arc(0,0,r-ring*9,a,a+Math.PI*1.43);
+                ctx.translate(node.x, node.y);
+                // Burst: a flower that just bloomed flashes outward.
+                if (!ready && since < .7) {
+                    const t = since / .7;
+                    ctx.globalAlpha = .55 * (1 - t); ctx.fillStyle = d.accent;
+                    ctx.beginPath(); ctx.arc(0, 0, r * (.4 + 1.6 * t), 0, Math.PI * 2); ctx.fill();
+                }
+                // Ripples from a ready flower.
+                if (ready && active && !low) {
+                    for (let ring = 0; ring < 2; ring++) {
+                        const k = ((clock / 2.2 + ring * .5 + index * .21) % 1 + 1) % 1;
+                        ctx.globalAlpha = .35 * (1 - k); ctx.strokeStyle = d.color; ctx.lineWidth = 2;
+                        ctx.beginPath(); ctx.arc(0, 0, r + 4 + 30 * k, 0, Math.PI * 2); ctx.stroke();
+                    }
+                }
+                // Petals: bud while spent, open when ready, wider while charging.
+                const open = ready ? .82 + .3 * progress : .42 + .3 * (since / CHAPTER_RULES.gardenCooldown);
+                const breathe = 1 + (low ? 0 : .05 * Math.sin(clock * 2 + index * 1.7));
+                const spin = clock * (.15 + .5 * progress);
+                ctx.strokeStyle = d.color; ctx.fillStyle = d.color; ctx.lineWidth = 2;
+                for (let petal = 0; petal < 6; petal++) {
+                    const a = petal * Math.PI / 3 + spin;
+                    const dist = r * .46 * open * breathe;
+                    ctx.beginPath();
+                    ctx.ellipse(Math.cos(a) * dist, Math.sin(a) * dist, r * .5 * open * breathe, r * .22 * breathe, a, 0, Math.PI * 2);
+                    ctx.globalAlpha = (active ? (ready ? .16 : .07) : .04) + .2 * progress;
+                    ctx.fill();
+                    ctx.globalAlpha = active ? (ready ? .85 : .32) : .25;
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = active ? (ready ? .8 : .3) : .25;
+                ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+                // Core: two soft discs, brighter while charging.
+                ctx.fillStyle = d.accent;
+                ctx.globalAlpha = (ready ? .18 : .08) + .25 * progress;
+                ctx.beginPath(); ctx.arc(0, 0, r * .32, 0, Math.PI * 2); ctx.fill();
+                ctx.globalAlpha = (ready ? .7 : .3) + .3 * progress;
+                ctx.beginPath(); ctx.arc(0, 0, 4 + 5 * progress, 0, Math.PI * 2); ctx.fill();
+                // Charging pulls ions in a spiral toward the core.
+                if (progress > 0 && !low) {
+                    const ions = 6;
+                    ctx.fillStyle = d.accent;
+                    for (let j = 0; j < ions; j++) {
+                        const t = ((clock * 1.4 + j / ions) % 1 + 1) % 1;
+                        const a = j * Math.PI * 2 / ions + t * 2.4 + clock;
+                        const rad = r * 1.25 * (1 - t) + 6;
+                        ctx.globalAlpha = .9 * t * Math.min(1, progress * 3);
+                        ctx.beginPath(); ctx.arc(Math.cos(a) * rad, Math.sin(a) * rad, 2.5, 0, Math.PI * 2); ctx.fill();
+                    }
+                }
+                ctx.strokeStyle = d.accent;
+                if (progress > 0) {
+                    ctx.globalAlpha = active ? .85 : .25;
+                    ctx.lineWidth = 5;
+                    ctx.beginPath(); ctx.arc(0, 0, r + 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress); ctx.stroke();
+                }
+                if (active && ready && chapterGardenContested[index] > 0) {
+                    ctx.globalAlpha = .85;
+                    ctx.lineWidth = 4; ctx.strokeStyle = '#ffc078';
+                    ctx.setLineDash([8, 6]); ctx.lineDashOffset = -clock * 30;
+                    ctx.beginPath(); ctx.arc(0, 0, r + 13, 0, Math.PI * 2); ctx.stroke();
+                    ctx.setLineDash([]); ctx.lineDashOffset = 0;
+                }
+                if (!ready) {
+                    ctx.globalAlpha = active ? .8 : .2;
+                    ctx.lineWidth = 4; ctx.strokeStyle = d.accent;
+                    ctx.beginPath(); ctx.arc(0, 0, r + 6, -Math.PI / 2,
+                        -Math.PI / 2 + Math.PI * 2 * (1 - readyIn / CHAPTER_RULES.gardenCooldown));
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+        // Odak 4.10 · Yarık Geçidi floor. Energy packets run along a flowing link, each
+        // gate is a turning vortex that swallows dust; an armed gate pulses, and both
+        // gates flash on a warp.
+        function drawRiftFloor(ctx, d, active, low, clock) {
+            const nodes = getRiftCenters(), r = CHAPTER_RULES.riftRadius;
+            const armed = totalTime >= chapterRiftReadyAt;
+            const sinceWarp = totalTime - chapterRiftLastWarpAt;
+            ctx.save();
+            ctx.strokeStyle = d.color; ctx.lineWidth = 2;
+            ctx.globalAlpha = active ? .42 : .17;
+            ctx.setLineDash([8, 12]); ctx.lineDashOffset = -clock * 40;
+            ctx.beginPath(); ctx.moveTo(nodes[0].x, nodes[0].y); ctx.lineTo(nodes[1].x, nodes[1].y); ctx.stroke();
+            ctx.setLineDash([]); ctx.lineDashOffset = 0;
+            if (active && armed && !low) {
+                ctx.fillStyle = d.accent;
+                for (let n = 0; n < 3; n++) {
+                    const t = ((clock * .4 + n / 3) % 1 + 1) % 1;
+                    const back = n % 2 ? 1 - t : t;
+                    ctx.globalAlpha = .8 * Math.sin(Math.PI * t);
+                    ctx.beginPath();
+                    ctx.arc(nodes[0].x + (nodes[1].x - nodes[0].x) * back, nodes[0].y + (nodes[1].y - nodes[0].y) * back, 3.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            for (let i = 0; i < 2; i++) {
+                const node = nodes[i], dir = i ? -1 : 1;
+                ctx.save(); ctx.translate(node.x, node.y);
+                // The hole itself.
+                ctx.globalAlpha = active ? .5 : .25; ctx.fillStyle = '#05030f';
+                ctx.beginPath(); ctx.arc(0, 0, r * .92, 0, Math.PI * 2); ctx.fill();
+                const col = i ? d.accent : d.color;
+                if (!low) {
+                    // Vortex arms that wind inward.
+                    ctx.strokeStyle = col; ctx.lineWidth = 2;
+                    ctx.globalAlpha = active ? .42 : .15;
+                    for (let arm = 0; arm < 3; arm++) {
+                        const base = arm * Math.PI * 2 / 3 + clock * 1.5 * dir;
+                        ctx.beginPath();
+                        for (let q = 0; q <= 10; q++) {
+                            const t = q / 10, a = base + dir * t * 2.6, rad = r * (.15 + .8 * t);
+                            if (q === 0) ctx.moveTo(Math.cos(a) * rad, Math.sin(a) * rad);
+                            else ctx.lineTo(Math.cos(a) * rad, Math.sin(a) * rad);
+                        }
                         ctx.stroke();
                     }
-                    ctx.beginPath();ctx.moveTo(-15,0);ctx.lineTo(0,-18);
-                    ctx.lineTo(15,0);ctx.lineTo(0,18);ctx.closePath();ctx.stroke();
-                    if(chapterRiftPursuit&&i===chapterRiftPursuit.to&&active){
-                        ctx.globalAlpha=.95;
-                        ctx.lineWidth=5;ctx.strokeStyle='#ffc078';
-                        ctx.setLineDash([9,7]);
-                        ctx.beginPath();ctx.arc(0,0,r+17,0,Math.PI*2);ctx.stroke();
-                        ctx.setLineDash([]);
+                    // Dust falling in.
+                    const motes = graphicsQuality === 'medium' ? 5 : 9;
+                    ctx.fillStyle = col;
+                    for (let j = 0; j < motes; j++) {
+                        const t = ((clock * .55 + j / motes) % 1 + 1) % 1;
+                        const a = j * 2.39996 + dir * t * 3;
+                        const rad = r * 1.9 * (1 - t) + r * .2;
+                        ctx.globalAlpha = (active ? .75 : .3) * t;
+                        ctx.beginPath(); ctx.arc(Math.cos(a) * rad, Math.sin(a) * rad, 1.8 + t * 1.5, 0, Math.PI * 2); ctx.fill();
                     }
-                    if(totalTime<chapterRiftReadyAt){
-                        ctx.globalAlpha=active?.7:.2;
-                        ctx.lineWidth=4;ctx.strokeStyle=d.accent;
-                        const remaining=chapterRiftReadyAt-totalTime;
-                        ctx.beginPath();ctx.arc(0,0,r+7,-Math.PI/2,
-                            -Math.PI/2+Math.PI*2*(1-remaining/CHAPTER_RULES.riftCooldown));
-                        ctx.stroke();
-                    }
-                    ctx.restore();
+                }
+                ctx.strokeStyle = col;
+                ctx.globalAlpha = active ? .85 : .3;
+                for (let ring = 0; ring < (low ? 2 : 3); ring++) {
+                    const a = clock * .8 * dir * (ring % 2 ? -1.4 : 1) + ring * .72;
+                    ctx.lineWidth = ring ? 1.5 : 3;
+                    ctx.beginPath(); ctx.arc(0, 0, r - ring * 9, a, a + Math.PI * 1.43); ctx.stroke();
+                }
+                // Core: a diamond that flickers.
+                const flicker = low ? 1 : .7 + .3 * Math.sin(clock * 9 + i * 2);
+                ctx.globalAlpha = (active ? .9 : .35) * flicker;
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(-15, 0); ctx.lineTo(0, -18); ctx.lineTo(15, 0); ctx.lineTo(0, 18); ctx.closePath(); ctx.stroke();
+                // Armed gates breathe out a ring.
+                if (active && armed && !low) {
+                    const k = ((clock / 1.6 + i * .5) % 1 + 1) % 1;
+                    ctx.globalAlpha = .45 * (1 - k); ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(0, 0, r + 6 + 22 * k, 0, Math.PI * 2); ctx.stroke();
+                }
+                // A warp flashes both gates.
+                if (sinceWarp >= 0 && sinceWarp < .5) {
+                    const t = sinceWarp / .5;
+                    ctx.globalAlpha = .7 * (1 - t); ctx.fillStyle = '#ffffff';
+                    ctx.beginPath(); ctx.arc(0, 0, r * (.3 + .9 * t), 0, Math.PI * 2); ctx.fill();
+                }
+                if (chapterRiftPursuit && i === chapterRiftPursuit.to && active) {
+                    ctx.globalAlpha = .95;
+                    ctx.lineWidth = 5; ctx.strokeStyle = '#ffc078';
+                    ctx.setLineDash([9, 7]); ctx.lineDashOffset = clock * 30;
+                    ctx.beginPath(); ctx.arc(0, 0, r + 17, 0, Math.PI * 2); ctx.stroke();
+                    ctx.setLineDash([]); ctx.lineDashOffset = 0;
+                }
+                if (!armed) {
+                    ctx.globalAlpha = active ? .7 : .2;
+                    ctx.lineWidth = 4; ctx.strokeStyle = d.accent;
+                    const remaining = chapterRiftReadyAt - totalTime;
+                    ctx.beginPath(); ctx.arc(0, 0, r + 7, -Math.PI / 2,
+                        -Math.PI / 2 + Math.PI * 2 * (1 - remaining / CHAPTER_RULES.riftCooldown));
+                    ctx.stroke();
                 }
                 ctx.restore();
             }
