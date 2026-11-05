@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 5.2 · Kostümler
+- Laboratuvara GARDIROP eklendi: 4 yuvada 16 kostüm (çekirdek rengi, iz efekti, çekirdek şekli, arena paleti), 400–1500 altın.
+- Kostümler yalnızca görünüşü değiştirir; can, hasar ve hız aynı kalır. Alınan kostüm hemen giyilir, tekrar tıklayınca çıkar; hangarda ve koşuda görünür.
+- Kostümler kayıtla ve yedekle saklanır; menüdeki sıradaki hedef artık en ucuz kostümü de gösterir.
+
 ## Odak 5.1 · Düşman sözlüğü
 - Nasıl Oynanır › TEHDİTLER artık bir sözlük: 10 düşman, elit ve 4 boss. Bir koşuda karşılaştığın düşman kalıcı olarak kaydedilir; adı, ne yaptığı, nasıl yenileceği ve kaç tane imha ettiğin görünür.
 - Görmediğin düşmanlar adı gizli bir siluet olarak durur ve hangi dalga civarında çıktığını söyler. Yeni bir düşman görünce koşu sırasında "SÖZLÜĞE EKLENDİ" yazar.

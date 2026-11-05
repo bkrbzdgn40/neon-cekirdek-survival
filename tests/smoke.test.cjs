@@ -7769,20 +7769,23 @@ test('Odak 3.7 backups carry owned content and reject unknown ids', () => {
   assert.deepEqual(x.owned, ['PHANTOM', 'coolant']);
 });
 
-test('Odak 3.8 next goal walks collection, then lab, then the record', () => {
+// Odak 5.2 · after the lab the goal points at the cheapest costume, then at the record.
+test('Odak 3.8 next goal walks collection, then lab, then costumes, then the record', () => {
   const { run } = setup({}, { unlockAll: false });
   const x = JSON.parse(run(`(()=>{
     savedMaxWave=10;const out=[];totalGold=0;out.push(getMenuNextGoal());
     totalGold=1000;out.push(getMenuNextGoal());
     CONTENT_UNLOCKS.forEach(c=>ownedContent.add(c.id));out.push(getMenuNextGoal());
     META_SHOP_ITEMS.forEach(i=>metaUpgrades[i.key]=i.maxLevel);out.push(getMenuNextGoal());
+    COSMETICS.forEach(c=>ownedCosmetics.add(c.id));out.push(getMenuNextGoal());
     return JSON.stringify(out.map(g=>({kind:g.kind,id:g.id,ready:g.ready})));})()`));
   assert.deepEqual(x[0], { kind: 'content', id: 'coolant', ready: false });
   // With 1000 gold the cheapest locked item is affordable, so the card says it is ready.
   assert.equal(x[1].kind, 'content');
   assert.equal(x[1].ready, true);
   assert.equal(x[2].kind, 'lab');
-  assert.equal(x[3].kind, 'record');
+  assert.deepEqual(x[3], { kind: 'cosmetic', id: 'core_gold', ready: true });
+  assert.equal(x[4].kind, 'record');
 });
 
 test('Odak 3.8 the last run summary survives a reload and ignores broken saves', () => {
@@ -8113,4 +8116,64 @@ test('Odak 5.1 enemy codex records encounters and kills and keeps them', () => {
   const r = JSON.parse(fresh.run(`(()=>{gameState='MENU';const ok=restoreProgressBackup(${JSON.stringify(x.backup)});
     return JSON.stringify({ok,seen:[...codexSeen].sort(),kills:codexKills});})()`));
   assert.deepEqual(r, { ok: true, seen: ['DASHER', 'ELITE', 'SWARM'], kills: { SWARM: 1, DASHER: 1, ELITE: 1 } });
+});
+
+// Odak 5.2 · costumes are bought once, worn or taken off, saved, and change nothing but looks.
+test('Odak 5.2 costumes are bought, worn and saved, and never change the run', () => {
+  const key = 'neonCekirdek.meta.v1';
+  const store = {};
+  const first = setup(store);
+  const x = JSON.parse(first.run(`(()=>{
+    gameState='MENU';totalGold=300;
+    const poor=buyCosmetic('core_gold');totalGold=2000;
+    const bought=buyCosmetic('core_gold'), again=buyCosmetic('core_gold');
+    const afterBuy={gold:totalGold,worn:equippedCosmetics.core};
+    buyCosmetic('shape_star');
+    toggleCosmetic('core_gold');const off=equippedCosmetics.core;toggleCosmetic('core_gold');
+    renderShopItems();
+    const html=document.getElementById('shopCosmeticContainer').innerHTML;
+    return JSON.stringify({poor,bought,again,afterBuy,off,gold:totalGold,equipped:equippedCosmetics,
+      worn:(html.match(/data-state="worn"/g)||[]).length,items:(html.match(/data-cosmetic=/g)||[]).length,
+      count:document.getElementById('shopCosmeticCount').textContent,backup:JSON.stringify(createProgressBackup())});})()`));
+  assert.equal(x.poor, false, 'not enough gold');
+  assert.equal(x.bought, true);
+  assert.equal(x.again, false, 'bought once');
+  assert.deepEqual(x.afterBuy, { gold: 1600, worn: 'core_gold' }, 'a new costume is worn at once');
+  assert.equal(x.off, null, 'wearing it again takes it off');
+  assert.equal(x.gold, 1600 - 950);
+  assert.deepEqual(x.equipped, { core: 'core_gold', trail: null, shape: 'shape_star', arena: null });
+  assert.equal(x.items, 16);
+  assert.equal(x.worn, 2);
+  assert.equal(x.count, '2/16');
+  const again = JSON.parse(setup(store).run('JSON.stringify({owned:[...ownedCosmetics].sort(),equipped:equippedCosmetics})'));
+  assert.deepEqual(again, { owned: ['core_gold', 'shape_star'], equipped: { core: 'core_gold', trail: null, shape: 'shape_star', arena: null } });
+  // Worn-but-not-owned, wrong slot and unknown ids are dropped.
+  const bad = { [key]: JSON.stringify({ version: 2, gold: 5, highScore: 0, maxWave: 2,
+    cosmetics: { owned: ['trail_comet', 'nope', 'arena_amber'], equipped: { core: 'trail_comet', trail: 'trail_comet', shape: 'shape_ring', arena: 'nope' } },
+    upgrades: { baseDamage: 0, maxHp: 0, speedDash: 0, greed: 0, defibrillator: 0 } }) };
+  const c = JSON.parse(setup(bad).run('JSON.stringify({owned:[...ownedCosmetics].sort(),equipped:equippedCosmetics,gold:totalGold})'));
+  assert.deepEqual(c, { owned: ['arena_amber', 'trail_comet'], equipped: { core: null, trail: 'trail_comet', shape: null, arena: null }, gold: 5 });
+  const r = JSON.parse(setup({}).run(`(()=>{gameState='MENU';const ok=restoreProgressBackup(${JSON.stringify(x.backup)});
+    return JSON.stringify({ok,owned:[...ownedCosmetics].sort(),core:equippedCosmetics.core});})()`));
+  assert.deepEqual(r, { ok: true, owned: ['core_gold', 'shape_star'], core: 'core_gold' });
+  // Every costume on: the same player numbers, a different picture.
+  const trace = [];
+  const ctx = new Proxy({}, { get: (_, k) => (...a) => { trace.push(String(k)); },
+    set: (_, k, v) => { if (k === 'fillStyle') trace.push('fill:' + v); return true; } });
+  const look = setup({}, { canvasContext: ctx });
+  const stats = (wear) => JSON.parse(look.run(`(()=>{gameState='MENU';
+    for(const slot of Object.keys(equippedCosmetics))equippedCosmetics[slot]=null;
+    if(${wear}){for(const c of COSMETICS)ownedCosmetics.add(c.id);
+      Object.assign(equippedCosmetics,{core:'core_lava',trail:'trail_comet',shape:'shape_hex',arena:'arena_emerald'});}
+    setRunSeed(3);startNewGame();
+    return JSON.stringify({r:player.radius,speed:player.speed,dmg:player.damage,hp:player.maxHp,rate:player.fireRate,crit:player.critChance});})()`));
+  const plain = stats(false), dressed = stats(true);
+  assert.deepEqual(dressed, plain);
+  const picture = () => { trace.length = 0; look.run(`player.trail=[{x:10,y:10,r:12},{x:20,y:10,r:12},{x:30,y:10,r:12}];player.draw(ctx);drawBackgroundGrid()`); return trace.join('|'); };
+  const worn = picture();
+  look.run(`for(const slot of Object.keys(equippedCosmetics))equippedCosmetics[slot]=null`);
+  const standard = picture();
+  assert.ok(worn.includes('fill:#03100c') && !standard.includes('fill:#03100c'), 'arena palette paints the floor');
+  assert.ok(worn.includes('fill:#ff6a3d'), 'core colour');
+  assert.ok((worn.match(/lineTo/g) || []).length > (standard.match(/lineTo/g) || []).length, 'hexagon and comet trail draw lines');
 });

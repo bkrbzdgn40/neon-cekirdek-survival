@@ -828,6 +828,120 @@
             host.innerHTML = '<div class="codex-summary"><span><b>SÖZLÜK · ' + seen + '/' + total + '</b> Karşılaştığın düşmanlar buraya kendiliğinden eklenir.</span>' +
                 '<span class="codex-meter"><span style="width:' + Math.round(seen / total * 100) + '%"></span></span></div>' + cards;
         }
+        // Odak 5.2 · Kostümler. Four slots, four looks each. A costume changes only how
+        // things look: hitbox, speed, damage and every warning colour stay the same.
+        const COSMETIC_SLOTS = Object.freeze({ core: 'ÇEKİRDEK RENGİ', trail: 'İZ EFEKTİ', shape: 'ÇEKİRDEK ŞEKLİ', arena: 'ARENA PALETİ' });
+        const COSMETICS = Object.freeze([
+            { id: 'core_gold', slot: 'core', name: 'Altın Çekirdek', cost: 400, color: '#ffd166' },
+            { id: 'core_lava', slot: 'core', name: 'Lav Çekirdek', cost: 450, color: '#ff6a3d' },
+            { id: 'core_ice', slot: 'core', name: 'Buz Çekirdek', cost: 500, color: '#bfe9ff' },
+            { id: 'core_uv', slot: 'core', name: 'Morötesi Çekirdek', cost: 550, color: '#c77dff' },
+            { id: 'trail_spark', slot: 'trail', name: 'Kıvılcım İzi', cost: 600, style: 'spark', color: '#ffd166' },
+            { id: 'trail_comet', slot: 'trail', name: 'Kuyruklu Yıldız', cost: 700, style: 'comet', color: '#9ff3ff' },
+            { id: 'trail_prism', slot: 'trail', name: 'Prizma İzi', cost: 800, style: 'prism', color: '#ff7ad9' },
+            { id: 'trail_ghost', slot: 'trail', name: 'Hayalet İzi', cost: 900, style: 'ghost', color: '#e0d4ff' },
+            { id: 'shape_hex', slot: 'shape', name: 'Altıgen Çekirdek', cost: 700, sides: 6, color: '#67e8f9' },
+            { id: 'shape_diamond', slot: 'shape', name: 'Elmas Çekirdek', cost: 800, sides: 4, color: '#67e8f9' },
+            { id: 'shape_star', slot: 'shape', name: 'Yıldız Çekirdek', cost: 950, star: 5, color: '#67e8f9' },
+            { id: 'shape_ring', slot: 'shape', name: 'Halka Çekirdek', cost: 1100, ring: true, color: '#67e8f9' },
+            { id: 'arena_violet', slot: 'arena', name: 'Gece Moru', cost: 1000, color: '#c084fc', bg: '#0b0618',
+              grid: 'rgba(190,120,255,0.09)', accent: '#c084fc', secondary: '#ff7ad9', pulse: 1.1, label: 'GECE MORU' },
+            { id: 'arena_emerald', slot: 'arena', name: 'Zümrüt Matris', cost: 1150, color: '#5dffb0', bg: '#03100c',
+              grid: 'rgba(80,255,170,0.08)', accent: '#5dffb0', secondary: '#3dd6ff', pulse: .9, label: 'ZÜMRÜT MATRİS' },
+            { id: 'arena_amber', slot: 'arena', name: 'Kehribar Hat', cost: 1300, color: '#ffbe5c', bg: '#100a03',
+              grid: 'rgba(255,190,90,0.08)', accent: '#ffbe5c', secondary: '#ff8a5c', pulse: .8, label: 'KEHRİBAR HAT' },
+            { id: 'arena_glacier', slot: 'arena', name: 'Buzul', cost: 1500, color: '#bde8ff', bg: '#04101a',
+              grid: 'rgba(190,235,255,0.10)', accent: '#bde8ff', secondary: '#7aa8ff', pulse: .7, label: 'BUZUL' }
+        ].map(c => Object.freeze({ ...c, id: c.id })));
+        const COSMETIC_BY_ID = new Map(COSMETICS.map(c => [c.id, c]));
+        let ownedCosmetics = new Set();
+        let equippedCosmetics = { core: null, trail: null, shape: null, arena: null };
+        function parseCosmetics(data) {
+            const owned = new Set(Array.isArray(data?.owned) ? data.owned.filter(id => COSMETIC_BY_ID.has(id)) : []);
+            const equipped = { core: null, trail: null, shape: null, arena: null };
+            for (const slot of Object.keys(equipped)) {
+                const id = data?.equipped?.[slot];
+                if (owned.has(id) && COSMETIC_BY_ID.get(id).slot === slot) equipped[slot] = id;
+            }
+            return { owned, equipped };
+        }
+        function cosmeticsSaveDataFrom(c) {
+            return { owned: [...c.owned], equipped: { ...c.equipped } };
+        }
+        function cosmeticsSaveData() {
+            return cosmeticsSaveDataFrom({ owned: ownedCosmetics, equipped: equippedCosmetics });
+        }
+        function equippedCosmetic(slot) {
+            const id = equippedCosmetics[slot];
+            return id ? COSMETIC_BY_ID.get(id) || null : null;
+        }
+        function buyCosmetic(id) {
+            const item = COSMETIC_BY_ID.get(id);
+            if (!item || ownedCosmetics.has(id) || totalGold < item.cost) return false;
+            totalGold -= item.cost;
+            ownedCosmetics.add(id);
+            equippedCosmetics[item.slot] = id;
+            saveMetaProgress();
+            return true;
+        }
+        // Wearing the worn one again takes it off (back to the standard look).
+        function toggleCosmetic(id) {
+            const item = COSMETIC_BY_ID.get(id);
+            if (!item || !ownedCosmetics.has(id)) return false;
+            equippedCosmetics[item.slot] = equippedCosmetics[item.slot] === id ? null : id;
+            saveMetaProgress();
+            return true;
+        }
+        function hexToRgbTriplet(hex) {
+            const n = parseInt(String(hex).slice(1), 16);
+            return ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255);
+        }
+        // One path for the player and the hangar: a circle, a polygon, a star or a ring.
+        function fillCoreShape(ctx, x, y, r, shape, rot) {
+            ctx.beginPath();
+            if (shape?.sides) {
+                for (let i = 0; i < shape.sides; i++) {
+                    const a = rot + i * Math.PI * 2 / shape.sides;
+                    if (i === 0) ctx.moveTo(x + Math.cos(a) * r * 1.12, y + Math.sin(a) * r * 1.12);
+                    else ctx.lineTo(x + Math.cos(a) * r * 1.12, y + Math.sin(a) * r * 1.12);
+                }
+                ctx.closePath(); ctx.fill();
+            } else if (shape?.star) {
+                for (let i = 0; i < shape.star * 2; i++) {
+                    const a = rot - Math.PI / 2 + i * Math.PI / shape.star, rad = i % 2 ? r * .62 : r * 1.28;
+                    if (i === 0) ctx.moveTo(x + Math.cos(a) * rad, y + Math.sin(a) * rad);
+                    else ctx.lineTo(x + Math.cos(a) * rad, y + Math.sin(a) * rad);
+                }
+                ctx.closePath(); ctx.fill();
+            } else if (shape?.ring) {
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.arc(x, y, r * .55, 0, Math.PI * 2, true);
+                ctx.fill('evenodd');
+            } else {
+                ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        function cosmeticSwatch(item) {
+            const c = item.color;
+            if (item.slot === 'shape') {
+                const pts = item.ring ? null : [];
+                if (item.sides) for (let i = 0; i < item.sides; i++) { const a = -Math.PI / 2 + i * Math.PI * 2 / item.sides; pts.push((Math.cos(a) * 15).toFixed(1) + ',' + (Math.sin(a) * 15).toFixed(1)); }
+                if (item.star) for (let i = 0; i < item.star * 2; i++) { const a = -Math.PI / 2 + i * Math.PI / item.star, r = i % 2 ? 7 : 16; pts.push((Math.cos(a) * r).toFixed(1) + ',' + (Math.sin(a) * r).toFixed(1)); }
+                return '<svg viewBox="-20 -20 40 40" aria-hidden="true">' + (item.ring ?
+                    '<circle r="12" fill="none" stroke="' + c + '" stroke-width="7"/>' :
+                    '<polygon points="' + pts.join(' ') + '" fill="' + c + '"/>') + '</svg>';
+            }
+            if (item.slot === 'trail') {
+                return '<svg viewBox="-20 -20 40 40" aria-hidden="true">' + [0, 1, 2, 3].map(i =>
+                    '<circle cx="' + (-14 + i * 8) + '" cy="' + (6 - i * 4) + '" r="' + (2 + i * 1.4) + '" fill="' + c + '" opacity="' + (.3 + i * .2) + '"/>').join('') +
+                    '<circle cx="14" cy="-10" r="8" fill="#e6faff"/></svg>';
+            }
+            if (item.slot === 'arena') {
+                return '<svg viewBox="-20 -20 40 40" aria-hidden="true"><rect x="-18" y="-18" width="36" height="36" rx="6" fill="' + item.bg + '" stroke="' + item.accent + '"/>' +
+                    '<path d="M-18 -6H18M-18 6H18M-6 -18V18M6 -18V18" stroke="' + item.accent + '" stroke-opacity=".45"/></svg>';
+            }
+            return '<svg viewBox="-20 -20 40 40" aria-hidden="true"><circle r="15" fill="' + c + '"/><circle r="7" fill="#ffffff"/></svg>';
+        }
         // Odak 4.4 · the lab sells one revive tier now; saves may still hold the old three.
         const META_UPGRADE_LIMITS = { baseDamage: 10, maxHp: 10, speedDash: 8, greed: 8, defibrillator: 1 };
         const LEGACY_DEFIBRILLATOR_MAX = 3;
@@ -874,6 +988,7 @@
                 lastRunSummary = parseLastRunSummary(data.lastRun);
                 guidesSeen = new Set(parseGuidesSeen(data.guides));
                 ({ seen: codexSeen, kills: codexKills } = parseCodex(data.codex));
+                ({ owned: ownedCosmetics, equipped: equippedCosmetics } = parseCosmetics(data.cosmetics));
                 if (data.upgrades && typeof data.upgrades === 'object') {
                     const rawDefib = data.upgrades.defibrillator;
                     const legacyDefib = Number.isSafeInteger(rawDefib) && rawDefib >= 0 &&
@@ -907,6 +1022,7 @@
                     lastRun: lastRunSummary,
                     guides: [...guidesSeen],
                     codex: codexSaveData(),
+                    cosmetics: cosmeticsSaveData(),
                     upgrades: { ...metaUpgrades }
                 }));
             } catch (error) {
@@ -936,6 +1052,7 @@
                     unlockFailedRuns,
                     owned: [...ownedContent],
                     codex: codexSaveData(),
+                    cosmetics: cosmeticsSaveData(),
                     upgrades: { ...metaUpgrades }
                 },
                 graphics: graphicsQuality
@@ -990,6 +1107,7 @@
                         owned: restoredOwned,
                         // Odak 5.1 · older backups simply have an empty codex.
                         codex: codexSaveDataFrom(parseCodex(data.codex)),
+                        cosmetics: cosmeticsSaveDataFrom(parseCosmetics(data.cosmetics)),
                         upgrades
                     },
                     graphics: backup.graphics
@@ -1036,6 +1154,7 @@
             metaUpgrades = { ...backup.progress.upgrades };
             ownedContent = new Set(backup.progress.owned);
             ({ seen: codexSeen, kills: codexKills } = parseCodex(backup.progress.codex));
+            ({ owned: ownedCosmetics, equipped: equippedCosmetics } = parseCosmetics(backup.progress.cosmetics));
             applyGraphicsQuality(backup.graphics, false);
             updateMenuCounters();
             return true;
@@ -2113,16 +2232,7 @@
             }
 
             draw(ctx) {
-                for (let i = 0; i < this.trail.length; i++) {
-                    const t = this.trail[i];
-                    const alpha = ((i + 1) / this.trail.length) * 0.35;
-                    ctx.beginPath();
-                    ctx.arc(t.x, t.y, t.r * (i / this.trail.length), 0, Math.PI * 2);
-                    ctx.fillStyle = this.overdriveActive
-                        ? `rgba(255, 0, 127, ${alpha})`
-                        : (this.isDashing ? `rgba(255, 230, 0, ${alpha})` : `rgba(0, 243, 255, ${alpha})`);
-                    ctx.fill();
-                }
+                this.drawTrail(ctx);
 
                 const orbPositions = this.getOrbitalPositions();
                 for (const op of orbPositions) {
@@ -2211,17 +2321,62 @@
                     }
                     ctx.restore();
                 }
+                // Odak 5.2 · a costume recolours and reshapes the core; dash and Cinnet keep their signal colours.
+                const coreColor = this.overdriveActive ? '#ff007f' : (this.isDashing ? '#ffe600' :
+                    (equippedCosmetic('core')?.color || this.color));
+                const shape = equippedCosmetic('shape');
+                const spin = PREFERS_REDUCED_VFX_MOTION ? 0 : totalTime * .6;
                 ctx.shadowBlur = getGraphicsBlur(22);
-                ctx.shadowColor = this.overdriveActive ? '#ff007f' : (this.isDashing ? '#ffe600' : this.color);
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.overdriveActive ? '#ff007f' : (this.isDashing ? '#ffe600' : this.color);
-                ctx.fill();
-
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 0.48, 0, Math.PI * 2);
+                ctx.shadowColor = coreColor;
+                ctx.fillStyle = coreColor;
+                fillCoreShape(ctx, this.x, this.y, this.radius, shape, spin);
+                ctx.shadowBlur = 0;
                 ctx.fillStyle = '#ffffff';
-                ctx.fill();
+                fillCoreShape(ctx, this.x, this.y, this.radius * 0.48, shape, spin);
+                ctx.restore();
+            }
+            // Odak 5.2 · the trail behind the core. A trail costume changes its style; dash
+            // and Cinnet still tint it yellow and pink.
+            drawTrail(ctx) {
+                const n = this.trail.length;
+                if (!n) return;
+                const look = equippedCosmetic('trail');
+                const signal = this.overdriveActive ? '255,0,127' : this.isDashing ? '255,230,0' : null;
+                const rgb = signal || (look ? hexToRgbTriplet(look.color) : '0,243,255');
+                const style = look?.style || 'dots';
+                const clock = PREFERS_REDUCED_VFX_MOTION ? 0 : totalTime;
+                ctx.save();
+                if (style === 'comet') {
+                    ctx.lineCap = 'round';
+                    for (let i = 1; i < n; i++) {
+                        const a = this.trail[i - 1], b = this.trail[i], k = i / n;
+                        ctx.strokeStyle = 'rgba(' + rgb + ',' + (k * .5).toFixed(3) + ')';
+                        ctx.lineWidth = Math.max(1, b.r * 1.6 * k);
+                        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+                    }
+                } else {
+                    for (let i = 0; i < n; i++) {
+                        const t = this.trail[i], k = (i + 1) / n, alpha = k * .35;
+                        ctx.beginPath();
+                        if (style === 'spark') {
+                            const jx = Math.sin(i * 7.3 + clock * 21) * 5, jy = Math.cos(i * 5.1 + clock * 17) * 5;
+                            ctx.arc(t.x + jx, t.y + jy, 1.6 + 2.2 * k, 0, Math.PI * 2);
+                            ctx.fillStyle = i % 2 && !signal ? 'rgba(255,255,255,' + (alpha * 2).toFixed(3) + ')' :
+                                'rgba(' + rgb + ',' + Math.min(1, alpha * 2.2).toFixed(3) + ')';
+                            ctx.fill();
+                        } else if (style === 'ghost') {
+                            ctx.arc(t.x, t.y, t.r * (.55 + .45 * k), 0, Math.PI * 2);
+                            ctx.strokeStyle = 'rgba(' + rgb + ',' + (alpha * 1.4).toFixed(3) + ')';
+                            ctx.lineWidth = 1.5; ctx.stroke();
+                        } else {
+                            ctx.arc(t.x, t.y, t.r * (i / n), 0, Math.PI * 2);
+                            ctx.fillStyle = style === 'prism' && !signal ?
+                                'hsla(' + Math.round((clock * 140 + i * 28) % 360) + ',100%,65%,' + (alpha * 1.3).toFixed(3) + ')' :
+                                'rgba(' + rgb + ',' + alpha.toFixed(3) + ')';
+                            ctx.fill();
+                        }
+                    }
+                }
                 ctx.restore();
             }
         }
@@ -10667,7 +10822,8 @@
         }
 
         function drawBackgroundGrid() {
-            ctx.fillStyle = '#050816';
+            const palette = equippedCosmetic('arena');
+            ctx.fillStyle = palette?.bg || '#050816';
             ctx.fillRect(0, 0, worldWidth, worldHeight);
             const phase = combatDirector?.profile?.phase;
             const railColor = phase === 'BOSS' || phase === 'WARNING'
@@ -10684,7 +10840,7 @@
             }
 
             const spacing = getGraphicsPreset().gridSpacing;
-            ctx.strokeStyle = (player && player.overdriveActive) ? 'rgba(255, 0, 127, 0.14)' : 'rgba(0, 243, 255, 0.08)';
+            ctx.strokeStyle = (player && player.overdriveActive) ? 'rgba(255, 0, 127, 0.14)' : (palette?.grid || 'rgba(0, 243, 255, 0.08)');
             ctx.lineWidth = 1;
             if (shockwaves.length === 0) {
                 drawStraightGridLines(ctx, gridOffset, worldWidth, worldHeight, spacing);
@@ -10784,6 +10940,9 @@
             TITAN: Object.freeze({id:'EMERALD_FURNACE',label:'EMERALD FURNACE',accent:'#62ff9a',secondary:'#ffd166',pulse:0.78})
         });
         function getChassisAtmosphereSkin(chassis = player?.chassis) {
+            // Odak 5.2 · an arena palette replaces the chassis tint; boss danger red stays.
+            const palette = equippedCosmetic('arena');
+            if (palette) return palette;
             return CHASSIS_ATMOSPHERE_SKINS[chassis] || CHASSIS_ATMOSPHERE_SKINS.VANGUARD;
         }
         function getArenaAtmosphereProfile(phase, overdrive) {
@@ -11331,7 +11490,8 @@
                 const w = Math.max(1, Math.round(rect.width * dpr)), h = Math.max(1, Math.round(rect.height * dpr));
                 if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
                 this.t += dt;
-                const t = this.t, rgb = HANGAR_COLORS[selectedChassis] || HANGAR_COLORS.VANGUARD;
+                const coreLook = equippedCosmetic('core');
+                const t = this.t, rgb = coreLook ? hexToRgbTriplet(coreLook.color) : (HANGAR_COLORS[selectedChassis] || HANGAR_COLORS.VANGUARD);
                 const s = Math.min(w, h), R = s * 0.085;
                 let cx = w / 2, cy = h * 0.46;
                 if (selectedChassis === 'PHANTOM') { cx += Math.cos(t * 1.6) * s * 0.07; cy += Math.sin(t * 3.2) * s * 0.03; }
@@ -11429,7 +11589,8 @@
                 ctx.shadowColor = 'rgb(' + rgb + ')';
                 const g = ctx.createRadialGradient(cx, cy, R * 0.1, cx, cy, R);
                 g.addColorStop(0, '#ffffff'); g.addColorStop(0.45, 'rgba(' + rgb + ',0.95)'); g.addColorStop(1, 'rgba(' + rgb + ',0.25)');
-                ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = g;
+                fillCoreShape(ctx, cx, cy, R, equippedCosmetic('shape'), t * .6);
                 ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5 * dpr; ctx.stroke();
                 ctx.restore();
             }
@@ -11454,6 +11615,9 @@
                 .sort((a, b) => a.cost - b.cost)[0];
             if (lab) return { kind: 'lab', id: lab.item.key, title: lab.item.name, label: 'GELİŞTİRME',
                 color: lab.item.color, cost: lab.cost, ready: totalGold >= lab.cost };
+            const look = COSMETICS.filter(c => !ownedCosmetics.has(c.id)).sort((a, b) => a.cost - b.cost)[0];
+            if (look) return { kind: 'cosmetic', id: look.id, title: look.name, label: 'KOSTÜM',
+                color: look.color, cost: look.cost, ready: totalGold >= look.cost };
             return { kind: 'record', title: 'Rekorunu geç', label: 'USTALIK', color: '#67e8f9', cost: 0, ready: false };
         }
         function formatRunClock(seconds) {
@@ -12906,9 +13070,39 @@
             updateMenuCounters();
         }
 
+        function renderShopCosmetics() {
+            const container = document.getElementById('shopCosmeticContainer');
+            if (!container) return;
+            const owned = COSMETICS.filter(c => ownedCosmetics.has(c.id)).length;
+            const count = document.getElementById('shopCosmeticCount');
+            if (count) count.textContent = owned + '/' + COSMETICS.length;
+            container.innerHTML = Object.entries(COSMETIC_SLOTS).map(([slot, label]) =>
+                '<div class="wardrobe-slot"><span class="wardrobe-slot-title">' + label + '</span><div class="wardrobe-row">' +
+                COSMETICS.filter(c => c.slot === slot).map(c => {
+                    const have = ownedCosmetics.has(c.id), worn = equippedCosmetics[slot] === c.id;
+                    const afford = totalGold >= c.cost;
+                    const label = worn ? '<i class="fa-solid fa-check"></i> GİYİLİ' : have ? 'GİY' :
+                        '<i class="fa-solid fa-coins"></i> ' + c.cost.toLocaleString('tr-TR');
+                    const state = worn ? 'worn' : have ? 'owned' : afford ? 'buy' : 'locked';
+                    return '<button type="button" class="wardrobe-item" data-cosmetic="' + c.id + '" data-state="' + state + '"' +
+                        (state === 'locked' ? ' aria-disabled="true"' : '') + ' title="' + (worn ? 'Çıkarmak için tıkla' : c.name) + '">' +
+                        '<span class="wardrobe-swatch">' + cosmeticSwatch(c) + '</span>' +
+                        '<span class="wardrobe-name">' + c.name + '</span><span class="wardrobe-action">' + label + '</span></button>';
+                }).join('') + '</div></div>').join('');
+            container.querySelectorAll?.('.wardrobe-item').forEach(btn => btn.addEventListener('click', () => {
+                const id = btn.dataset.cosmetic;
+                const ok = ownedCosmetics.has(id) ? toggleCosmetic(id) : buyCosmetic(id);
+                if (!ok) return;
+                audio.init();
+                if (!btn.dataset.state || btn.dataset.state === 'buy') audio.playLevelUp();
+                renderShopItems();
+                updateMenuCounters();
+            }));
+        }
         function renderShopItems() {
             document.getElementById('shopGoldBalance').textContent = totalGold.toLocaleString('tr-TR');
             renderShopCollection();
+            renderShopCosmetics();
             const container = document.getElementById('shopItemsContainer');
             container.innerHTML = '';
 
