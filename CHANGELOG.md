@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 4.7 · Faz Kıskacı görseli
+- Oyuncunun çevresinde terk edilmesi gereken kesikli kaçış çemberi: dışa akan oklar, üstünde "UZAKLAŞ · 1,2" geri sayımı; çemberin dışına çıkınca yeşile döner, "GÜVENDESİN" yazar.
+- İşaretli düşmandan iniş noktasına akan ışın, düşmanın üstünde "DURDUR"; iniş noktasında dönen, tarama çizgili hologram ve kapanan geri sayım halkası. Düşman ölür ya da sersemlerse işaret yeşil çarpıyla iptal görünür.
+- Işınlanmada iniş noktasında açılıp kapanan bir yarık; kaçınca hologramlar parçalanır ve "KISKAÇTAN KAÇTIN" yazar. Kural aynı; düşük grafikte ok, tarama ve parlama yok.
+
 ## Odak 4.6 · İyon Korosu görseli
 - Doldurulmamış çiçekler dışa yayılan işaret halkalarıyla çağırır, üstünde "DOLDUR" ya da yüzde yazar; dolan çiçeğin içi büyüyerek parlar.
 - Alınan çiçek altın renkte açar, taç yaprakları döner; sahne üçgeninin kenarlarında ondan diğer çiçeklere iyon ışıkları akar, iki ucu alınan kenar altına döner.
