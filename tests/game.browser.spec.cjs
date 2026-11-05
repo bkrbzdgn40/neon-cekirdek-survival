@@ -1483,13 +1483,15 @@ test('Odak 3.7 a locked chassis opens the lab, and buying it selects it',async({
  await gotoGame(page,'/index.html',{unlockAll:false});
  const titan=page.locator('.chassis-card[data-chassis="TITAN"]');
  await expect(titan).toHaveAttribute('data-locked','true');
- await expect(titan.locator('.chassis-lock')).toContainText('1.800 ALTIN');
+ // Odak 3.10 · a fresh save sees the wave condition first.
+ await expect(titan.locator('.chassis-lock')).toContainText("DALGA 4'E ULAŞ · 1.800 ALTIN");
  await titan.click();
  await expect(page.locator('#shopModal')).toBeVisible();
  await expect(page.locator('.chassis-card.active')).toHaveAttribute('data-chassis','VANGUARD');
  const buy=page.locator('.shop-collection-card[data-content="TITAN"] .buy-content-btn');
+ await expect(buy).toContainText("DALGA 4'E ULAŞ");
+ await page.evaluate(()=>{totalGold=2000;savedMaxWave=4;renderShopItems();});
  await expect(buy).toContainText('1.800 ALTIN İLE AÇ');
- await page.evaluate(()=>{totalGold=2000;renderShopItems();});
  await buy.click();
  await expect(page.locator('.shop-collection-card[data-content="TITAN"]')).toHaveAttribute('data-owned','true');
  expect(await page.evaluate(()=>totalGold)).toBe(200);

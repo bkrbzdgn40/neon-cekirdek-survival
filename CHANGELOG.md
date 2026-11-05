@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 3.10 · Koleksiyonda dalga şartı
+- Koleksiyon içeriği önce rekor dalga şartı ister, sonra altınla alınır: Soğutucu 3, Titan 4, Toplayıcı 5, Mayın İzi 6, Hayalet 7, Bumerang Disk 8, Şok Halkası 10.
+- Şartı sağlanmamış kart ve kilitli şasi rozeti "DALGA 7'YE ULAŞ · 1.200 ALTIN" gibi yazar. "Sıradaki hedef" alınabilecek içerik yoksa en yakın dalga şartını mor çubukla gösterir.
+- Önceden alınan içerik açık kalır. Türkçe yönelme eki tek yardımcıda (`waveDative`).
+
 ## Odak 3.9 · Alan savunma görevi
 - Savunma ilerlemesi artık alanda durunca dolar; yakında düşman varsa 1,6 kat hızlı dolar (`DEFEND_RULES`). Önceden yakında düşman şartı vardı ve ilk dalgalarda düşmanlar alana varmadan öldüğü için ilerleme geri sayıyordu.
 - Geri sayım yalnız alan dışındayken, 0,65 yerine 0,4 hızla. Hedef 5 → 8 sn; gerçek koşuda 5–7 sn'de tamamlanıyor.

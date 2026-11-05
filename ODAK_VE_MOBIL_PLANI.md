@@ -440,9 +440,11 @@ Sonuç: üç sütun aynı çizgide bitiyor (fark ≤2 px). Ortada canvas önizle
 
 Kullanıcı geri bildirimi: ilk dalgalarda düşmanlar alana varmadan ölüyor, savunma ilerlemesi geri sayıyordu (ilerleme yakında düşman şartına bağlıydı). Yeni kural (`DEFEND_RULES`): alanda durmak her zaman ilerletir, yakında düşman varsa 1,6 kat hızlı; geri sayım yalnız alan dışında, 0,4 hızla. Hedef 5 → 8 sn. Gerçek koşuda (dalga 3, 4 tohum) 5,2–6,9 sn'de tamamlanıyor.
 
-### - [ ] 3.10 Koleksiyonda dalga şartı
+### - [x] 3.10 Koleksiyonda dalga şartı
 
 Koleksiyon içeriği önce bir dalga şartı ister, sonra altınla alınır. Şart sağlanmadan kart "Dalga X'e ulaş" der ve satın alınamaz.
+
+Sonuç (rekor dalgaya göre): Soğutucu 3, Titan 4, Toplayıcı 5, Mayın İzi 6, Hayalet 7, Bumerang Disk 8, Şok Halkası 10. Önceden alınan içerik açık kalır. "Sıradaki hedef" alınabilecek içerik yoksa en yakın dalga şartını mor çubukla gösterir.
 
 ---
 
