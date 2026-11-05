@@ -1733,6 +1733,8 @@
                 this.xp = 0;
                 this.xpToNext = 125;
                 this.xpMultiplier = 1;
+                this.overloadDamage = 0;
+                this.overloadStacks = 0;
                 this.magnetRadius = 85;
 
                 if (this.chassis === 'VANGUARD') {
@@ -3327,6 +3329,7 @@
                     this.xpValue *= 2.5;
                     this.scoreValue *= 3;
                 }
+                this.xpValue = Math.round(this.xpValue * lateXpMult(wave));
 
                 this.hp = this.maxHp;
             }
@@ -3655,7 +3658,7 @@
             }
 
             takeDamage(amount, knockVx = 0, knockVy = 0, isCrit = false, triggerChain = true, forceChain = false) {
-                let finalDmg = amount;
+                let finalDmg = amount * playerLatePowerMult();
                 if (this.type === 'SHIELD_BEARER' && !isCrit) {
                     finalDmg *= 0.55;
                 }
@@ -3843,7 +3846,7 @@
                         emitEnergyOrb(
                             this.x + (rng() - 0.5) * 90,
                             this.y + (rng() - 0.5) * 90,
-                            35,
+                            Math.round(35 * lateXpMult(wave)),
                             i < 8
                         );
                     }
@@ -4226,6 +4229,44 @@
             { id: 'EPIC', name: 'DESTANSI', mult: 1.75, border: '#ec4899', badgeBg: 'rgba(236,72,153,0.25)', textCol: '#f9a8d4', weight: 15 },
             { id: 'LEGENDARY', name: 'EFSANEVİ', mult: 2.3, border: '#eab308', badgeBg: 'rgba(234,179,8,0.3)', textCol: '#fef08a', weight: 7 }
         ];
+
+        // Odak 5.8 · late-game power: XP keeps pace with the waves, run gold
+        // turns into damage, and a full build still gets something on level up.
+        const LATE_POWER = Object.freeze({
+            xpPerWave: 0.08, xpCap: 3.5,
+            resonanceStep: 100, resonancePerStep: 0.03, resonanceCap: 0.60,
+            overloadDamageCap: 1.50
+        });
+        function lateXpMult(w = wave) {
+            return Math.min(LATE_POWER.xpCap, 1 + LATE_POWER.xpPerWave * Math.max(0, w - 1));
+        }
+        // Gold picked up this run, not the lab balance: nothing is spent.
+        function goldResonance(gold = sessionGold) {
+            const steps = Math.floor(Math.max(0, gold) / LATE_POWER.resonanceStep);
+            return Math.min(LATE_POWER.resonanceCap, steps * LATE_POWER.resonancePerStep);
+        }
+        function playerLatePowerMult(p = player) {
+            return 1 + goldResonance() + (p?.overloadDamage || 0);
+        }
+        // Small rarity lift: common 1x, legendary about 1.65x.
+        const overloadStep = (base, r) => Math.round(base * (1 + (r.mult - 1) * 0.5));
+        const OVERLOAD_CARDS = Object.freeze([
+            Object.freeze({ id: 'overload_core', kind: 'overload', name: 'Aşırı Yük: Çekirdek', icon: 'fa-solid fa-bolt', color: '#ff7a3d',
+                getDesc: r => `Tüm hasar +%${overloadStep(5, r)}. Birikir; hasar tavanından bağımsızdır.`,
+                offerable: p => (p.overloadDamage || 0) < LATE_POWER.overloadDamageCap,
+                apply: (p, r) => { p.overloadDamage = Math.min(LATE_POWER.overloadDamageCap, (p.overloadDamage || 0) + overloadStep(5, r) / 100); } }),
+            Object.freeze({ id: 'overload_hull', kind: 'overload', name: 'Aşırı Yük: Gövde', icon: 'fa-solid fa-heart-pulse', color: '#ff7a3d',
+                getDesc: r => `Maks can +${overloadStep(10, r)} ve aynı miktar onarım.`,
+                offerable: () => true,
+                apply: (p, r) => { const v = overloadStep(10, r); p.maxHp += v; p.hp = Math.min(p.maxHp, p.hp + v); } }),
+            Object.freeze({ id: 'overload_focus', kind: 'overload', name: 'Aşırı Yük: Odak', icon: 'fa-solid fa-bullseye', color: '#ff7a3d',
+                getDesc: r => `Kritik şansı +%${overloadStep(3, r)}.`,
+                offerable: p => p.critChance < 0.60,
+                apply: (p, r) => { p.critChance += overloadStep(3, r) / 100; } })
+        ]);
+        function overloadChoicesFor(p) {
+            return shuffleInPlace(OVERLOAD_CARDS.filter(card => card.offerable(p)));
+        }
 
         function rollRarity() {
             const total = RARITIES.reduce((acc, r) => acc + r.weight, 0);
@@ -11903,7 +11944,7 @@
         const hudEls = Object.freeze(Object.fromEntries([
             'hud', 'xpMeter', 'xpBar', 'levelText', 'xpText', 'momentumMeter', 'momentumBar', 'momentumText',
             'overdriveMeter', 'overdriveBar', 'overdriveText', 'hpBar', 'hpText', 'lowHpOverlay',
-            'reviveIndicator', 'reviveCountText', 'goldHudChip', 'goldHudText',
+            'reviveIndicator', 'reviveCountText', 'goldHudChip', 'goldHudText', 'goldResonanceText',
             'bastionBtn', 'novaBtn', 'prismBtn', 'dashBtn', 'shieldIndicator', 'shieldText',
             'waveText', 'timeText', 'scoreText', 'hudScoreText', 'activeContractBadge',
             'comboContainer', 'comboText', 'comboRankText', 'comboTimerBar',
@@ -11980,6 +12021,14 @@
                 h.reviveIndicator.dataset.empty = reviveEmpty;
 
             h.goldHudText.textContent = totalGold.toLocaleString('tr-TR');
+            const resonance = Math.round(goldResonance() * 100);
+            const resonanceText = resonance > 0 ? `+%${resonance}` : '';
+            if (h.goldResonanceText && h.goldResonanceText.textContent !== resonanceText) {
+                h.goldResonanceText.textContent = resonanceText;
+                h.goldResonanceText.hidden = !resonanceText;
+                h.goldHudChip.title = resonanceText ?
+                    `Altın · ALTIN REZONANSI: bu koşuda toplanan her 100 altın +%3 hasar (şu an +%${resonance})` : 'Altın';
+            }
             if (hudLastGold !== null && totalGold > hudLastGold)
                 showContextual(h.goldHudChip, HUD_CONTEXT_RULES.goldMs);
             hudLastGold = totalGold;
@@ -12281,6 +12330,7 @@
         function selectUpgradeOption(index) {
             if (gameState !== 'LEVEL_UP' || !currentUpgradeChoices[index]) return;
             const { upg, rarity } = currentUpgradeChoices[index];
+            if (upg.kind === 'overload') { selectOverloadCard(upg, rarity); return; }
             const currentLvl = player.upgradeCounts[upg.id] || 0;
             const nextLvl = currentLvl + 1;
             const newlyUnlockedSynergies = newSynergiesForUpgrade(player.upgradeCounts, upg.id);
@@ -12314,6 +12364,19 @@
             if (player.xp >= player.xpToNext) player.gainXp(0);
         }
 
+        // Overload cards stack without tiers or build slots.
+        function selectOverloadCard(upg, rarity) {
+            if (!upg.offerable(player)) return;
+            upg.apply(player, rarity);
+            player.overloadStacks++;
+            normalizePlayerBuildPower(player);
+            closeUpgradeModal();
+            shockwaves.push(new Shockwave(player.x, player.y, 150, upg.color, 0.35));
+            createFloatingText(player.x, player.y - 30, `${upg.name} · Y${player.overloadStacks}`, rarity.textCol, 16);
+            updateHUD();
+            if (player.xp >= player.xpToNext) player.gainXp(0);
+        }
+
         function closeUpgradeModal() {
             document.getElementById('upgradeModal').classList.add('hidden');
             document.getElementById('upgradeModal').classList.remove('flex');
@@ -12337,6 +12400,8 @@
         // Visual role (evolution, weapon, module) and rarity are independent axes.
         // Odak 3.1: the weapon/module label follows the upgrade's kind.
         function getUpgradeCardPresentation(upg, rarity, currentLvl) {
+            if (upg.kind === 'overload') return {role:'overload',label:'AŞIRI YÜK',roleIcon:'fa-solid fa-infinity',
+                willEvolve:false,isLegendary:rarity.id==='LEGENDARY'};
             const willEvolve=currentLvl+1===MAX_MODULE_TIER && !!EVOLUTION_DEFS[upg.id];
             const role=willEvolve?'evolution':upg.kind==='weapon'?'weapon':'module';
             const labels={evolution:'EVRİM EŞİĞİ',weapon:'SİLAH MODÜLÜ',module:'SİSTEM MODÜLÜ'};
@@ -12376,10 +12441,12 @@
                     </div>
                     <h3 class="upgrade-card-name font-cyber font-black">${upg.name}</h3>
                     <p class="upgrade-card-desc">${upg.getDesc(rarity)}</p>
-                    <div class="upgrade-card-tier-row">
+                    ${role==='overload'?`<div class="upgrade-card-tier-row">
+                        <span class="upgrade-card-tier-label">YIĞIN ${player.overloadStacks} → ${player.overloadStacks+1}</span>
+                    </div>`:`<div class="upgrade-card-tier-row">
                         <span class="upgrade-card-tier-label">KADEME ${currentLvl} → ${currentLvl+1}</span>
                         <span class="upgrade-tier-track" aria-label="${currentLvl} / ${MAX_MODULE_TIER} kademe">${tiers}</span>
-                    </div>
+                    </div>`}
                     ${evolution?`<div class="upgrade-evolution-benefit">
                         <strong class="upgrade-bonus-heading block mb-1 text-purple-200">✦ ${evolution.name}</strong>
                         ${evolution.desc}
@@ -12387,7 +12454,7 @@
                     ${unlocks.map(s=>`<p class="upgrade-synergy-benefit"><strong>YENİ SİNERJİ:</strong> ${s.name} · ${s.desc}</p>`).join('')}
                 </div>
                 <div class="upgrade-card-footer flex items-center justify-between gap-2 font-bold">
-                    <span><span class="key-hint">[ ${index+1} ] </span>${role==='evolution'?'EVRİMİ AÇ':
+                    <span><span class="key-hint">[ ${index+1} ] </span>${role==='overload'?'ÇEKİRDEĞİ ZORLA':role==='evolution'?'EVRİMİ AÇ':
                         role==='weapon'?'SİLAHI GÜÇLENDİR':'MODÜLÜ ENTEGRE ET'}</span>
                     <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
                 </div>`;
@@ -12416,12 +12483,15 @@
             const featured = ready[0] || null;
             const choices = (featured ?
                 [featured, ...shuffled.filter(u => u.id !== featured.id)] : shuffled).slice(0, 3);
+            // Odak 5.8 · fewer than three modules left: overload cards fill the hand.
+            const overload = choices.length < 3 ? overloadChoicesFor(player) : [];
+            while (choices.length < 3 && overload.length) choices.push(overload.shift());
             currentUpgradeChoices = [];
 
             const statsBar = document.getElementById('upgradeStatsSummary');
             if (statsBar && player) {
                 statsBar.innerHTML = `
-                    <div>HASAR: <span class="text-pink-400 font-bold">${Math.round(player.damage)}</span></div>
+                    <div>HASAR: <span class="text-pink-400 font-bold">${Math.round(player.damage)}</span>${playerLatePowerMult()>1.001?` <span class="text-amber-300 font-bold">×${playerLatePowerMult().toFixed(2)}</span>`:''}</div>
                     <div>KRİTİK: <span class="text-sky-300 font-bold">%${Math.round(player.critChance * 100)}</span></div>
                     <div>ÇOKLU ATIŞ: <span class="text-cyan-300 font-bold">${player.multishot}x</span></div>
                     <div>DELİCİ/SEKME: <span class="text-purple-400 font-bold">${player.pierce}/${player.ricochet}</span></div>
@@ -12457,7 +12527,7 @@
                 card.setAttribute('data-role',presentation.role);
                 card.setAttribute('data-rarity',rarity.id);
                 card.setAttribute('aria-label',
-                    `Seçenek ${idx+1}: ${rarity.name} ${upg.name}. ${presentation.label}. Kademe ${currentLvl+1}`);
+                    `Seçenek ${idx+1}: ${rarity.name} ${upg.name}. ${presentation.label}. ${upg.kind==='overload'?'Yığın '+(player.overloadStacks+1):'Kademe '+(currentLvl+1)}`);
                 card.setAttribute('aria-keyshortcuts',String(idx+1));
                 card.style.animationDelay=`${idx*65}ms`;
                 card.innerHTML=renderUpgradeCardMarkup(upg,rarity,currentLvl,idx,presentation,unlocks);
@@ -12468,7 +12538,7 @@
         }
 
         function triggerLevelUp() {
-            if (!UPGRADES_POOL.some(u => isUpgradeOfferable(u, player))) {
+            if (!UPGRADES_POOL.some(u => isUpgradeOfferable(u, player)) && !OVERLOAD_CARDS.some(c => c.offerable(player))) {
                 // Endless play stays playable after all module tiers; no empty choice modal.
                 player.hp = Math.min(player.maxHp, player.hp + 20);
                 player.addOverdrive(20);

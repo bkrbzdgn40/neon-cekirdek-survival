@@ -1827,10 +1827,12 @@ test('M3.2 fully completed 39-tier run does not open an empty choice dialog', ()
     player.hp=player.maxHp-40;
     triggerLevelUp();
     return JSON.stringify({state:gameState,hp:player.hp,max:player.maxHp,
-      evolutions:player.evolutions.size,choices:currentUpgradeChoices.length});
+      evolutions:player.evolutions.size,kinds:currentUpgradeChoices.map(c=>c.upg.kind)});
   })()`));
-  assert.equal(x.state,'PLAYING');
-  assert.equal(x.hp,x.max-20);
+  // Odak 5.8: a full build gets a hand of overload cards instead of a silent heal.
+  assert.equal(x.state,'LEVEL_UP');
+  assert.equal(x.hp,x.max-40);
+  assert.deepEqual(x.kinds,['overload','overload','overload']);
   assert.equal(x.evolutions,UPGRADE_IDS.length);
 });
 
@@ -2826,9 +2828,10 @@ test('Odak 3.1 a full slot type only offers owned cards below tier 3', () => {
       firerate: 3, vampiric: 3, crit_mastery: 3, aegis_shield: 3, kinetic_magnet: 3 };
     player.hp = player.maxHp - 40;
     triggerLevelUp();
-    return JSON.stringify({ state: gameState, missing: player.maxHp - player.hp });
+    return JSON.stringify({ state: gameState, kinds: currentUpgradeChoices.map(c => c.upg.kind) });
   })()`));
-  assert.deepEqual(done, { state: 'PLAYING', missing: 20 });
+  // Odak 5.8: the dialog is never empty, overload cards fill it.
+  assert.deepEqual(done, { state: 'LEVEL_UP', kinds: ['overload', 'overload', 'overload'] });
 });
 
 test('Odak 3.1 card label follows kind and the slot row shows filled and empty slots', () => {
@@ -8292,4 +8295,90 @@ test('Odak 5.6 contract mastery travels with the backup; old backups leave it an
   assert.equal(x.kept, true, 'a failed write keeps the old mastery');
   assert.ok(x.size < 16384, 'still well under the backup size limit');
   assert.equal(JSON.parse(stored[key]).contracts.REDLINE.bestWave, 100000);
+});
+
+test('Odak 5.8 enemy XP grows with the wave and stops at 3.5x', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    const xpAt = (w, elite = false) => { wave = w; return new Enemy(300, 300, 'TANK', elite).xpValue; };
+    const out = { mult: [1, 11, 20, 40].map(w => +lateXpMult(w).toFixed(2)),
+      w1: xpAt(1), w11: xpAt(11), w40: xpAt(40), elite11: xpAt(11, true) };
+    // A boss drops scaled orbs too.
+    wave = 11; orbs = []; const boss = new Enemy(400, 400, 'BOSS_TITAN'); boss.takeDamage(1e9);
+    out.bossOrbs = orbs.filter(o => !o.isGold).map(o => o.value);
+    return JSON.stringify(out);
+  })()`));
+  assert.deepEqual(x.mult, [1, 1.8, 2.52, 3.5]);
+  assert.equal(x.w11, Math.round(x.w1 * 1.8));
+  assert.equal(x.w40, Math.round(x.w1 * 3.5));
+  assert.equal(x.elite11, Math.round(x.w1 * 2.5 * 1.8));
+  assert.ok(x.bossOrbs.length > 0 && x.bossOrbs.every(v => v % 63 === 0), JSON.stringify(x.bossOrbs));
+});
+
+test('Odak 5.8 gold resonance turns run gold into damage without spending lab gold', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    const res = [0, 99, 100, 650, 5000].map(g => +goldResonance(g).toFixed(2));
+    const hit = gold => { sessionGold = gold; const e = new Enemy(300, 300, 'TANK'); e.hp = e.maxHp = 1e6;
+      e.takeDamage(100); return Math.round(1e6 - e.hp); };
+    totalGold = 1234;
+    const plain = hit(0), rich = hit(1000);
+    sessionGold = 600; updateHUD();
+    const badge = document.getElementById('goldResonanceText');
+    const shown = { text: badge.textContent, hidden: badge.hidden, title: document.getElementById('goldHudChip').title };
+    sessionGold = 0; updateHUD();
+    return JSON.stringify({ res, plain, rich, lab: totalGold, shown, after: { text: badge.textContent, hidden: badge.hidden } });
+  })()`));
+  assert.deepEqual(x.res, [0, 0, 0.03, 0.18, 0.6]);
+  assert.equal(x.rich, Math.round(x.plain * 1.3));
+  assert.equal(x.lab, 1234);
+  assert.equal(x.shown.text, '+%18');
+  assert.equal(x.shown.hidden, false);
+  assert.ok(x.shown.title.includes('ALTIN REZONANSI'));
+  assert.deepEqual(x.after, { text: '', hidden: true });
+});
+
+test('Odak 5.8 overload cards fill a thin hand and stack without tiers', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    const box = document.getElementById('upgradeCardsContainer'), cards = [];
+    box.appendChild = c => cards.push(c);
+    // Only two modules left below tier 3: the third card is an overload.
+    const offer = new Set(['homing', 'firerate']);
+    const saved = isUpgradeOfferable;
+    isUpgradeOfferable = u => offer.has(u.id);
+    try { populateUpgradeCards(); } finally { isUpgradeOfferable = saved; }
+    const kinds = currentUpgradeChoices.map(c => c.upg.kind).sort();
+    const idx = currentUpgradeChoices.findIndex(c => c.upg.kind === 'overload');
+    const card = cards[idx];
+    // Pick the damage overload twice at common rarity.
+    const core = OVERLOAD_CARDS.find(c => c.id === 'overload_core');
+    const pick = () => { gameState = 'LEVEL_UP'; currentUpgradeChoices = [{ upg: core, rarity: RARITIES[0] }]; selectUpgradeOption(0); };
+    player.damage = 240; pick(); pick();
+    const e = new Enemy(300, 300, 'TANK'); e.hp = e.maxHp = 1e6; e.takeDamage(100);
+    // Focus leaves the pool at the crit cap.
+    player.critChance = 0.60;
+    const pool = overloadChoicesFor(player).map(c => c.id).sort();
+    return JSON.stringify({ kinds, role: card._attrs['data-role'], label: card._attrs['aria-label'], markup: card.innerHTML,
+      stacks: player.overloadStacks, bonus: +player.overloadDamage.toFixed(2), counts: Object.keys(player.upgradeCounts).filter(k => k.startsWith('overload')),
+      state: gameState, dealt: Math.round(1e6 - e.hp), damage: player.damage, pool,
+      legendary: core.getDesc(RARITIES[3]) });
+  })()`));
+  assert.equal(x.kinds.length, 3);
+  assert.equal(x.kinds.filter(k => k === 'overload').length, 1);
+  assert.equal(x.role, 'overload');
+  assert.ok(x.label.includes('Yığın 1'), x.label);
+  assert.ok(x.markup.includes('AŞIRI YÜK') && x.markup.includes('YIĞIN 0 → 1'), x.markup);
+  assert.ok(!x.markup.includes('KADEME'));
+  assert.equal(x.stacks, 2);
+  assert.equal(x.bonus, 0.1);
+  assert.deepEqual(x.counts, []);
+  assert.equal(x.state, 'PLAYING');
+  assert.equal(x.damage, 240);
+  assert.equal(x.dealt, 110);
+  assert.deepEqual(x.pool, ['overload_core', 'overload_hull']);
+  assert.ok(x.legendary.includes('+%8'), x.legendary);
 });
