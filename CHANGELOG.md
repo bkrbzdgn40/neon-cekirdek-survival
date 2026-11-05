@@ -1,5 +1,9 @@
 # Değişiklik Günlüğü
 
+## Odak 5.11 · Günlük koşu
+- Ana menüye GÜNLÜK düğmesi eklendi: o gün her denemede aynı tohum ve aynı sözleşme. Şasiyi sen seçersin.
+- Bugünün en iyi skoru kaydedilir; düğmede ve koşu raporunda (GÜNLÜK REKOR) görünür. Ertesi gün yeni tohum gelir.
+
 ## Odak 5.10 · Eserler
 - Boss sandığı artık normal ödülünün yanında 3 eserden birini seçtirir. Eser koşu boyunca kalır, alt bardaki modül şeridinde görünür.
 - 8 eser: Patlayan Şarjör, Kor İzi, Kritik Fırtına, Son Direniş, Altın Kan, Yankı Novası, Kombo Hasadı, Ayna Namlu. Hepsi oyunun nasıl oynandığını değiştirir; aynı eser bir koşuda iki kez çıkmaz.

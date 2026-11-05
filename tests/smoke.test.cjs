@@ -8592,3 +8592,68 @@ test('Odak 5.10 every relic changes how the run plays', () => {
   assert.ok(Math.abs(x.echo - 0.5) < 0.02, String(x.echo));
   assert.equal(x.echoNeedsEmp, true);
 });
+
+test('Odak 5.11 the daily run uses one seed and one contract per day', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    const key = dailyDateKey(new Date(2026, 10, 6));
+    const a = dailySeedFor(key), b = dailySeedFor(key), other = dailySeedFor('2026-11-07');
+    selectedContractId = 'STANDARD';
+    startDailyRun(); const s1 = runSeed, c1 = activeContractId, r1 = [rng(), rng()];
+    selectedContractId = 'REDLINE';
+    startDailyRun(); const s2 = runSeed, c2 = activeContractId, r2 = [rng(), rng()];
+    document.getElementById('startBtn'); dailyRunActive = false; startNewGame(); const normal = runSeed;
+    const ids = NEON_CONTRACTS.map(c => c.id);
+    const contracts = new Set(); for (let d = 1; d <= 40; d++) contracts.add(dailyContractFor('2026-12-' + String(d).padStart(2, '0')));
+    return JSON.stringify({ key, a, b, other, s1, s2, c1, c2, r1, r2, normal, today: dailySeedFor(dailyDateKey()),
+      validContract: ids.includes(c1), contracts: contracts.size });
+  })()`));
+  assert.equal(x.key, '2026-11-06');
+  assert.equal(x.a, x.b);
+  assert.notEqual(x.a, x.other);
+  assert.equal(x.s1, x.today);
+  assert.equal(x.s1, x.s2);
+  assert.deepEqual(x.r1, x.r2);
+  assert.equal(x.c1, x.c2);
+  assert.equal(x.validContract, true);
+  assert.notEqual(x.normal, x.s1);
+  assert.ok(x.contracts >= 3, String(x.contracts));
+});
+
+test('Odak 5.11 a locked contract system keeps the daily run on the standard protocol', () => {
+  const { run } = setup({}, { unlockAll: false });
+  const x = JSON.parse(run(`(() => { startDailyRun(); return JSON.stringify({ contract: activeContractId, label: document.getElementById('dailyRunMeta').textContent }); })()`));
+  assert.equal(x.contract, 'STANDARD');
+  assert.equal(x.label, 'GÜVENLİ');
+});
+
+test('Odak 5.11 today\'s best is saved, shown in the menu and reported at game over', () => {
+  const first = setup();
+  const x = JSON.parse(first.run(`(() => {
+    startDailyRun(); score = 5000; wave = 7; triggerGameOver();
+    const firstLabel = document.getElementById('newRecordText').textContent;
+    startDailyRun(); score = 3000; wave = 5; triggerGameOver();
+    const lowerLabel = document.getElementById('newRecordText').textContent;
+    const saved = JSON.parse(localStorage.getItem(META_SAVE_KEY)).daily;
+    // A normal run never touches the daily best.
+    dailyRunActive = false; startNewGame(); score = 9000; triggerGameOver();
+    return JSON.stringify({ firstLabel, lowerLabel, saved, after: dailyBest, normalLabel: document.getElementById('newRecordText').textContent,
+      meta: (updateMenuCounters(), document.getElementById('dailyRunMeta').textContent), store: localStorage.getItem(META_SAVE_KEY) });
+  })()`));
+  assert.ok(x.firstLabel.startsWith('GÜNLÜK REKOR · 5.000'), x.firstLabel);
+  assert.ok(x.lowerLabel.startsWith('GÜNLÜK KOŞU · BUGÜNÜN EN İYİSİ 5.000'), x.lowerLabel);
+  assert.equal(x.saved.score, 5000);
+  assert.equal(x.saved.wave, 7);
+  assert.equal(x.after.score, 5000);
+  assert.ok(!x.normalLabel.includes('GÜNLÜK'), x.normalLabel);
+  assert.equal(x.meta, 'EN İYİ 5.000');
+  // The best survives a reload; yesterday's or broken entries are ignored.
+  const reload = setup({ 'neonCekirdek.meta.v1': x.store });
+  assert.equal(reload.run('todaysDailyBest()?.score'), 5000);
+  const old = JSON.parse(x.store); old.daily = { date: '2001-01-01', score: 99, wave: 2 };
+  assert.equal(setup({ 'neonCekirdek.meta.v1': JSON.stringify(old) }).run('todaysDailyBest()'), null);
+  for (const bad of [{ date: 'yarın', score: 5, wave: 2 }, { date: '2026-11-06', score: -4, wave: 2 }, 'x']) {
+    const broken = JSON.parse(x.store); broken.daily = bad;
+    assert.equal(setup({ 'neonCekirdek.meta.v1': JSON.stringify(broken) }).run('dailyBest'), null);
+  }
+});

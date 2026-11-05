@@ -1845,3 +1845,16 @@ test('Odak 5.10 a boss chest offers relics in the real page', async ({ page }) =
   await expect(page.locator('#hudModulesDock [title^="ESER"]')).toHaveCount(1);
   expect(errors).toEqual([]);
 });
+
+test('Odak 5.11 the daily run button starts today\'s seeded run', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await gotoGame(page, '/index.html');
+  await expect(page.locator('#dailyRunBtn')).toBeVisible();
+  await page.locator('#dailyRunBtn').click();
+  await expect.poll(() => page.evaluate(() => gameState)).toBe('PLAYING');
+  const run = await page.evaluate(() => ({ daily: dailyRunActive, seed: runSeed, expected: dailySeedFor(dailyDateKey()) }));
+  expect(run.daily).toBe(true);
+  expect(run.seed).toBe(run.expected);
+  expect(errors).toEqual([]);
+});

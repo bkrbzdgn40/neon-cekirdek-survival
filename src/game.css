@@ -2332,3 +2332,9 @@ html[data-graphics-quality="low"] #hud .field-device-badge{box-shadow:none;}
 #hud .hud-resonance[hidden]{display:none;}
 /* Odak 5.10 · the reroll/skip row hides while a relic hand is open */
 #upgradeToolsRow[hidden]{display:none !important;}
+/* Odak 5.11 · daily run button between the lab and the launch button */
+.hangar-daily-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:0 0 auto;min-width:7.5rem;color:#a7f3d0;background:#0b1220;border:1px solid rgba(52,211,153,.7);box-shadow:0 0 18px rgba(52,211,153,.14);}
+.hangar-daily-btn:hover{background:#111c2e;}
+.hangar-daily-label{display:flex;align-items:center;gap:.45rem;}
+.hangar-daily-label i{color:#6ee7b7;}
+.hangar-daily-meta{font-size:10px;color:rgba(110,231,183,.85);letter-spacing:.06em;}
