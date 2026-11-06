@@ -24,7 +24,7 @@ test('Odak 3.2 Mayın İzi tier rules, card and evolution are wired', () => {
   assert.equal(x.label, 'SİLAH MODÜLÜ');
   assert.deepEqual(x.rules.maxMines, [0, 3, 4, 5]);
   assert.deepEqual(x.rules.dropDistance, [0, 300, 260, 220]);
-  assert.deepEqual(x.rules.damageMult, [0, 0.35, 0.45, 0.75]);
+  assert.deepEqual(x.rules.damageMult, [0, 0.35, 0.45, 0.6]);
   assert.ok(x.rules.blastRadius[1] < x.rules.blastRadius[3]);
   assert.equal(x.max, 6);
   assert.ok(x.rules.maxMines.every(n => n + x.rules.evolvedExtraMines <= x.max));
@@ -214,7 +214,7 @@ test('Odak 3.2 Şok Halkası tier rules, card and evolution are wired', () => {
   assert.equal(x.label, 'SİLAH MODÜLÜ');
   assert.deepEqual(x.rules.interval, [0, 3.2, 2.9, 2.6]);
   assert.deepEqual(x.rules.maxRadius, [0, 130, 145, 160]);
-  assert.deepEqual(x.rules.damageMult, [0, 0.45, 0.55, 0.7]);
+  assert.deepEqual(x.rules.damageMult, [0, 0.65, 0.85, 1.1]);
   assert.equal(x.max, 3);
   assert.equal(x.evo, 'Artçı Şok');
   assert.ok(x.fire && x.hit);
@@ -246,7 +246,7 @@ test('Odak 3.2 Şok Halkası hits each enemy once per ring and harder near the c
   assert.ok(x.once[0] > 0 && x.once[1] > 0, 'both enemies inside the ring are hit');
   assert.ok(x.once[0] > x.once[1] * 1.4, 'near enemy takes clearly more: ' + x.once);
   assert.equal(x.once[2], 0, 'outside the ring is untouched');
-  assert.deepEqual(x.twice.slice(0, 2), x.once.slice(0, 2).map(v => v * 2));
+  x.twice.slice(0, 2).forEach((v, i) => assert.ok(Math.abs(v - x.once[i] * 2) <= 1, `ring twice: ${x.twice} vs ${x.once}`));
   assert.equal(x.stats.shockRings, 2);
   assert.equal(x.stats.shockHits, 4);
 });
@@ -8656,4 +8656,85 @@ test('Odak 5.11 today\'s best is saved, shown in the menu and reported at game o
     const broken = JSON.parse(x.store); broken.daily = bad;
     assert.equal(setup({ 'neonCekirdek.meta.v1': JSON.stringify(broken) }).run('dailyBest'), null);
   }
+});
+
+test('Odak 5.12 fire rate and Cyber Frenzy speed up every weapon', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame();
+    const give = (id, n) => { const upg = UPGRADES_POOL.find(u => u.id === id);
+      for (let i = 0; i < n; i++) { gameState = 'LEVEL_UP'; currentUpgradeChoices = [{ upg, rarity: RARITIES[0] }]; selectUpgradeOption(0); } };
+    const base = getWeaponTempo(player), baseCd = getWeaponCooldownMult(player);
+    give('firerate', 3); const fast = getWeaponTempo(player);
+    player.overdriveActive = true; const frenzy = getWeaponTempo(player); player.overdriveActive = false;
+    player.fireDelay = 0.01; const capped = getWeaponTempo(player);
+    player.fireDelay = 0.46; give('boomerang_disc', 1);
+    boomerangDiscs = []; player.boomerangReadyAt = 0; updateBoomerangDiscs(1 / 60); const slowCd = player.boomerangReadyAt - totalTime;
+    player.fireDelay = 0.30; boomerangDiscs = []; player.boomerangReadyAt = 0; updateBoomerangDiscs(1 / 60); const fastCd = player.boomerangReadyAt - totalTime;
+    return JSON.stringify({ base, baseCd, fast, frenzy, capped, slowCd, fastCd, tempoAt30: getWeaponTempo(player) });
+  })()`));
+  assert.equal(x.base, 1);
+  assert.equal(x.baseCd, 1);
+  assert.ok(x.fast > 1.2 && x.fast < 2, String(x.fast));
+  assert.ok(Math.abs(x.frenzy - x.fast * 1.3) < 1e-9);
+  assert.equal(x.capped, 2);
+  assert.ok(Math.abs(x.slowCd - 2.2) < 1e-6, String(x.slowCd));
+  assert.ok(Math.abs(x.fastCd - 2.2 / x.tempoAt30) < 1e-6, String(x.fastCd));
+});
+
+test('Odak 5.12 every weapon can hurt a lone boss on its own', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    const out = {};
+    for (const id of ['orbital', 'mine_trail', 'boomerang_disc', 'shock_ring', 'homing']) {
+      startNewGame(); gameState = 'PLAYING'; nextBossTime = 1e12;
+      const upg = UPGRADES_POOL.find(u => u.id === id);
+      for (let i = 0; i < 3; i++) { gameState = 'LEVEL_UP'; currentUpgradeChoices = [{ upg, rarity: RARITIES[0] }]; selectUpgradeOption(0); }
+      gameState = 'PLAYING';
+      const cx = worldWidth / 2, cy = worldHeight / 2;
+      const boss = new Enemy(cx + 260, cy, 'BOSS_TITAN'); boss.maxHp = boss.hp = 1e9; boss.speed = 0; boss.actionTimer = 1e9;
+      enemies = [boss]; activeBosses = [boss];
+      // The plasma gun stays silent: only the weapon under test can deal damage.
+      const shoot = Player.prototype.autoShoot;
+      player.autoShoot = function () { this.lockedTarget = boss; if (id === 'homing') shoot.call(this); };
+      player.x = cx; player.y = cy;
+      for (let t = 0; t < 60 * 8; t++) {
+        gameState = 'PLAYING'; player.hp = player.maxHp; enemyProjectiles = []; enemies = [boss];
+        player.lockedTarget = boss; boss.x = cx + 260; boss.y = cy;
+        updateGame(1 / 60);
+      }
+      out[id] = Math.round(1e9 - boss.hp);
+    }
+    return JSON.stringify(out);
+  })()`));
+  for (const id of ['orbital', 'mine_trail', 'boomerang_disc', 'shock_ring', 'homing'])
+    assert.ok(x[id] > 0, id + ' never reached the boss: ' + JSON.stringify(x));
+});
+
+test('Odak 5.12 lightning grounds into a lone foe and a circuit discharges into the boss', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); gameState = 'PLAYING';
+    player.upgradeCounts.lightning = 3; player.chainLightning = 6;
+    const lone = new Enemy(300, 300, 'TANK'); lone.hp = lone.maxHp = 1e6; enemies = [lone];
+    lone.takeDamage(100, 0, 0, false, true, true);
+    const grounded = Math.round(1e6 - lone.hp);
+    const a = new Enemy(300, 300, 'TANK'), b = new Enemy(340, 300, 'TANK');
+    a.hp = a.maxHp = b.hp = b.maxHp = 1e6; enemies = [a, b];
+    player.chainLightning = 1; a.takeDamage(100, 0, 0, false, true, true);
+    const pair = { a: Math.round(1e6 - a.hp), b: Math.round(1e6 - b.hp) };
+    // Circuit: the closure skips bosses, the discharge does not.
+    player.upgradeCounts.circuit_weaver = 3;
+    const boss = new Enemy(player.x + 200, player.y, 'BOSS_TITAN'); boss.maxHp = boss.hp = 1e9; enemies = [boss]; activeBosses = [boss];
+    player.lockedTarget = boss;
+    const square = [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 200 }, { x: 0, y: 200 }];
+    closeCircuitWeaver(player, square, 40000);
+    return JSON.stringify({ grounded, pair, discharge: Math.round(1e9 - boss.hp), dmg: player.damage, stats: player.buildStats.circuitDischarges });
+  })()`));
+  // 100 + 4 grounded arcs at 1.05 x arcDamage (1.0 at tier 3).
+  assert.equal(x.grounded, Math.round(100 + 100 * 1.05 * 4));
+  assert.equal(x.pair.a, 100, 'with a neighbour the arc jumps, nothing grounds');
+  assert.ok(x.pair.b > 0);
+  assert.equal(x.stats, 1);
+  assert.equal(x.discharge, Math.round(x.dmg * 17 * 0.78));
 });

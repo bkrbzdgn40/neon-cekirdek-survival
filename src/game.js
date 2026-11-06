@@ -2066,6 +2066,26 @@
                     }
                 }
 
+                // Odak 5.12 · satellites fire at the locked target.
+                const orbitalTier = Math.min(MAX_MODULE_TIER, this.upgradeCounts.orbital || 0);
+                if (orbitalTier && this.orbitals > 0) {
+                    const rules = WEAPON_REACH_RULES.orbitalShot;
+                    this.orbitalShotTimer = (this.orbitalShotTimer || 0) - dt * getWeaponTempo(this);
+                    const target = this.orbitalShotTimer <= 0 ? weaponReachTarget(this, rules.range) : null;
+                    if (target) {
+                        this.orbitalShotTimer = rules.interval[orbitalTier];
+                        for (const s of this.getOrbitalPositions()) {
+                            if (bullets.length >= MAX_PLAYER_PROJECTILES) break;
+                            const a = Math.atan2(target.y - s.y, target.x - s.x);
+                            const shot = new Bullet(s.x, s.y, Math.cos(a) * rules.speed, Math.sin(a) * rules.speed,
+                                this.damage * rules.damage[orbitalTier], 4, 1, 0, false, false);
+                            shot.orbitalShot = true;
+                            bullets.push(shot);
+                        }
+                        this.buildStats.orbitalShots = (this.buildStats.orbitalShots || 0) + 1;
+                    } else if (this.orbitalShotTimer < 0) this.orbitalShotTimer = 0;
+                }
+
                 const odFireBonus = this.overdriveActive ? this.overdriveFireRateMult : 1.0;
                 const lastStand = hasRelic('LAST_STAND', this) && this.hp < this.maxHp * RELIC_RULES.lastStandHp ? RELIC_RULES.lastStandFire : 1;
                 this.fireTimer -= dt * (1 + (this.momentum / 100) * 0.3) * odFireBonus * (this.hasteTimer > 0 ? 1.2 : 1.0) * lastStand;
@@ -3894,6 +3914,13 @@
                                 nextTarget = other;
                             }
                         }
+                        if (!nextTarget && lastTarget === this) {
+                            const ground = WEAPON_REACH_RULES.lightningGround;
+                            const grounded = Math.min(jumps, ground.maxJumps);
+                            emitLightningArc(this.x, this.y - this.radius - 40, this.x, this.y, isCrit);
+                            this.takeDamage(chainBase * getLegacyWeaponValue('lightning', 'arcDamage') * ground.share * grounded, 0, 0, false, false);
+                            break;
+                        }
                         if (nextTarget) {
                             visited.add(nextTarget.id);
                             emitLightningArc(lastTarget.x, lastTarget.y,
@@ -4566,10 +4593,34 @@
         // or a stat set without the card) behaves like tier 1.
         const LEGACY_WEAPON_RULES = Object.freeze({
             multishot: { salvoDamage: [.88, .88, .66, .55] },
-            orbital: { contactDamage: [.13, .13, .105, .06], pulseDamage: .35 },
+            orbital: { contactDamage: [.13, .13, .11, .1], pulseDamage: .35 },
             homing: { missileDamage: [2.3, 2.3, 1.55, 1.35] },
             lightning: { arcDamage: [1.2, 1.2, .88, 1] }
         });
+        // Odak 5.12 · weapon balance. Fire rate and Cyber Frenzy speed up every
+        // weapon, not only the plasma gun, and each weapon has a way to reach a boss.
+        const WEAPON_TEMPO_RULES = Object.freeze({ refDelay: 0.46, exponent: 0.75, cap: 2, overdrive: 1.3 });
+        function getWeaponTempo(p = player) {
+            if (!p) return 1;
+            const fire = Math.pow(WEAPON_TEMPO_RULES.refDelay / Math.max(0.08, p.fireDelay), WEAPON_TEMPO_RULES.exponent);
+            return Math.min(WEAPON_TEMPO_RULES.cap, Math.max(1, fire)) * (p.overdriveActive ? WEAPON_TEMPO_RULES.overdrive : 1);
+        }
+        function getWeaponCooldownMult(p = player) {
+            return getCooldownMult(p) / getWeaponTempo(p);
+        }
+        const WEAPON_REACH_RULES = Object.freeze({
+            orbitalShot: { interval: [0, 1.2, 1.0, 0.85], damage: [0, 0.6, 0.72, 0.85], range: 460, speed: 620 },
+            mineLaunch: { interval: [0, 1.3, 1.1, 0.9], range: 400, armDelay: 0.2 },
+            lightningGround: { share: 1.05, maxJumps: 4 },
+            discBossGap: 0.12, discBossMult: 2.5, mineBossMult: 3,
+            shockLance: { damage: [0, 4, 6.2, 8.5], range: 520 },
+            circuitDischarge: { damage: [0, 9, 13, 17], range: 600 }
+        });
+        function weaponReachTarget(p, range) {
+            const t = p?.lockedTarget;
+            return t && !t.dead && enemies.includes(t) && Math.hypot(t.x - p.x, t.y - p.y) <= range ? t : null;
+        }
+
         function getLegacyWeaponValue(id, key, p = player) {
             const tier = Math.min(MAX_MODULE_TIER, p?.upgradeCounts?.[id] || 0);
             return LEGACY_WEAPON_RULES[id][key][tier];
@@ -4697,7 +4748,7 @@
                 name: 'Devre Dokuyucu',
                 icon: 'fa-solid fa-draw-polygon',
                 color: '#ffe66d',
-                getDesc: (r) => `Hareketinle kapalı bir devre çiz: ${CIRCUIT_WEAVER.maxDuration} sn içinde sarı halkaya dön, içindeki en fazla ${rarityCardValue('circuit_weaver', r)} düşmanı vur. Atılım devreyi sıfırlar. 3. kademede sınırı elektrikli bırak.`,
+                getDesc: (r) => `Hareketinle kapalı bir devre çiz: ${CIRCUIT_WEAVER.maxDuration} sn içinde sarı halkaya dön, içindeki en fazla ${rarityCardValue('circuit_weaver', r)} düşmanı vur. Devre kapanınca kilitli hedefe (boss dahil) boşalır. Atılım devreyi sıfırlar. 3. kademede sınırı elektrikli bırak.`,
                 // The drawn path is the attack; rarity sets how many enemies a closure hits.
                 apply: (p, r) => recordCardRarity(p, 'circuit_weaver', r)
             },
@@ -4707,7 +4758,7 @@
                 name: 'Mayın İzi',
                 icon: 'fa-solid fa-bomb',
                 color: '#ff9f1c',
-                getDesc: (r) => 'Hareket ettikçe arkana mayın bırakırsın (kademeye göre 3/4/5); yaklaşan düşman onu patlatır. Peşindeki sürüyü mayınların üstünden geçir.' +
+                getDesc: (r) => 'Hareket ettikçe arkana mayın bırakırsın (kademeye göre 3/4/5) ve kilitli hedefe düzenli mayın fırlatırsın; yaklaşan düşman onu patlatır.' +
                     (r.mult > 1 ? ` Mayın hasarı +%${Math.round(15 * (r.mult - 1))}.` : ''),
                 apply: (p, r) => { p.mineDamageBonus *= 1 + 0.15 * (r.mult - 1); }
             },
@@ -4717,7 +4768,7 @@
                 name: 'Bumerang Disk',
                 icon: 'fa-solid fa-compact-disc',
                 color: '#c084fc',
-                getDesc: (r) => 'Hareket yönüne delici bir disk fırlatır; disk sana geri döner ve dönüşte yine vurur. Dönüş yolunda düşmanları toplayacak yerde dur.' +
+                getDesc: (r) => 'Kilitli hedefe delici bir disk fırlatır; disk sana geri döner ve dönüşte yine vurur. Boss\'un içinden geçerken defalarca keser.' +
                     (r.mult > 1 ? ` Disk hasarı +%${Math.round(15 * (r.mult - 1))}.` : ''),
                 apply: (p, r) => { p.discDamageBonus *= 1 + 0.15 * (r.mult - 1); }
             },
@@ -4727,7 +4778,7 @@
                 name: 'Şok Halkası',
                 icon: 'fa-solid fa-circle-radiation',
                 color: '#5eead4',
-                getDesc: (r) => 'Çekirdekten düzenli aralıkla genişleyen bir şok halkası yayar; merkeze yakın düşmanlar çok daha fazla hasar alır. Kalabalığın içine dal.' +
+                getDesc: (r) => 'Çekirdekten düzenli aralıkla genişleyen bir şok halkası yayar; merkeze yakın düşmanlar çok daha fazla hasar alır. Her halka kilitli hedefe bir şok mızrağı saplar.' +
                     (r.mult > 1 ? ` Halka hasarı +%${Math.round(15 * (r.mult - 1))}.` : ''),
                 apply: (p, r) => { p.shockDamageBonus *= 1 + 0.15 * (r.mult - 1); }
             },
@@ -4784,7 +4835,7 @@
                 name: 'Hiper-Reaktör',
                 icon: 'fa-solid fa-gauge-high',
                 color: '#ff007f',
-                getDesc: (r) => `Atış hızını +%${Math.round(16 * r.mult)} ve mermi hızını +%12 artırır.`,
+                getDesc: (r) => `Atış hızını +%${Math.round(16 * r.mult)} ve mermi hızını +%12 artırır. Diğer silahların temposu da hızlanır.`,
                 apply: (p, r) => {
                     p.fireDelay = Math.max(0.08, p.fireDelay * (1 - 0.12 * Math.min(1.8, r.mult)));
                     p.bulletSpeed *= 1.12;
@@ -4796,7 +4847,7 @@
                 name: 'Plazma Uydusu',
                 icon: 'fa-solid fa-satellite',
                 color: '#ffe600',
-                getDesc: (r) => `Çekirdek etrafında dönen +${r.id === 'LEGENDARY' ? 2 : 1} koruyucu plazma uydusu ekler.`,
+                getDesc: (r) => `Çekirdek etrafında dönen +${r.id === 'LEGENDARY' ? 2 : 1} koruyucu plazma uydusu ekler. Uydular kilitli hedefe de ateş eder.`,
                 apply: (p, r) => {
                     p.orbitals += (r.id === 'LEGENDARY' ? 2 : 1);
                     p.orbitalSpeed += 0.35 * r.mult;
@@ -4832,7 +4883,7 @@
                 name: 'Zincirleme Yıldırım',
                 icon: 'fa-solid fa-bolt-lightning',
                 color: '#ffe600',
-                getDesc: (r) => `Mermiler vurduğu düşmandan yakındaki +${Math.ceil(1.5 * r.mult)} hedefe elektrik arkı sıçratır.`,
+                getDesc: (r) => `Mermiler vurduğu düşmandan yakındaki +${Math.ceil(1.5 * r.mult)} hedefe elektrik arkı sıçratır. Yakında hedef yoksa ark aynı düşmana geri iner.`,
                 apply: (p, r) => {
                     p.chainLightning += Math.ceil(1.5 * r.mult);
                 }
@@ -5964,7 +6015,7 @@
             minLength: 340, minPoints: 12, closeRadius: 56,
             minArea: 8000, maxArea: 90000, maxJump: 90,
             maxWireTargets: 16,
-            cooldown: [0, 11, 9, 7], fieldSeconds: 3.2, fieldStep: .13
+            cooldown: [0, 9, 7.5, 6], fieldSeconds: 3.2, fieldStep: .13
         });
         let circuitField = null;
         let circuitFlash = null;
@@ -5996,12 +6047,19 @@
                 if (target.dead || target.isBoss ||
                     !circuitContains(points, target.x, target.y)) continue;
                 impacted.push(target.id);
-                target.takeDamage(Math.min(260, p.damage * (1.15 + .1 * tier) + 18),
+                target.takeDamage(Math.min(340, p.damage * (1.6 + .3 * tier) + 18),
                     0, 0, false, false);
+            }
+            // Odak 5.12 · the closed circuit discharges into the locked target, bosses included.
+            const discharge = weaponReachTarget(p, WEAPON_REACH_RULES.circuitDischarge.range);
+            if (discharge) {
+                emitLightningArc(p.x, p.y, discharge.x, discharge.y, true);
+                discharge.takeDamage(p.damage * WEAPON_REACH_RULES.circuitDischarge.damage[tier], 0, 0, false, false);
+                p.buildStats.circuitDischarges = (p.buildStats.circuitDischarges || 0) + 1;
             }
             p.buildStats.circuitClosures++;
             p.buildStats.circuitPulseHits += impacted.length;
-            p.circuitReadyAt = totalTime + CIRCUIT_WEAVER.cooldown[tier] * getCooldownMult(p);
+            p.circuitReadyAt = totalTime + CIRCUIT_WEAVER.cooldown[tier] * getWeaponCooldownMult(p);
             // Preserve immutable point snapshots for effects and the live wire.
             const closed = points.map(point => ({x: point.x, y: point.y}));
             circuitFlash = { points: closed, expiresAt: totalTime + .75,
@@ -6178,7 +6236,7 @@
         const MINE_TRAIL_RULES = Object.freeze({
             dropDistance: [0, 300, 260, 220],
             maxMines: [0, 3, 4, 5],
-            damageMult: [0, 0.35, 0.45, 0.75],
+            damageMult: [0, 0.35, 0.45, 0.6],
             flatDamage: [0, 2, 3, 4],
             blastRadius: [0, 52, 58, 64],
             triggerRadius: 30, armDelay: .45, lifetime: 8,
@@ -6210,7 +6268,7 @@
             const tier = getMineTrailTier(p);
             if (!tier || gameState !== 'PLAYING' || p.isDashing) return false;
             p.mineTrailDistance += movedDist;
-            if (p.mineTrailDistance < MINE_TRAIL_RULES.dropDistance[tier]) return false;
+            if (p.mineTrailDistance < MINE_TRAIL_RULES.dropDistance[tier] / getWeaponTempo(p)) return false;
             p.mineTrailDistance = 0;
             return dropTrailMine(p, p.x, p.y);
         }
@@ -6230,7 +6288,7 @@
                 const dist = Math.hypot(dx, dy);
                 if (dist > radius + target.radius) continue;
                 const push = 220 / Math.max(1, dist);
-                target.takeDamage(damage, dx * push, dy * push, false, false);
+                target.takeDamage(target.isBoss ? damage * WEAPON_REACH_RULES.mineBossMult : damage, dx * push, dy * push, false, false);
                 hits++;
             }
             p.buildStats.mineBlasts++;
@@ -6405,7 +6463,20 @@
             ctx.restore();
         }
 
+        function launchMineAtTarget(p) {
+            const tier = getMineTrailTier(p);
+            const rules = WEAPON_REACH_RULES.mineLaunch;
+            if (!tier || gameState !== 'PLAYING' || totalTime < (p.mineLaunchReadyAt || 0)) return false;
+            const target = weaponReachTarget(p, rules.range);
+            if (!target) return false;
+            p.mineLaunchReadyAt = totalTime + rules.interval[tier] * getWeaponCooldownMult(p);
+            if (!dropTrailMine(p, target.x, target.y)) return false;
+            trailMines[trailMines.length - 1].armedAt = totalTime + rules.armDelay;
+            p.buildStats.mineLaunches = (p.buildStats.mineLaunches || 0) + 1;
+            return true;
+        }
         function updateTrailMines() {
+            if (player) launchMineAtTarget(player);
             if (!trailMines.length) return;
             if (!player || !getMineTrailTier(player)) {
                 trailMines = [];
@@ -6468,7 +6539,7 @@
         const BOOMERANG_RULES = Object.freeze({
             cooldown: [0, 2.2, 1.9, 1.8],
             range: [0, 260, 290, 320],
-            damageMult: [0, 0.3, 0.3, 0.3],
+            damageMult: [0, 0.4, 0.5, 0.55],
             flatDamage: [0, 2, 2, 2],
             radius: [0, 14, 16, 18],
             outSpeed: 560, returnSpeed: 640, catchRadius: 22,
@@ -6495,10 +6566,13 @@
                 p.damage * rules.damageMult[tier] * p.discDamageBonus + rules.flatDamage[tier]);
             for (const target of enemies) {
                 if (disc.hitIds.size >= rules.maxHitsPerLeg) return;
-                if (target.dead || disc.hitIds.has(target.id)) continue;
+                if (target.dead) continue;
+                // A boss is hit again every short gap while the disc cuts through it.
+                if (target.isBoss ? totalTime < (disc.bossHitAt?.get(target.id) || 0) : disc.hitIds.has(target.id)) continue;
                 if (Math.hypot(target.x - disc.x, target.y - disc.y) > rules.radius[tier] + target.radius) continue;
-                disc.hitIds.add(target.id);
-                target.takeDamage(damage, disc.dx * 160, disc.dy * 160, false, false);
+                if (target.isBoss) (disc.bossHitAt ||= new Map()).set(target.id, totalTime + WEAPON_REACH_RULES.discBossGap);
+                else disc.hitIds.add(target.id);
+                target.takeDamage(target.isBoss ? damage * WEAPON_REACH_RULES.discBossMult : damage, disc.dx * 160, disc.dy * 160, false, false);
                 p.buildStats.discHits++;
                 audio.playWeaponHit('disc', false, target.isBoss);
             }
@@ -6512,10 +6586,11 @@
             const rules = BOOMERANG_RULES;
             if (gameState === 'PLAYING' && totalTime >= player.boomerangReadyAt &&
                 !boomerangDiscs.length) {
-                const dir = player.dashDir || { x: 1, y: 0 };
+                const aim = weaponReachTarget(player, rules.range[tier] + 140);
+                const dir = aim ? { x: aim.x - player.x, y: aim.y - player.y } : (player.dashDir || { x: 1, y: 0 });
                 throwBoomerangDisc(player, dir.x, dir.y);
                 if (player.evolutions.has('boomerang_disc')) throwBoomerangDisc(player, -dir.x, -dir.y);
-                player.boomerangReadyAt = totalTime + rules.cooldown[tier] * getCooldownMult(player);
+                player.boomerangReadyAt = totalTime + rules.cooldown[tier] * getWeaponCooldownMult(player);
                 audio.playWeaponFire('disc', false);
             }
             for (const disc of boomerangDiscs) {
@@ -6617,7 +6692,7 @@
         const SHOCK_RING_RULES = Object.freeze({
             interval: [0, 3.2, 2.9, 2.6],
             maxRadius: [0, 130, 145, 160],
-            damageMult: [0, 0.45, 0.55, 0.7],
+            damageMult: [0, 0.65, 0.85, 1.1],
             flatDamage: [0, 3, 4, 5],
             farFactor: .3, expandSeconds: .45,
             maxTargets: 12, maxDamage: 220,
@@ -6715,7 +6790,13 @@
             }
             const rules = SHOCK_RING_RULES;
             if (gameState === 'PLAYING' && totalTime >= player.shockReadyAt) {
-                player.shockReadyAt = totalTime + rules.interval[tier] * getCooldownMult(player);
+                player.shockReadyAt = totalTime + rules.interval[tier] * getWeaponCooldownMult(player);
+                const lanceTarget = weaponReachTarget(player, WEAPON_REACH_RULES.shockLance.range);
+                if (lanceTarget) {
+                    emitLightningArc(player.x, player.y, lanceTarget.x, lanceTarget.y, true);
+                    lanceTarget.takeDamage(player.damage * WEAPON_REACH_RULES.shockLance.damage[tier] * player.shockDamageBonus, 0, 0, false, false);
+                    player.buildStats.shockLances = (player.buildStats.shockLances || 0) + 1;
+                }
                 if (emitShockRing(player)) {
                     player.buildStats.shockRings++;
                     audio.playWeaponFire('shock', false);
@@ -11143,7 +11224,7 @@
                     for (const op of orbPositions) {
                         if (e.orbitalHitCooldown <= 0 && Math.hypot(e.x - op.x, e.y - op.y) < e.radius + op.r) {
                             // Shared contact cooldown limits both DPS and damage-number spam.
-                            e.orbitalHitCooldown = 0.12;
+                            e.orbitalHitCooldown = 0.12 / getWeaponTempo(player);
                             const angle = Math.atan2(e.y - player.y, e.x - player.x);
                             e.takeDamage(player.damage * getLegacyWeaponValue('orbital', 'contactDamage'),
                                 Math.cos(angle) * 13.2, Math.sin(angle) * 13.2, false, false);

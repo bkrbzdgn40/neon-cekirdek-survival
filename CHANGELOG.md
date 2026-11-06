@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 5.12 · Silah dengesi
+- Her silahın boss'a ulaşan bir yolu var: uydular kilitli hedefe ateş eder, mayınlar hedefe fırlatılır, disk hedefe atılıp boss'u defalarca keser, şok halkası mızrak saplar, devre kapanınca boss'a boşalır, yalnız kalan düşmana şimşek geri iner.
+- Atış hızı kartları ve Siber Cinnet artık disk, halka, devre, mayın ve uyduların temposunu da hızlandırır; çatallı plazma tek kazanan build değil.
+- Zayıf kalan uydu, disk, şok halkası ve devrenin kalabalık hasarı artırıldı; mayının biraz azaltıldı.
+
 ## Odak 5.11 · Günlük koşu
 - Ana menüye GÜNLÜK düğmesi eklendi: o gün her denemede aynı tohum ve aynı sözleşme. Şasiyi sen seçersin.
 - Bugünün en iyi skoru kaydedilir; düğmede ve koşu raporunda (GÜNLÜK REKOR) görünür. Ertesi gün yeni tohum gelir.

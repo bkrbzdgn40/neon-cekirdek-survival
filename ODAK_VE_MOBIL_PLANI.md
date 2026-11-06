@@ -527,6 +527,9 @@ Boss sandığı 3 eserden birini seçtirir; eser koşu boyunca kalır ve oyun ta
 ### - [x] 5.11 Günlük koşu
 Menüdeki GÜNLÜK düğmesi o günün tohumu ve sözleşmesiyle koşu başlatır (yerel takvim günü; sözleşmeler kilitliyse standart). Şasi oyuncunun seçimidir. Bugünün en iyi skoru kayıtta tutulur, düğmede ve raporda görünür.
 
+### - [x] 5.12 Silah dengesi
+Her silah 3. kademede tek başına bir build taşır (kalabalıkta temel plazmanın ×2,0–2,7'si) ve tek bir boss'a ulaşır (×1,7–2,2; Devre çizime bağlı). Atış hızı ve Siber Cinnet bütün silahların temposunu hızlandırır.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |
