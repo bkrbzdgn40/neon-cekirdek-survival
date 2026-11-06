@@ -533,6 +533,9 @@ Her silah 3. kademede tek başına bir build taşır (kalabalıkta temel plazman
 ### - [x] 5.13 Görev başarısızlığı ve boss sırasında biyom
 Görevler başarısız olabilir: hasarsız görev ilk gerçek hasarda, diğerleri 75 sn dolunca düşer ve sıradaki göreve geçilir. Biyom tehlikeleri boss savaşında ve boss uyarısında da çalışır; boss'lar raylardan ve sersemletmeden muaf kalır, gösteri ve nemesis boss'suz anı bekler.
 
+### - [x] 5.14 Perdeler ve final
+Koşu 10 dalgalık üç perdeye bölünür. 10. ve 20. dalga perde sonu boss'unu çağırır (×1,35 can; altın, %35 can, ek eser). 30. dalgada üç boss'lu Çekirdek Erimesi finali gelir; dalga sayacı final bitene kadar bekler. Final kazanılınca zafer ekranı çıkar, koşu bitirilir ya da sonsuz erimeye geçilir (her dalga düşman hasarı +%5). Biyomlar başladıkları perdenin kademesini alır.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

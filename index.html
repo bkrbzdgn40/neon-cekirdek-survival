@@ -90,7 +90,7 @@
                         </div>
                     </div>
                     <div class="hud-clock" aria-label="Dalga ve süre">
-                        <span class="hud-clock-wave">DALGA <span id="waveText">1</span></span>
+                        <span class="hud-clock-wave">DALGA <span id="waveText">1</span><span id="waveGoalText" class="hud-wave-goal">/30</span></span>
                         <span id="timeText">00:00</span>
                     </div>
                     <button id="pauseBtn" type="button" title="Duraklat [P / ESC]" aria-label="Duraklat" class="hud-pause-button pointer-events-auto cursor-pointer">
@@ -364,6 +364,24 @@
                 </div>
                 <div class="text-cyan-400/90 font-semibold">NEON ÇEKİRDEK</div>
             </footer>
+        </div>
+    </div>
+
+    <div id="victoryModal" class="fixed inset-0 z-40 hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="victoryTitle">
+        <div class="victory-card">
+            <p class="victory-kicker">FİNAL · ÇEKİRDEK ERİMESİ DURDURULDU</p>
+            <h2 id="victoryTitle" class="victory-title">ÇEKİRDEK STABİL</h2>
+            <p class="victory-copy">Üç perdeyi ve finali aştın. Koşuyu zaferle bitirebilir ya da sonsuz erimeye devam edebilirsin: orada düşmanlar her dalga daha sert vurur.</p>
+            <div class="victory-stats">
+                <div><span>SÜRE</span><b id="victoryTimeText">0:00</b></div>
+                <div><span>SKOR</span><b id="victoryScoreText">0</b></div>
+                <div><span>ALTIN</span><b id="victoryGoldText">+0</b></div>
+                <div><span>FİNAL</span><b id="victoryClearsText">1</b></div>
+            </div>
+            <div class="victory-actions">
+                <button id="victoryContinueBtn" type="button" class="victory-continue">SONSUZ ERİMEYE DEVAM<span class="key-hint"> [ENTER]</span></button>
+                <button id="victoryEndBtn" type="button" class="victory-end">KOŞUYU ZAFERLE BİTİR</button>
+            </div>
         </div>
     </div>
 

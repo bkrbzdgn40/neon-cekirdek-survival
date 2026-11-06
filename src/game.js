@@ -1059,6 +1059,8 @@
                 ownedContent = new Set(parseOwnedContent(data.owned) || []);
                 lastRunSummary = parseLastRunSummary(data.lastRun);
                 dailyBest = parseDailyBest(data.daily);
+                finalClears = safeSaveInteger(data.finals?.clears, 0);
+                bestFinalSeconds = safeSaveInteger(data.finals?.best, 0);
                 guidesSeen = new Set(parseGuidesSeen(data.guides));
                 ({ seen: codexSeen, kills: codexKills } = parseCodex(data.codex));
                 ({ owned: ownedCosmetics, equipped: equippedCosmetics } = parseCosmetics(data.cosmetics));
@@ -1094,6 +1096,7 @@
                     owned: [...ownedContent],
                     lastRun: lastRunSummary,
                     daily: dailyBest,
+                    finals: { clears: finalClears, best: bestFinalSeconds },
                     guides: [...guidesSeen],
                     codex: codexSaveData(),
                     cosmetics: cosmeticsSaveData(),
@@ -3391,7 +3394,8 @@
                 // Predictable, sub-exponential late-game scaling; wave 30 stays playable.
                 const elapsedWaves = Math.max(0, wave - 1);
                 const waveMult = 1 + elapsedWaves * 0.20 + elapsedWaves * elapsedWaves * 0.018;
-                const dmgMult = Math.min(2.8, 1 + elapsedWaves * 0.095);
+                const dmgMult = Math.min(2.8, 1 + elapsedWaves * 0.095) *
+                    (1 + endlessWaves() * ACT_RULES.endlessDamageStep);
                 const spdWaveMult = Math.min(1.65, 1 + elapsedWaves * 0.022);
                 const eliteHpMult = this.isElite ? Math.min(4.1, 2.2 + Math.max(0, wave - 4) * 0.12) : 1.0;
 
@@ -4056,6 +4060,7 @@
                         if (combatDirector) combatDirector.onBossCleared();
                         document.getElementById('bossHudContainer').classList.add('hidden');
                         document.getElementById('bossHudContainer').classList.remove('flex');
+                        onRunEncounterCleared();
                     }
                     shockwaves.push(new Shockwave(this.x, this.y, 350, '#ffe600', 0.65));
                     if (combatDirector) {
@@ -7689,6 +7694,17 @@
             riftPursuitTell:1.05, riftPursuitCooldown:16,
             firstWave:6, chapterWaves:3
         });
+        // Odak 5.14 · a chapter keeps the tier of the act it starts in.
+        const CHAPTER_TIER_RULES = Object.freeze({
+            foundryCycle:[6,5.2,4.5], foundryDamage:[9,13,18], foundryHitCap:[12,16,20],
+            gardenCooldown:[10,8.5,7], gardenHitCap:[8,11,14],
+            riftCooldown:[11,9.5,8], riftPursuitCooldown:[16,13,10.5]
+        });
+        let chapterTier = 1;
+        function chapterRule(key) {
+            const tiers = CHAPTER_TIER_RULES[key];
+            return tiers ? tiers[Math.min(tiers.length, Math.max(1, chapterTier)) - 1] : CHAPTER_RULES[key];
+        }
         let arenaChapter = null;
         let chapterAnnounceUntil = 0;
         let chapterStats = {changes:0,foundryEnemyHits:0,foundryPlayerHits:0,
@@ -7757,6 +7773,7 @@
         }
         function resetChapterBiome() {
             arenaChapter = null;
+            chapterTier = 1;
             chapterAnnounceUntil = 0;
             chapterStats={changes:0,foundryEnemyHits:0,foundryPlayerHits:0,
                 gardenBursts:0,gardenStuns:0,riftWarps:0,riftReroutes:0,
@@ -7784,6 +7801,7 @@
             if (arenaChapter===next) return false;
             if (!arenaChapter && next && !claimSystemIntro('chapters')) return false;
             arenaChapter=next;
+            chapterTier=actForWave(wave);
             chapterShowcase=null;
             chapterGardenCharge.fill(0);
             chapterGardenReady.fill(-Infinity);
@@ -7800,11 +7818,12 @@
             chapterAnnounceUntil=totalTime+5.0;
             chapterStats.changes++;
             const d=ARENA_CHAPTERS[next];
-            createFloatingText(player.x,player.y-54,d.label,d.color,17);
+            createFloatingText(player.x,player.y-54,
+                d.label+(chapterTier>1?' '+RUN_ACTS[chapterTier-1].roman:''),d.color,17);
             return true;
         }
         function foundryPulseIndex() {
-            return Math.floor(Math.max(0, totalTime - chapterFoundryAnchor) / CHAPTER_RULES.foundryCycle);
+            return Math.floor(Math.max(0, totalTime - chapterFoundryAnchor) / chapterRule('foundryCycle'));
         }
         // Rolled only from the update path, so draw order never changes the random sequence.
         function foundryRailLayout() {
@@ -7827,7 +7846,7 @@
         }
         function chapterFoundryPhase(t=totalTime) {
             if(chapterFoundryAnchor===null)return 0;
-            return Math.max(0,t-chapterFoundryAnchor)%CHAPTER_RULES.foundryCycle;
+            return Math.max(0,t-chapterFoundryAnchor)%chapterRule('foundryCycle');
         }
         function steerFoundryRangedEnemy(enemy,fromX,fromY) {
             if(arenaChapter!=='FOUNDRY'||!chapterEffectsAllowed()||
@@ -7852,7 +7871,7 @@
             enemy.y=Math.max(enemy.radius,Math.min(worldHeight-enemy.radius,
                 fromY+traveled*desiredY/norm));
             const pulse=Math.floor(Math.max(0,totalTime-chapterFoundryAnchor)/
-                CHAPTER_RULES.foundryCycle);
+                chapterRule('foundryCycle'));
             if(enemy.lastFoundryDodgePulse!==pulse){
                 enemy.lastFoundryDodgePulse=pulse;
                 chapterStats.foundryDodges++;
@@ -7870,12 +7889,12 @@
             const lanes=foundryRailPositions(layout);
             if (lanes.some(at=>onFoundryLane(axis,at,player,w))) {
                 const prev=player.hp;
-                player.takeDamage(FOUNDRY_RAILS.damage);
+                player.takeDamage(chapterRule('foundryDamage'));
                 if(player.hp<prev)chapterStats.foundryPlayerHits++;
             }
             let hits=0;
             for(const e of enemies){
-                if(hits>=CHAPTER_RULES.foundryHitCap) break;
+                if(hits>=chapterRule('foundryHitCap')) break;
                 if(e.dead||e.isBoss||!lanes.some(at=>onFoundryLane(axis,at,e,w))) continue;
                 e.takeDamage(Math.min(70,player.damage*.65+18),0,0,false,false);
                 hits++;
@@ -7923,12 +7942,12 @@
                 chapterGardenCharge[i]=Math.max(0,Math.min(CHAPTER_RULES.gardenCharge,
                     chapterGardenCharge[i]+dt*speed));
                 if(chapterGardenCharge[i]<CHAPTER_RULES.gardenCharge)continue;
-                chapterGardenReady[i]=totalTime+CHAPTER_RULES.gardenCooldown;
+                chapterGardenReady[i]=totalTime+chapterRule('gardenCooldown');
                 chapterGardenCharge[i]=0;
                 chapterStats.gardenBursts++;
                 let stunned=0;
                 for(const e of enemies){
-                    if(stunned>=CHAPTER_RULES.gardenHitCap)break;
+                    if(stunned>=chapterRule('gardenHitCap'))break;
                     if(e.dead||e.isBoss||Math.hypot(e.x-p.x,e.y-p.y)>
                         CHAPTER_RULES.gardenStunRadius)continue;
                     e.stunTimer=Math.max(e.stunTimer,1.15);
@@ -8024,7 +8043,7 @@
             if(!e)return;
             chapterRiftPursuit={enemyId:e.id,from,to,
                 readyAt:totalTime+CHAPTER_RULES.riftPursuitTell};
-            chapterRiftPursuitReadyAt=totalTime+CHAPTER_RULES.riftPursuitCooldown;
+            chapterRiftPursuitReadyAt=totalTime+chapterRule('riftPursuitCooldown');
         }
         function updateRiftChapter() {
             const nodes=getRiftCenters();
@@ -8038,7 +8057,7 @@
             if(!chapterRiftArmed||totalTime<chapterRiftReadyAt)return;
             const from=within[0]?0:1, source=nodes[from],dest=nodes[1-from];
             chapterRiftArmed=false;
-            chapterRiftReadyAt=totalTime+CHAPTER_RULES.riftCooldown;
+            chapterRiftReadyAt=totalTime+chapterRule('riftCooldown');
             chapterRiftLastWarpAt=totalTime;
             chapterRiftLastWarpSource=from;
             chapterStats.riftWarps++;
@@ -8692,7 +8711,7 @@
             updateChapterShowcase();
         }
         function getArenaChapterSnapshot(){
-            return {id:arenaChapter, label:arenaChapter?
+            return {id:arenaChapter, tier:chapterTier, label:arenaChapter?
                 ARENA_CHAPTERS[arenaChapter].label:null,
                 enabled:!!arenaChapter&&chapterEffectsAllowed(),
                 wave, showcase:chapterShowcaseSnapshot(),
@@ -8725,7 +8744,7 @@
             hud.setAttribute('data-arena-chapter',arenaChapter||'NONE');
             const d=arenaChapter?ARENA_CHAPTERS[arenaChapter]:null;
             // Odak 2.6 · glyph and name in their own spans: phones keep only the icon.
-            const badgeGlyph=d?d.glyph:'',badgeName=d?' '+d.short:'NORMAL';
+            const badgeGlyph=d?d.glyph:'',badgeName=d?' '+d.short+(chapterTier>1?' '+RUN_ACTS[chapterTier-1].roman:''):'NORMAL';
             if(badge.dataset.label!==badgeGlyph+badgeName){
                 badge.dataset.label=badgeGlyph+badgeName;
                 if(typeof badge.replaceChildren==='function'){
@@ -8882,7 +8901,7 @@
                 const node = nodes[index];
                 const readyIn = Math.max(0, chapterGardenReady[index] - totalTime);
                 const progress = chapterGardenCharge[index] / CHAPTER_RULES.gardenCharge;
-                const since = CHAPTER_RULES.gardenCooldown - readyIn;
+                const since = chapterRule('gardenCooldown') - readyIn;
                 const ready = readyIn === 0;
                 ctx.save();
                 ctx.translate(node.x, node.y);
@@ -8901,7 +8920,7 @@
                     }
                 }
                 // Petals: bud while spent, open when ready, wider while charging.
-                const open = ready ? .82 + .3 * progress : .42 + .3 * (since / CHAPTER_RULES.gardenCooldown);
+                const open = ready ? .82 + .3 * progress : .42 + .3 * (since / chapterRule('gardenCooldown'));
                 const breathe = 1 + (low ? 0 : .05 * Math.sin(clock * 2 + index * 1.7));
                 const spin = clock * (.15 + .5 * progress);
                 ctx.strokeStyle = d.color; ctx.fillStyle = d.color; ctx.lineWidth = 2;
@@ -8952,7 +8971,7 @@
                     ctx.globalAlpha = active ? .8 : .2;
                     ctx.lineWidth = 4; ctx.strokeStyle = d.accent;
                     ctx.beginPath(); ctx.arc(0, 0, r + 6, -Math.PI / 2,
-                        -Math.PI / 2 + Math.PI * 2 * (1 - readyIn / CHAPTER_RULES.gardenCooldown));
+                        -Math.PI / 2 + Math.PI * 2 * (1 - readyIn / chapterRule('gardenCooldown')));
                     ctx.stroke();
                 }
                 ctx.restore();
@@ -9051,7 +9070,7 @@
                     ctx.lineWidth = 4; ctx.strokeStyle = d.accent;
                     const remaining = chapterRiftReadyAt - totalTime;
                     ctx.beginPath(); ctx.arc(0, 0, r + 7, -Math.PI / 2,
-                        -Math.PI / 2 + Math.PI * 2 * (1 - remaining / CHAPTER_RULES.riftCooldown));
+                        -Math.PI / 2 + Math.PI * 2 * (1 - remaining / chapterRule('riftCooldown')));
                     ctx.stroke();
                 }
                 ctx.restore();
@@ -10234,7 +10253,7 @@
                         elite:{opened:0,gold:0,heal:0,xp:0,charge:0,shots:0},
                         boss:{opened:0,gold:0,heal:0,xp:0,charge:0,shots:0}
                     },
-                    goldBySource:{orbs:0,quests:0,arena:0,chests:0}
+                    goldBySource:{orbs:0,quests:0,arena:0,chests:0,acts:0}
                 };
             }
 
@@ -10704,14 +10723,132 @@
                 BOSS_ARCHETYPES.find(arch=>arch.type===type));
         }
 
+        // Odak 5.14 · a run is three acts of ten waves and a finale at wave 30.
+        // The last wave of acts I and II calls an act boss; wave 30 calls the Core
+        // Meltdown. Clearing it wins the run, which can then go on endlessly.
+        const ACT_RULES=Object.freeze({actWaves:10,finalWave:30,callDelay:4.5,afterBossDelay:10,
+            actBossHp:1.35,finalBossHp:1.6,actRewardGold:Object.freeze([150,260]),actRewardHeal:.35,
+            finalRewardGold:600,endlessDamageStep:.05});
+        const RUN_ACTS=Object.freeze([
+            Object.freeze({roman:'I',name:'UYANIŞ',color:'#00f3ff'}),
+            Object.freeze({roman:'II',name:'KUŞATMA',color:'#ff9757'}),
+            Object.freeze({roman:'III',name:'ERİME',color:'#ff3d6e'})
+        ]);
+        const FINAL_ENCOUNTER_PLAN=Object.freeze({id:'CORE_MELTDOWN',label:'ÇEKİRDEK ERİMESİ',
+            types:Object.freeze(['BOSS_TITAN','BOSS_DESTROYER','BOSS_VOID'])});
+        function freshRunActs(){
+            return {announced:1,called:{},pending:null,pendingAct:0,current:null,currentAct:0,
+                cleared:[],finalState:'NONE',finalSeconds:null,endless:false,lastClearAt:-Infinity};
+        }
+        let runActs=freshRunActs();
+        let finalClears=0,bestFinalSeconds=0;
+        function actForWave(w=wave){
+            return Math.min(RUN_ACTS.length,Math.max(1,Math.ceil(w/ACT_RULES.actWaves)));
+        }
+        function endlessWaves(w=wave){
+            return runActs.endless?Math.max(0,w-ACT_RULES.finalWave):0;
+        }
+        function finalHoldsWave(){
+            return runActs.finalState==='PENDING'||runActs.finalState==='ACTIVE';
+        }
+        function updateRunActs(){
+            if(!player||gameState!=='PLAYING')return;
+            const act=actForWave();
+            if(act>runActs.announced){
+                runActs.announced=act;
+                const a=RUN_ACTS[act-1];
+                showDopamineBanner('PERDE '+a.roman+' · '+a.name,a.color);
+                createFloatingText(player.x,player.y-70,'PERDE '+a.roman+' · BİYOMLAR SERTLEŞİYOR',a.color,18);
+            }
+            // The wave that closes an act owes an act boss; it waits for a running fight.
+            if(wave%ACT_RULES.actWaves===0&&wave<ACT_RULES.finalWave&&!runActs.called[wave]){
+                runActs.called[wave]=true;
+                if(runActs.pending!=='FINAL'){runActs.pending='ACT';runActs.pendingAct=actForWave();}
+            }
+            if(wave>=ACT_RULES.finalWave&&runActs.finalState==='NONE'){
+                runActs.finalState='PENDING';runActs.pending='FINAL';runActs.pendingAct=RUN_ACTS.length;
+            }
+            if(runActs.pending&&activeBosses.length===0)
+                nextBossTime=Math.min(nextBossTime,Math.max(totalTime+ACT_RULES.callDelay,
+                    runActs.lastClearAt+ACT_RULES.afterBossDelay));
+        }
+        function upcomingEncounterLabel(count,plan){
+            if(runActs.pending==='FINAL')return 'FİNAL · '+FINAL_ENCOUNTER_PLAN.label;
+            const base=count>1?count+' BOSS · '+plan.label:'BOSS YAKLAŞIYOR';
+            return runActs.pending==='ACT'?'PERDE '+RUN_ACTS[runActs.pendingAct-1].roman+' SONU · '+base:base;
+        }
+        function grantRunGold(amount){
+            totalGold+=amount;sessionGold+=amount;
+            if(combatDirector)combatDirector.onGoldGranted('acts',amount);
+        }
+        function onRunEncounterCleared(){
+            const kind=runActs.current,act=runActs.currentAct;
+            runActs.current=null;runActs.currentAct=0;runActs.lastClearAt=totalTime;
+            if(kind==='ACT'){
+                const gold=ACT_RULES.actRewardGold[Math.max(0,act-1)]||0;
+                grantRunGold(gold);
+                runActs.cleared.push(act);
+                if(player)player.hp=Math.min(player.maxHp,player.hp+player.maxHp*ACT_RULES.actRewardHeal);
+                pendingRelicChoices++;
+                saveMetaProgress();
+                audio.playJackpot();
+                showDopamineBanner('PERDE '+RUN_ACTS[act-1].roman+' TAMAMLANDI · +'+gold+' ALTIN',RUN_ACTS[act-1].color);
+            }else if(kind==='FINAL')winRun();
+        }
+        function winRun(){
+            runActs.finalState='CLEARED';runActs.finalSeconds=totalTime;
+            runActs.cleared.push(RUN_ACTS.length);
+            grantRunGold(ACT_RULES.finalRewardGold);
+            finalClears++;
+            bestFinalSeconds=bestFinalSeconds>0?Math.min(bestFinalSeconds,Math.round(totalTime)):Math.round(totalTime);
+            saveMetaProgress();
+            audio.playJackpot();
+            gameState='VICTORY';
+            const set=(id,text)=>{const el=document.getElementById(id);if(el)el.textContent=text;};
+            set('victoryTimeText',formatTime(totalTime));
+            set('victoryScoreText',Math.round(score).toLocaleString('tr-TR'));
+            set('victoryGoldText','+'+sessionGold.toLocaleString('tr-TR'));
+            set('victoryClearsText',String(finalClears));
+            const modal=document.getElementById('victoryModal');
+            if(modal){modal.classList.remove('hidden');modal.classList.add('flex');}
+        }
+        function hideVictoryModal(){
+            const modal=document.getElementById('victoryModal');
+            if(modal){modal.classList.add('hidden');modal.classList.remove('flex');}
+        }
+        function continueEndless(){
+            if(gameState!=='VICTORY')return false;
+            hideVictoryModal();
+            runActs.endless=true;
+            gameState='PLAYING';
+            nextBossTime=totalTime+20;
+            showDopamineBanner('SONSUZ ERİME · DÜŞMANLAR HER DALGA GÜÇLENİR','#ff3d6e');
+            return true;
+        }
+        function endVictoriousRun(){
+            if(gameState!=='VICTORY')return false;
+            hideVictoryModal();
+            triggerGameOver('VICTORY');
+            return true;
+        }
+        window.getNeonRunActsSnapshot=()=>({act:actForWave(),announced:runActs.announced,
+            pending:runActs.pending,current:runActs.current,cleared:[...runActs.cleared],
+            finalState:runActs.finalState,finalSeconds:runActs.finalSeconds,endless:runActs.endless,
+            finalClears,bestFinalSeconds});
+
         function spawnBossEncounter() {
             cancelFieldDevices();
             bossEncounterCount++;
             if (combatDirector) combatDirector.onBossEncounter();
             nextBossTime = Number.POSITIVE_INFINITY;
-            const bossCount = getBossCountForEncounter(bossEncounterCount);
-            const encounterPlan=getBossEncounterPlan(bossEncounterCount);
-            const selectedArchetypes=getBossArchetypesForEncounter(bossEncounterCount);
+            const kind=runActs.pending,kindAct=runActs.pendingAct;
+            runActs.pending=null;runActs.current=kind;runActs.currentAct=kindAct;
+            if(kind==='FINAL')runActs.finalState='ACTIVE';
+            const encounterPlan=kind==='FINAL'?{id:FINAL_ENCOUNTER_PLAN.id,label:FINAL_ENCOUNTER_PLAN.label,
+                types:[...FINAL_ENCOUNTER_PLAN.types]}:getBossEncounterPlan(bossEncounterCount);
+            const bossCount = kind==='FINAL'?encounterPlan.types.length:getBossCountForEncounter(bossEncounterCount);
+            const selectedArchetypes=encounterPlan.types.map(type=>BOSS_ARCHETYPES.find(arch=>arch.type===type));
+            const hpMult=kind==='FINAL'?ACT_RULES.finalBossHp:kind==='ACT'?ACT_RULES.actBossHp:1;
             if(combatDirector) combatDirector.recordBossPattern(encounterPlan.id);
             const spawnedNames = [];
 
@@ -10719,6 +10856,8 @@
                 const arch=selectedArchetypes[i%selectedArchetypes.length];
                 const pos = getRandomEdgePosition(55);
                 const boss = new Enemy(pos.x, pos.y, arch.type, false);
+                if(hpMult!==1){boss.maxHp*=hpMult;boss.hp=boss.maxHp;}
+                if(kind)boss.encounterKind=kind;
                 enemies.push(boss);
                 activeBosses.push(boss);
                 emitMotionFx('BOSS',boss.x,boss.y,{radius:150});
@@ -10729,7 +10868,12 @@
             hudBoss.classList.remove('hidden');
             hudBoss.classList.add('flex');
 
-            if (bossCount > 1) {
+            if (kind === 'FINAL') {
+                showDopamineBanner('FİNAL · '+encounterPlan.label, '#ff3d6e');
+            } else if (kind === 'ACT') {
+                showDopamineBanner('PERDE '+RUN_ACTS[kindAct-1].roman+' SONU · '+
+                    (bossCount>1?bossCount+' BOSS · '+encounterPlan.label:spawnedNames[0]), '#ff0055');
+            } else if (bossCount > 1) {
                 showDopamineBanner(bossCount+' BOSS · '+encounterPlan.label, '#ff0055');
             } else {
                 showDopamineBanner(`BOSS · ${spawnedNames[0]}`, '#ff0055');
@@ -11099,6 +11243,7 @@
             audio.updateMusic(dt, gameState === 'PLAYING', !!player?.overdriveActive,
                 activeBosses.length, bossApproaching);
 
+            if (finalHoldsWave()) waveTimer = Math.min(waveTimer, 15.99);
             if (waveTimer >= 16) {
                 waveTimer = 0;
                 wave++;
@@ -11109,6 +11254,7 @@
             }
 
             activeBosses = activeBosses.filter(b => !b.dead);
+            updateRunActs();
 
             if (totalTime >= nextBossTime - 3.8 && totalTime < nextBossTime && activeBosses.length === 0) {
                 bossWarningTimer = 1;
@@ -11121,11 +11267,9 @@
                 const upcomingCount=getBossCountForEncounter(bossEncounterCount+1);
                 const upcomingPlan=getBossEncounterPlan(bossEncounterCount+1);
                 if (warnText) {
-                    const nextLabel = upcomingCount>1?
-                        upcomingCount+' BOSS · '+upcomingPlan.label:
-                        'BOSS YAKLAŞIYOR';
+                    const nextLabel = upcomingEncounterLabel(upcomingCount,upcomingPlan);
                     if (warnText.textContent !== nextLabel) warnText.textContent = nextLabel;
-                    const nextTitle = upcomingPlan.types.map(type=>
+                    const nextTitle = (runActs.pending==='FINAL'?FINAL_ENCOUNTER_PLAN:upcomingPlan).types.map(type=>
                         BOSS_ARCHETYPES.find(arch=>arch.type===type).name).join(' + ');
                     if (warnText.title !== nextTitle) warnText.title = nextTitle;
                 }
@@ -12415,7 +12559,7 @@
             'overdriveMeter', 'overdriveBar', 'overdriveText', 'hpBar', 'hpText', 'lowHpOverlay',
             'reviveIndicator', 'reviveCountText', 'goldHudChip', 'goldHudText', 'goldResonanceText',
             'bastionBtn', 'novaBtn', 'prismBtn', 'dashBtn', 'shieldIndicator', 'shieldText',
-            'waveText', 'timeText', 'scoreText', 'hudScoreText', 'activeContractBadge',
+            'waveText', 'waveGoalText', 'timeText', 'scoreText', 'hudScoreText', 'activeContractBadge',
             'comboContainer', 'comboText', 'comboRankText', 'comboTimerBar',
             'bossHudContainer', 'bossHpBar', 'bossHpText', 'bossNameText', 'bossPhaseText',
             'bossIdentityStrip', 'dashCooldownOverlay', 'dashStatus', 'novaCooldownOverlay', 'novaStatus'
@@ -12523,6 +12667,11 @@
             }
 
             h.waveText.textContent = wave;
+            const goal = h.waveGoalText;
+            if (goal) {
+                const goalText = runActs.endless ? '∞' : wave <= ACT_RULES.finalWave ? '/' + ACT_RULES.finalWave : '';
+                if (goal.textContent !== goalText) goal.textContent = goalText;
+            }
             h.timeText.textContent = formatTime(totalTime);
             const scoreLabel = score.toLocaleString('tr-TR');
             h.scoreText.textContent = scoreLabel;
@@ -12566,7 +12715,9 @@
                 h.bossHpText.textContent = `${Math.ceil(totalHp)} / ${Math.round(totalMaxHp)}`;
                 const nameEl = h.bossNameText;
                 if (nameEl) {
-                    nameEl.textContent = activeBosses.length > 1
+                    nameEl.textContent = runActs.current === 'FINAL'
+                        ? '⚠ FİNAL · ' + FINAL_ENCOUNTER_PLAN.label + ' · ' + activeBosses.length + ' HEDEF'
+                        : activeBosses.length > 1
                         ? '⚠ ÇOKLU BOSS · ' + activeBosses.length + ' HEDEF'
                         : '⚠ ' + names.join(' + ');
                 }
@@ -12726,6 +12877,9 @@
             totalTime = 0;
             nextBossTime = 55;
             applyPlaytestStartWave(playtestParams.wave);
+            runActs = freshRunActs();
+            runActs.announced = actForWave(wave);
+            hideVictoryModal();
             bossEncounterCount = 0;
             combatDirector = new CombatDirector();
             activeBosses = [];
@@ -13247,6 +13401,8 @@
             }).sort((a,b)=>b.tier-a.tier||a.name.localeCompare(b.name,'tr')):[];
             const data={
                 version:RUN_REPORT_VERSION,reason,newRecord:!!isNewRecord,
+                acts:{reached:actForWave(),cleared:[...runActs.cleared],final:runActs.finalState,
+                    finalSeconds:runActs.finalSeconds,endless:runActs.endless},
                 result:{score,wave,durationSeconds:totalTime,kills,goldEarned:sessionGold,
                     totalGoldBalance:totalGold,bossEncounters:bossEncounterCount},
                 contract:{id:getActiveNeonContract().id,label:getActiveNeonContract().label},
@@ -13302,7 +13458,7 @@
         });
         const REPORT_GOLD_NAMES=Object.freeze({
             orbs:'Altın küreler',quests:'Görev ödülleri',
-            arena:'Arena etkinlikleri',chests:'Sandık ödülleri'
+            arena:'Arena etkinlikleri',chests:'Sandık ödülleri',acts:'Perde ve final ödülleri'
         });
         const REPORT_CHEST_NAMES=Object.freeze({
             goldHeal:'Altın / İyileşme',overdriveXp:'Cinnet / XP',bulletNova:'Mermi Novası'
@@ -13453,11 +13609,25 @@
             const openedTotal=Object.values(opened).reduce((s,n)=>s+(Number(n)||0),0);
             const missionRatio=r.missions.offered?
                 Math.round(100*r.missions.completed/r.missions.offered):0;
-            el('reportSubtitle').textContent=r.reason==='REVIVE_DECLINED'?
+            const won=r.acts?.final==='CLEARED';
+            const finalTime=won?formatTime(r.acts.finalSeconds||0):'';
+            el('reportSubtitle').textContent=won&&r.reason==='VICTORY'?
+                'Çekirdek Erimesi\'ni '+finalTime+' içinde durdurdun. Koşu zaferle kaydedildi.':
+                won?'Finali '+finalTime+' içinde aştın, sonsuz erimede '+
+                    Math.max(0,r.result.wave-ACT_RULES.finalWave)+' dalga dayandın.':
+                r.reason==='REVIVE_DECLINED'?
                 'Dirilişi reddederek operasyonu sonlandırdın. Bir sonraki koşu için kararlarını incele.':
                 'Çekirdek bütünlüğü tükendi. Bir sonraki koşu için kararlarını incele.';
-            el('reportRunStatus').textContent=r.reason==='REVIVE_DECLINED'?
-                'DİRİLİŞ REDDEDİLDİ':'SİNYAL KESİLDİ';
+            el('reportRunStatus').textContent=won?(r.reason==='VICTORY'?'FİNAL AŞILDI':'SONSUZ ERİME'):
+                r.reason==='REVIVE_DECLINED'?'DİRİLİŞ REDDEDİLDİ':'SİNYAL KESİLDİ';
+            const titleEl=el('reportTitle'),titleText=won?'ÇEKİRDEK STABİL':'ÇEKİRDEK ÇÖKTÜ';
+            if(titleEl&&titleEl.dataset.text!==titleText){
+                titleEl.dataset.text=titleText;
+                if(typeof titleEl.replaceChildren==='function'){
+                    const dot=document.createElement('span');dot.className='report-title-dot';dot.textContent='.';
+                    titleEl.replaceChildren(titleText,dot);
+                }else titleEl.textContent=titleText+'.';
+            }
             el('reportKillDetail').textContent=reportNumber(r.combat.eliteKills)+
                 ' elit · '+reportNumber(r.combat.bossKills)+' boss';
             el('reportGoldDetail').textContent='Kazanç · mevcut bakiye '+
@@ -13978,6 +14148,9 @@
             } else if (gameState === 'GUIDE' && ['Space', 'Enter', 'NumpadEnter', 'Escape'].includes(e.code)) {
                 e.preventDefault();
                 closeGuide();
+            } else if (gameState === 'VICTORY' && ['Space', 'Enter', 'NumpadEnter'].includes(e.code)) {
+                e.preventDefault();
+                continueEndless();
             }
         });
 
@@ -14178,6 +14351,8 @@
         }
         document.getElementById('confirmReviveBtn').addEventListener('click', executePlayerRevive);
         document.getElementById('declineReviveBtn').addEventListener('click', () => triggerGameOver('REVIVE_DECLINED'));
+        document.getElementById('victoryContinueBtn').addEventListener('click', continueEndless);
+        document.getElementById('victoryEndBtn').addEventListener('click', endVictoriousRun);
 
         function selectChassis(id) {
             selectedChassis = id;
