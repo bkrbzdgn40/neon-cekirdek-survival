@@ -3928,7 +3928,7 @@ test('M5.5.1 free revive and rejected second revive preserve explicit end reason
 test('M5.5.3 report aggregates gold sources and chest rewards without altering ledger',()=>{
  const {run}=setup();
  const a=JSON.parse(run("(()=>{startNewGame();const d=combatDirector.stats;Object.assign(d.goldBySource,{orbs:28,quests:36,arena:41,chests:75});Object.assign(d.chestDrops,{elite:3,boss:2});Object.assign(d.chestOpened,{goldHeal:2,overdriveXp:1,bulletNova:1});d.chestRewards.elite.opened=3;d.chestRewards.elite.gold=60;d.chestRewards.boss.opened=1;d.chestRewards.boss.gold=15;sessionGold=180;triggerGameOver();return JSON.stringify({report:window.getNeonFinalReport(),html:document.getElementById('reportEconomyContent').innerHTML});})()"));
- assert.deepEqual(a.report.economy.goldBySource,{orbs:28,quests:36,arena:41,chests:75});
+ assert.deepEqual(a.report.economy.goldBySource,{orbs:28,quests:36,arena:41,chests:75,acts:0});
  assert.equal(a.report.result.goldEarned,180);
  assert.equal(a.report.economy.chestDrops.elite,3);
  assert.equal(a.report.economy.chestRewards.elite.gold,60);
@@ -6464,8 +6464,8 @@ test('M5.18 mobile status and honest cooldown arcs expose terrain mechanics',()=
  const drawn=setup({},{canvasContext:ctx});
  const half=(code)=>{arcs.length=0;drawn.run(code);return arcs.some(a=>Math.abs(a[3]+Math.PI/2)<1e-6&&Math.abs(a[4]-Math.PI/2)<1e-3);};
  const base="startNewGame();nextBossTime=1e6;gameState='PLAYING';totalTime=40;";
- assert.ok(half(base+"wave=9;chapterShowcaseAttemptedWave=9;updateArenaChapter(.02);chapterGardenReady[0]=totalTime+CHAPTER_RULES.gardenCooldown/2;drawArenaChapter(ctx)"),'garden arc is half full');
- assert.ok(half(base+"wave=12;chapterShowcaseAttemptedWave=12;updateArenaChapter(.02);chapterRiftReadyAt=totalTime+CHAPTER_RULES.riftCooldown/2;drawArenaChapter(ctx)"),'rift arc is half full');
+ assert.ok(half(base+"wave=9;chapterShowcaseAttemptedWave=9;updateArenaChapter(.02);chapterGardenReady[0]=totalTime+chapterRule('gardenCooldown')/2;drawArenaChapter(ctx)"),'garden arc is half full');
+ assert.ok(half(base+"wave=12;chapterShowcaseAttemptedWave=12;updateArenaChapter(.02);chapterRiftReadyAt=totalTime+chapterRule('riftCooldown')/2;drawArenaChapter(ctx)"),'rift arc is half full');
 });
 
  
@@ -8814,4 +8814,135 @@ test('Odak 5.13 biome hazards keep working during a boss fight while bosses stay
   assert.equal(x.duringBoss.showcase, null);
   assert.equal(x.duringBoss.nemesis, false);
   assert.equal(x.afterBoss.showcase, 'FOUNDRY');
+});
+
+test('Odak 5.14 the last wave of an act calls a tougher act boss that pays out when cleared', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); gameState = 'PLAYING'; totalTime = 200; nextBossTime = 1e9; wave = 9;
+    updateRunActs(); const before = window.getNeonRunActsSnapshot().pending;
+    wave = 10; updateRunActs();
+    const called = { pending: runActs.pending, inSec: nextBossTime - totalTime, label: upcomingEncounterLabel(1, getBossEncounterPlan(bossEncounterCount + 1)) };
+    spawnBossEncounter();
+    const plain = new Enemy(0, 0, activeBosses[0].type);
+    const boss = { kind: activeBosses[0].encounterKind, ratio: activeBosses[0].maxHp / plain.maxHp };
+    const gold = sessionGold, relics = pendingRelicChoices; player.hp = 10;
+    for (const b of [...activeBosses]) { b.hp = 1; b.takeDamage(9000, 0, 0, false, false); }
+    const paid = { gold: sessionGold - gold, ledger: combatDirector.stats.goldBySource.acts, relics: pendingRelicChoices - relics, hp: player.hp, maxHp: player.maxHp, cleared: [...runActs.cleared] };
+    updateRunActs(); const again = runActs.pending;
+    wave = 11; updateRunActs(); const announced = runActs.announced;
+    // A fight already running makes the act boss wait for its end plus a breather.
+    wave = 20; const other = new Enemy(300, 300, 'BOSS_TITAN'); activeBosses = [other]; enemies = [other]; nextBossTime = Infinity;
+    updateRunActs(); const waiting = nextBossTime === Infinity;
+    other.hp = 1; other.takeDamage(9000, 0, 0, false, false); updateRunActs();
+    return JSON.stringify({ before, called, boss, paid, again, announced, waiting, afterClear: nextBossTime - totalTime, kind: runActs.pending });
+  })()`));
+  assert.equal(x.before, null);
+  assert.equal(x.called.pending, 'ACT');
+  assert.equal(x.called.inSec, 4.5);
+  assert.match(x.called.label, /^PERDE I SONU/);
+  assert.equal(x.boss.kind, 'ACT');
+  assert.ok(Math.abs(x.boss.ratio - 1.35) < 1e-9);
+  assert.equal(x.paid.gold, 150);
+  assert.equal(x.paid.ledger, 150);
+  assert.equal(x.paid.relics, 1);
+  assert.equal(x.paid.hp, Math.min(x.paid.maxHp, 10 + x.paid.maxHp * 0.35));
+  assert.deepEqual(x.paid.cleared, [1]);
+  assert.equal(x.again, null, 'an act boss is called once');
+  assert.equal(x.announced, 2);
+  assert.equal(x.waiting, true, "no call while another fight runs");
+  assert.equal(x.kind, 'ACT');
+  assert.equal(x.afterClear, 10);
+});
+
+test('Odak 5.14 wave 30 holds for the Core Meltdown; clearing it wins and endless erosion follows', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); gameState = 'PLAYING'; totalTime = 600; nextBossTime = 1e9; wave = 30;
+    updateRunActs(); const pending = runActs.finalState;
+    waveTimer = 15.98; enemies = []; for (let i = 0; i < 5; i++) { gameState = 'PLAYING'; updateGame(0.05); }
+    const held = wave;
+    activeBosses = []; spawnBossEncounter();
+    updateHUD(); const hudName = document.getElementById('bossNameText').textContent;
+    const final = { hudName, state: runActs.finalState, types: activeBosses.map(b => b.type), ratio: activeBosses[0].maxHp / new Enemy(0, 0, activeBosses[0].type).maxHp };
+    const gold = sessionGold;
+    for (const b of [...activeBosses]) { b.hp = 1; b.takeDamage(9000, 0, 0, false, false); }
+    const won = { state: gameState, snap: window.getNeonRunActsSnapshot(), gold: sessionGold - gold, time: document.getElementById('victoryTimeText').textContent };
+    const stored = JSON.parse(localStorage.getItem(META_SAVE_KEY)).finals;
+    const normalHit = new Enemy(0, 0, 'TANK').damage;
+    continueEndless();
+    const resumed = { state: gameState, endless: runActs.endless, nextIn: nextBossTime - totalTime };
+    wave = 40; const erodedHit = new Enemy(0, 0, 'TANK').damage; wave = 30; const sameWave = new Enemy(0, 0, 'TANK').damage;
+    wave = 37; triggerGameOver();
+    const r = window.getNeonFinalReport();
+    return JSON.stringify({ pending, held, final, won, stored, normalHit, erodedHit, sameWave, resumed, acts: r.acts,
+      status: document.getElementById('reportRunStatus').textContent, subtitle: document.getElementById('reportSubtitle').textContent,
+      title: document.getElementById('reportTitle').dataset.text });
+  })()`));
+  assert.equal(x.pending, 'PENDING');
+  assert.equal(x.held, 30, 'the wave clock waits for the finale');
+  assert.equal(x.final.state, 'ACTIVE');
+  assert.match(x.final.hudName, /FİNAL · ÇEKİRDEK ERİMESİ · 3 HEDEF/);
+  assert.deepEqual(x.final.types, ['BOSS_TITAN', 'BOSS_DESTROYER', 'BOSS_VOID']);
+  assert.ok(Math.abs(x.final.ratio - 1.6) < 1e-9);
+  assert.equal(x.won.state, 'VICTORY');
+  assert.equal(x.won.snap.finalState, 'CLEARED');
+  assert.equal(x.won.snap.finalClears, 1);
+  assert.equal(x.won.gold, 600);
+  assert.equal(x.won.time, '10:00');
+  assert.deepEqual(x.stored, { clears: 1, best: 600 });
+  assert.equal(x.resumed.state, 'PLAYING');
+  assert.equal(x.resumed.endless, true);
+  assert.equal(x.resumed.nextIn, 20);
+  assert.equal(x.sameWave, x.normalHit);
+  assert.ok(x.erodedHit > x.normalHit * 1.4, x.erodedHit + ' vs ' + x.normalHit);
+  assert.equal(x.acts.final, 'CLEARED');
+  assert.equal(x.acts.endless, true);
+  assert.equal(x.status, 'SONSUZ ERİME');
+  assert.match(x.subtitle, /sonsuz erimede 7 dalga/);
+  assert.equal(x.title, 'ÇEKİRDEK STABİL');
+});
+
+test('Odak 5.14 ending a won run reports a victory; a plain death still reads as a collapse', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); gameState = 'PLAYING'; totalTime = 500; wave = 30; updateRunActs(); spawnBossEncounter();
+    for (const b of [...activeBosses]) { b.hp = 1; b.takeDamage(9000, 0, 0, false, false); }
+    endVictoriousRun();
+    const win = { reason: window.getNeonFinalReport().reason, status: document.getElementById('reportRunStatus').textContent, title: document.getElementById('reportTitle').dataset.text };
+    startNewGame(); const fresh = window.getNeonRunActsSnapshot(); triggerGameOver();
+    const loss = { status: document.getElementById('reportRunStatus').textContent, title: document.getElementById('reportTitle').dataset.text, final: window.getNeonFinalReport().acts.final };
+    return JSON.stringify({ win, fresh, loss });
+  })()`));
+  assert.equal(x.win.reason, 'VICTORY');
+  assert.equal(x.win.status, 'FİNAL AŞILDI');
+  assert.equal(x.win.title, 'ÇEKİRDEK STABİL');
+  assert.equal(x.fresh.finalState, 'NONE');
+  assert.equal(x.fresh.finalClears, 1, 'final clears persist across runs');
+  assert.deepEqual(x.fresh.cleared, []);
+  assert.equal(x.loss.status, 'SİNYAL KESİLDİ');
+  assert.equal(x.loss.title, 'ÇEKİRDEK ÇÖKTÜ');
+  assert.equal(x.loss.final, 'NONE');
+});
+
+test('Odak 5.14 each biome gets harder in later acts and shows its act on the chip', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    const out = [];
+    for (const w of [6, 15, 24]) {
+      startNewGame(); nextBossTime = 1e9; wave = w; updateArenaChapter(.02); updateArenaChapterHud();
+      out.push({ id: arenaChapter, tier: getArenaChapterSnapshot().tier, cycle: chapterRule('foundryCycle'), damage: chapterRule('foundryDamage'), cap: chapterRule('foundryHitCap'), badge: document.getElementById('arenaChapterBadge').textContent });
+    }
+    startNewGame(); nextBossTime = 1e9; wave = 18; updateArenaChapter(.02); const garden = { tier: chapterTier, cooldown: chapterRule('gardenCooldown'), cap: chapterRule('gardenHitCap') };
+    return JSON.stringify({ out, garden });
+  })()`));
+  assert.deepEqual(x.out.map(o => o.id), ['FOUNDRY', 'FOUNDRY', 'FOUNDRY']);
+  assert.deepEqual(x.out.map(o => o.tier), [1, 2, 3]);
+  assert.deepEqual(x.out.map(o => o.cycle), [6, 5.2, 4.5]);
+  assert.deepEqual(x.out.map(o => o.damage), [9, 13, 18]);
+  assert.deepEqual(x.out.map(o => o.cap), [12, 16, 20]);
+  assert.doesNotMatch(x.out[0].badge, / I$/);
+  assert.match(x.out[1].badge, /DÖKÜMHANE II/);
+  assert.match(x.out[2].badge, /DÖKÜMHANE III/);
+  assert.deepEqual(x.garden, { tier: 2, cooldown: 8.5, cap: 11 });
 });

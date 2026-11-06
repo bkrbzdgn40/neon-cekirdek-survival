@@ -1023,10 +1023,12 @@ test('Odak 0.2 ?wave=10 starts the real game directly at wave 10',async({page})=
  await gotoGame(page,'/index.html?wave=10');
  await page.locator('#startBtn').click();
  await expect(page.locator('#waveText')).toHaveText('10');
- const state=await page.evaluate(()=>({wave,totalTime,nextBossTime,unlockAll:window.NEON_UNLOCK_ALL===true}));
+ const state=await page.evaluate(()=>({wave,totalTime,nextBossTime,unlockAll:window.NEON_UNLOCK_ALL===true,act:runActs.pending||runActs.current}));
  expect(state.wave).toBe(10);
  expect(state.totalTime).toBeGreaterThanOrEqual(144);
- expect(state.nextBossTime).toBe(199);
+ // Odak 5.14 · wave 10 closes act I, so its act boss is called within seconds.
+ expect(state.act).toBe('ACT');
+ expect(state.nextBossTime).toBeLessThanOrEqual(144+4.5+1);
  expect(state.unlockAll).toBe(true); // gotoGame adds ?unlock=all next to ?wave=10
  expect(errors).toEqual([]);
 });

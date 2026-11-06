@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 5.14 · Perdeler ve final
+- Koşu 3 perdeye bölündü: 10. ve 20. dalgada güçlü bir perde sonu boss'u gelir; yenilince altın, can ve ek bir eser seçimi verir. Dalga göstergesi hedefi gösterir (örn. 8/30).
+- 30. dalgada Behemot, Yıkıcı ve Hiçlik birlikte gelir (Çekirdek Erimesi). Kazanınca zafer ekranı: koşuyu zaferle bitir ya da sonsuz erimeye devam et; orada düşmanlar her dalga daha sert vurur.
+- Dökümhane, Bahçe ve Yarık 2. ve 3. perdede sertleşir (daha sık raylar, daha fazla sersemletme, daha kısa geçit bekleme).
+
 ## Odak 5.13 · Görev başarısızlığı ve boss sırasında biyom
 - Hasarsız görev hasar alınca sıfırlanmak yerine başarısız olur ve sıradaki göreve geçilir; diğer görevlerin 75 sn süresi var, son 15 sn çipte sayılır.
 - Koşu raporunda "Hasarsız görev sıfırlaması" yerine başarısız görev sayısı gösterilir.
