@@ -858,6 +858,10 @@
         .report-kpi-primary strong{color:#79edff}
         .report-kpi-gold strong{color:#ffe3a0}
         #perfOverlay{max-width:min(680px,92vw);max-height:35dvh;overflow:hidden;line-height:1.5;overflow-wrap:anywhere;}
+        /* Odak 5.19 · prepared items waiting for the next run, on the start button */
+        .run-prep-badge{display:inline-flex;align-items:center;margin-left:8px;padding:2px 7px;border-radius:999px;
+            background:rgba(0,0,0,.45);border:1px solid #ffd34d;color:#ffe9a3;font-size:10px;letter-spacing:.08em;vertical-align:middle;white-space:nowrap;flex:0 0 auto}
+        .run-prep-badge.hidden{display:none}
         .report-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin;padding:10px clamp(16px,4vw,42px);
             background:#0a1425;border-block:1px solid #27374c;position:sticky;top:0;z-index:2;}
         .report-tab{flex:0 0 auto;min-height:43px;padding:0 15px;border:1px solid transparent;border-radius:8px;

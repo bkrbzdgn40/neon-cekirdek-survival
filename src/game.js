@@ -1039,6 +1039,58 @@
         function labOverclockHp() {
             return (metaUpgrades.maxHpPlus || 0) * LAB_OVERCLOCK.maxHp.hp;
         }
+        // Odak 5.19 · one-run preparations bought in the lab. A bought one waits for
+        // the next normal run and is used up there; daily runs leave them waiting.
+        const RUN_PREP_ITEMS = Object.freeze([
+            Object.freeze({ id: 'relic', name: 'Başlangıç Eseri', cost: 900, icon: 'fa-solid fa-gem', color: '#ffd34d',
+                desc: 'Koşu bir eser seçimiyle başlar.' }),
+            Object.freeze({ id: 'module', name: 'Ön Yükleme', cost: 600, icon: 'fa-solid fa-microchip', color: '#00f3ff',
+                desc: 'Koşu bir seviye kartı seçimiyle başlar.' }),
+            Object.freeze({ id: 'rerolls', name: 'Bedava Yenileme ×3', cost: 250, icon: 'fa-solid fa-dice', color: '#c084fc',
+                desc: 'Koşudaki ilk 3 kart yenileme altın istemez.' }),
+            Object.freeze({ id: 'revive', name: 'Acil Şarj', cost: 1500, icon: 'fa-solid fa-heart-circle-bolt', color: '#10b981',
+                desc: 'Koşudaki ücretli diriliş altın istemez. Diriliş sınırı aynı kalır.' })
+        ]);
+        const RUN_PREP_FREE_REROLLS = 3;
+        let runPrepQueued = new Set();
+        let runPrep = { relic: false, module: false, rerolls: 0, revive: false };
+        // A list of known ids, each once; anything else is refused.
+        function parseRunPrep(value) {
+            if (value === undefined) return [];
+            if (!Array.isArray(value) || value.length > RUN_PREP_ITEMS.length ||
+                new Set(value).size !== value.length ||
+                !value.every(id => RUN_PREP_ITEMS.some(item => item.id === id))) return null;
+            return [...value];
+        }
+        function buyRunPrep(id) {
+            const item = RUN_PREP_ITEMS.find(entry => entry.id === id);
+            if (!item || runPrepQueued.has(id) || totalGold < item.cost) return false;
+            totalGold -= item.cost;
+            runPrepQueued.add(id);
+            saveMetaProgress();
+            return true;
+        }
+        // Not used yet, so it is given back in full.
+        function cancelRunPrep(id) {
+            const item = RUN_PREP_ITEMS.find(entry => entry.id === id);
+            if (!item || !runPrepQueued.has(id)) return false;
+            runPrepQueued.delete(id);
+            totalGold += item.cost;
+            saveMetaProgress();
+            return true;
+        }
+        // Called by startNewGame once the run is set up.
+        function applyRunPrep() {
+            runPrep = { relic: false, module: false, rerolls: 0, revive: false };
+            if (dailyRunActive || !runPrepQueued.size) return;
+            runPrep = { relic: runPrepQueued.has('relic'), module: runPrepQueued.has('module'),
+                rerolls: runPrepQueued.has('rerolls') ? RUN_PREP_FREE_REROLLS : 0, revive: runPrepQueued.has('revive') };
+            runPrepQueued.clear();
+            saveMetaProgress();
+            if (runPrep.relic) pendingRelicChoices++;
+            if (runPrep.module) triggerLevelUp();
+        }
+
         // A missing value is 0 (older saves); anything else must be a valid level.
         function parseOverclockLevel(value) {
             if (value === undefined) return 0;
@@ -1106,6 +1158,7 @@
                     }
                     for (const { key } of Object.values(LAB_OVERCLOCK))
                         metaUpgrades[key] = parseOverclockLevel(data.upgrades[key]) ?? 0;
+                    runPrepQueued = new Set(parseRunPrep(data.prep) || []);
                 }
             } catch (error) {
                 // Corrupt saves, disabled storage and file:// privacy restrictions must not block play.
@@ -1130,7 +1183,8 @@
                     guides: [...guidesSeen],
                     codex: codexSaveData(),
                     cosmetics: cosmeticsSaveData(),
-                    upgrades: { ...metaUpgrades }
+                    upgrades: { ...metaUpgrades },
+                    prep: [...runPrepQueued]
                 }));
             } catch (error) {
                 console.warn('Meta kayıt yazılamadı; bu oturum devam edebilir.', error);
@@ -1160,7 +1214,8 @@
                     owned: [...ownedContent],
                     codex: codexSaveData(),
                     cosmetics: cosmeticsSaveData(),
-                    upgrades: { ...metaUpgrades }
+                    upgrades: { ...metaUpgrades },
+                    prep: [...runPrepQueued]
                 },
                 graphics: graphicsQuality,
                 // Odak 5.6 · contract mastery travels with the backup too.
@@ -1197,6 +1252,8 @@
                     if (level === null) return null;
                     upgrades[key] = level;
                 }
+                const prep = parseRunPrep(data.prep);
+                if (prep === null) return null;
                 // Backups exported before v2 carry no unlock tier; migrate like a v1 save.
                 const restoredUnlockLevel = data.version === 1 ?
                     unlockLevelFromV1MaxWave(data.maxWave) : data.unlockLevel;
@@ -1230,7 +1287,8 @@
                         // Odak 5.1 · older backups simply have an empty codex.
                         codex: codexSaveDataFrom(parseCodex(data.codex)),
                         cosmetics: cosmeticsSaveDataFrom(parseCosmetics(data.cosmetics)),
-                        upgrades
+                        upgrades,
+                        prep
                     },
                     graphics: backup.graphics,
                     contracts
@@ -1281,6 +1339,7 @@
             unlockFailedRuns = backup.progress.unlockFailedRuns;
             unlockSpotlightPending = false;
             metaUpgrades = { ...backup.progress.upgrades };
+            runPrepQueued = new Set(backup.progress.prep);
             ownedContent = new Set(backup.progress.owned);
             ({ seen: codexSeen, kills: codexKills } = parseCodex(backup.progress.codex));
             ({ owned: ownedCosmetics, equipped: equippedCosmetics } = parseCosmetics(backup.progress.cosmetics));
@@ -12029,6 +12088,7 @@
             renderMenuGoals();
             hangarPreview.start();
             renderDailyRunButton();
+            renderRunPrepBadge();
             document.getElementById('menuHighScore').textContent = savedHighScore.toLocaleString('tr-TR');
             document.getElementById('menuMaxWave').textContent = savedMaxWave;
             document.getElementById('menuGoldText').textContent = totalGold.toLocaleString('tr-TR');
@@ -12537,6 +12597,7 @@
             updateModulesDock();
             updateHUD();
             maybeShowRotateHint();
+            applyRunPrep();
         }
 
         // Odak 2.5 · a phone held upright gets one tip to turn sideways, once
@@ -12737,9 +12798,10 @@
             container.innerHTML = '';
 
             const rerollBtn = document.getElementById('rerollUpgradesBtn');
-            document.getElementById('rerollCostText').textContent = rerollCost;
-            rerollBtn.disabled = totalGold < rerollCost;
-            rerollBtn.style.opacity = totalGold < rerollCost ? '0.45' : '1';
+            const freeReroll = runPrep.rerolls > 0;
+            document.getElementById('rerollCostText').textContent = freeReroll ? 'BEDAVA ×' + runPrep.rerolls : rerollCost;
+            rerollBtn.disabled = !freeReroll && totalGold < rerollCost;
+            rerollBtn.style.opacity = rerollBtn.disabled ? '0.45' : '1';
             const slotRow = document.getElementById('upgradeSlotRow');
             if (slotRow) slotRow.innerHTML = renderUpgradeSlotRow(player);
             const skipBtn = document.getElementById('skipUpgradeBtn');
@@ -12788,9 +12850,13 @@
         }
 
         document.getElementById('rerollUpgradesBtn').addEventListener('click', () => {
-            if (relicChoiceOpen || totalGold < rerollCost) return;
-            totalGold -= rerollCost;
-            rerollCost += 10;
+            if (relicChoiceOpen) return;
+            if (runPrep.rerolls > 0) runPrep.rerolls--;
+            else {
+                if (totalGold < rerollCost) return;
+                totalGold -= rerollCost;
+                rerollCost += 10;
+            }
             saveMetaProgress();
             audio.playOrbPickup(5, true);
             populateUpgradeCards();
@@ -12824,7 +12890,7 @@
         }
 
         function showRevivePromptOrGameOver() {
-            const goldReviveCost = paidReviveCost();
+            const goldReviveCost = runPrep.revive ? 0 : paidReviveCost();
             const canUseFree = player.freeRevives > 0;
             const canAffordGold = paidRevivesUsed < REVIVE_RULES.paidMax && totalGold >= goldReviveCost;
 
@@ -12834,13 +12900,13 @@
                 document.getElementById('reviveGoldText').textContent = totalGold.toLocaleString('tr-TR');
                 // Odak 4.4 · each revive brings back less health; say how much this one gives.
                 document.getElementById('reviveHpText').textContent = '%' + Math.round(reviveHpFraction() * 100) + ' Can';
-                document.getElementById('reviveFreeChargesText').textContent = canUseFree ? `${player.freeRevives} ÜCRETSİZ` : `${goldReviveCost} ALTIN`;
+                document.getElementById('reviveFreeChargesText').textContent = canUseFree ? `${player.freeRevives} ÜCRETSİZ` : runPrep.revive ? 'ACİL ŞARJ' : `${goldReviveCost} ALTIN`;
 
                 const confirmBtn = document.getElementById('confirmReviveBtn');
                 if (canUseFree) {
                     confirmBtn.innerHTML = `DİRİL · ${player.freeRevives} HAK<span class="key-hint"> · BOŞLUK</span>`;
                 } else {
-                    confirmBtn.innerHTML = `DİRİL · ${goldReviveCost} ALTIN<span class="key-hint"> · BOŞLUK</span>`;
+                    confirmBtn.innerHTML = `DİRİL · ${runPrep.revive ? 'ACİL ŞARJ' : goldReviveCost + ' ALTIN'}<span class="key-hint"> · BOŞLUK</span>`;
                 }
 
                 const modal = document.getElementById('reviveModal');
@@ -12853,7 +12919,7 @@
 
         function executePlayerRevive() {
             if (gameState !== 'REVIVE_PROMPT') return;
-            const goldReviveCost = paidReviveCost();
+            const goldReviveCost = runPrep.revive ? 0 : paidReviveCost();
             if (player.freeRevives > 0) {
                 player.freeRevives--;
                 runMetrics.freeRevivesUsed++;
@@ -13282,6 +13348,46 @@
                 if (section && section.scrollIntoView) section.scrollIntoView({ block: 'start' });
             }
         }
+        function renderShopRunPrep() {
+            const container = document.getElementById('shopPrepContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            RUN_PREP_ITEMS.forEach(item => {
+                const ready = runPrepQueued.has(item.id);
+                const canAfford = totalGold >= item.cost;
+                const card = document.createElement('div');
+                card.className = 'shop-prep-card bg-gray-900/90 border rounded-xl p-3 flex flex-col justify-between gap-2 text-left';
+                card.setAttribute('data-prep', item.id);
+                card.setAttribute('data-ready', String(ready));
+                card.style.borderColor = ready ? item.color : 'rgb(31 41 55)';
+                card.innerHTML = `
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-lg flex items-center justify-center border" style="color:${item.color};border-color:${item.color};background:rgba(0,0,0,0.4);"><i class="${item.icon}"></i></div>
+                        <div><h4 class="font-cyber font-bold text-white text-sm">${item.name}</h4>
+                        <p class="text-xs text-gray-400 leading-snug">${item.desc}</p></div>
+                    </div>
+                    <button type="button" class="prep-btn w-full py-2 rounded-lg font-cyber font-bold text-xs flex items-center justify-center gap-1.5 ${ready ? 'bg-gray-800 text-green-400 cursor-pointer' : canAfford ? 'bg-yellow-500 hover:bg-yellow-400 text-black cursor-pointer' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}">
+                        ${ready ? '<i class="fa-solid fa-check"></i> HAZIR · İPTAL ET' : `<i class="fa-solid fa-coins"></i> ${item.cost.toLocaleString('tr-TR')} ALTIN İLE HAZIRLA`}
+                    </button>`;
+                const btn = card.querySelector('.prep-btn');
+                if (ready || canAfford) btn.addEventListener('click', () => {
+                    if (ready ? cancelRunPrep(item.id) : buyRunPrep(item.id)) {
+                        audio.init(); audio.playOrbPickup(5, true);
+                    }
+                    renderShopItems();
+                    renderRunPrepBadge();
+                });
+                container.appendChild(card);
+            });
+        }
+        function renderRunPrepBadge() {
+            const badge = document.getElementById('runPrepBadge');
+            if (!badge) return;
+            const count = runPrepQueued.size;
+            badge.textContent = 'HAZIRLIK ' + count;
+            badge.classList.toggle('hidden', count === 0);
+            badge.title = count ? RUN_PREP_ITEMS.filter(i => runPrepQueued.has(i.id)).map(i => i.name).join(' · ') : '';
+        }
         function renderShopCollection() {
             const container = document.getElementById('shopCollectionContainer');
             if (!container) return;
@@ -13388,6 +13494,7 @@
             document.getElementById('shopGoldBalance').textContent = totalGold.toLocaleString('tr-TR');
             renderShopCollection();
             renderShopCosmetics();
+            renderShopRunPrep();
             const container = document.getElementById('shopItemsContainer');
             container.innerHTML = '';
 

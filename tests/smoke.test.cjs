@@ -8393,3 +8393,102 @@ test('Odak 5.18 overclock tiers travel with the backup; old backups and saves st
     upgrades: { baseDamage: 10, maxHp: 0, speedDash: 0, greed: 0, defibrillator: 0, baseDamagePlus: 'x' } }) };
   assert.equal(setup(stored).run('metaUpgrades.baseDamagePlus'), 0, 'a broken level falls back to zero');
 });
+
+test('Odak 5.19 run preparations are bought, cancelled for a refund and used up by the next run', () => {
+  const store = {};
+  const { run } = setup(store);
+  const x = JSON.parse(run(`(() => {
+    totalGold = 3000;
+    const bought = ['relic', 'module', 'rerolls'].map(buyRunPrep);
+    const twice = buyRunPrep('relic');
+    const poor = buyRunPrep('revive');
+    const afterBuy = totalGold;
+    const cancelled = cancelRunPrep('module'); const afterCancel = totalGold;
+    buyRunPrep('module');
+    renderRunPrepBadge();
+    const badge = { text: document.getElementById('runPrepBadge').textContent, title: document.getElementById('runPrepBadge').title };
+    const saved = JSON.parse(localStorage.getItem(META_SAVE_KEY)).prep;
+    startNewGame();
+    const start = { state: gameState, relics: pendingRelicChoices, queued: [...runPrepQueued], rerolls: runPrep.rerolls,
+      saved: JSON.parse(localStorage.getItem(META_SAVE_KEY)).prep };
+    // Three free rerolls: no gold, no price rise; the fourth costs as usual.
+    const gold0 = totalGold, cost0 = rerollCost;
+    const btn = document.getElementById('rerollUpgradesBtn');
+    for (let i = 0; i < 3; i++) btn.click();
+    const free = { gold: gold0 - totalGold, cost: rerollCost, left: runPrep.rerolls };
+    btn.click();
+    const paid = { gold: gold0 - totalGold, cost: rerollCost };
+    // The level-up closes and the relic hand opens on the next frame.
+    selectUpgradeOption(0); gameState = 'PLAYING'; updateGame(1 / 60);
+    const relicHand = { open: relicChoiceOpen, kind: currentUpgradeChoices[0]?.upg.kind };
+    startNewGame();
+    const next = { state: gameState, relics: pendingRelicChoices, rerolls: runPrep.rerolls };
+    return JSON.stringify({ bought, twice, poor, afterBuy, cancelled, afterCancel, badge, saved, start, free, paid, relicHand, next });
+  })()`));
+  assert.deepEqual(x.bought, [true, true, true]);
+  assert.equal(x.twice, false, 'one of each per run');
+  assert.equal(x.poor, false);
+  assert.equal(x.afterBuy, 3000 - 900 - 600 - 250);
+  assert.equal(x.cancelled, true);
+  assert.equal(x.afterCancel, x.afterBuy + 600, 'an unused preparation is refunded in full');
+  assert.equal(x.badge.text, 'HAZIRLIK 3');
+  assert.equal(x.badge.title, 'Başlangıç Eseri · Ön Yükleme · Bedava Yenileme ×3');
+  assert.deepEqual([...x.saved].sort(), ['module', 'relic', 'rerolls']);
+  assert.equal(x.start.state, 'LEVEL_UP', 'the run opens on a level-up card');
+  assert.equal(x.start.relics, 1);
+  assert.deepEqual(x.start.queued, []);
+  assert.deepEqual(x.start.saved, []);
+  assert.equal(x.start.rerolls, 3);
+  assert.deepEqual(x.free, { gold: 0, cost: 15, left: 0 });
+  assert.deepEqual(x.paid, { gold: 15, cost: 25 });
+  assert.deepEqual(x.relicHand, { open: true, kind: 'relic' });
+  assert.deepEqual(x.next, { state: 'PLAYING', relics: 0, rerolls: 0 });
+});
+
+test('Odak 5.19 a daily run leaves preparations waiting; the emergency charge pays the paid revive', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    totalGold = 5000; buyRunPrep('revive'); buyRunPrep('relic');
+    startDailyRun();
+    const daily = { queued: [...runPrepQueued].sort(), relics: pendingRelicChoices, revive: runPrep.revive };
+    dailyRunActive = false; startNewGame();
+    // No free revives left and no gold: the charge still pays the one paid revive.
+    totalGold = 0; player.freeRevives = 0; player.hp = 0; gameState = 'PLAYING';
+    showRevivePromptOrGameOver();
+    const prompt = { state: gameState, text: document.getElementById('reviveFreeChargesText').textContent };
+    executePlayerRevive();
+    const revived = { state: gameState, gold: totalGold, paid: paidRevivesUsed, spent: runMetrics.paidReviveGoldSpent };
+    player.freeRevives = 0; player.hp = 0; gameState = 'PLAYING'; showRevivePromptOrGameOver();
+    return JSON.stringify({ daily, prompt, revived, second: gameState });
+  })()`));
+  assert.deepEqual(x.daily, { queued: ['relic', 'revive'], relics: 0, revive: false });
+  assert.equal(x.prompt.state, 'REVIVE_PROMPT');
+  assert.equal(x.prompt.text, 'ACİL ŞARJ');
+  assert.equal(x.revived.state, 'PLAYING');
+  assert.equal(x.revived.gold, 0);
+  assert.equal(x.revived.paid, 1);
+  assert.equal(x.revived.spent, 0);
+  assert.equal(x.second, 'GAME_OVER', 'the revive cap is unchanged');
+});
+
+test('Odak 5.19 preparations travel with the backup; bad lists are refused and old saves have none', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    totalGold = 5000; buyRunPrep('rerolls'); buyRunPrep('revive');
+    const backup = createProgressBackup();
+    const good = parseProgressBackup(JSON.stringify(backup));
+    const old = JSON.parse(JSON.stringify(backup)); delete old.progress.prep;
+    const bad = JSON.parse(JSON.stringify(backup)); bad.progress.prep = ['revive', 'revive'];
+    const odd = JSON.parse(JSON.stringify(backup)); odd.progress.prep = ['gold'];
+    return JSON.stringify({ inBackup: backup.progress.prep, good: good.progress.prep, old: parseProgressBackup(JSON.stringify(old)).progress.prep,
+      bad: parseProgressBackup(JSON.stringify(bad)), odd: parseProgressBackup(JSON.stringify(odd)) });
+  })()`));
+  assert.deepEqual(x.inBackup, ['rerolls', 'revive']);
+  assert.deepEqual(x.good, ['rerolls', 'revive']);
+  assert.deepEqual(x.old, []);
+  assert.equal(x.bad, null);
+  assert.equal(x.odd, null);
+  const stored = { 'neonCekirdek.meta.v1': JSON.stringify({ version: 2, highScore: 0, maxWave: 1, gold: 0, unlockLevel: 0,
+    upgrades: { baseDamage: 0, maxHp: 0, speedDash: 0, greed: 0, defibrillator: 0 }, prep: 'relic' }) };
+  assert.equal(setup(stored).run('runPrepQueued.size'), 0, 'a broken list is dropped');
+});
