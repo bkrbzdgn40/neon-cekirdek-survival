@@ -1843,6 +1843,7 @@
                 this.trail = [];
                 this.upgradeCounts = {};
                 this.relics = new Set();
+                this.relicTiers = new Map();
                 this.evolutions = new Set();
                 this.synergies = new Set();
                 this.evolutionPulseTimer = 5.5;
@@ -2118,7 +2119,7 @@
                 }
 
                 const odFireBonus = this.overdriveActive ? this.overdriveFireRateMult : 1.0;
-                const lastStand = hasRelic('LAST_STAND', this) && this.hp < this.maxHp * RELIC_RULES.lastStandHp ? RELIC_RULES.lastStandFire : 1;
+                const lastStand = hasRelic('LAST_STAND', this) && this.hp < this.maxHp * relicTierValue('LAST_STAND', 'lastStandHp', relicTier('LAST_STAND', this)) ? RELIC_RULES.lastStandFire : 1;
                 this.fireTimer -= dt * (1 + (this.momentum / 100) * 0.3) * odFireBonus * (this.hasteTimer > 0 ? 1.2 : 1.0) * lastStand;
                 if (this.fireTimer <= 0 && enemies.length > 0) {
                     this.autoShoot();
@@ -2183,14 +2184,14 @@
                         false
                     );
                     if (this.evolutions.has('pierce_ricochet')) shell.prismEvolved = true;
-                    if (i === 0 && hasRelic('BURST_MAG', this) && this.shotCounter % RELIC_RULES.burstEvery === 0) shell.relicBurst = true;
+                    if (i === 0 && hasRelic('BURST_MAG', this) && this.shotCounter % relicTierValue('BURST_MAG', 'burstEvery', relicTier('BURST_MAG', this)) === 0) shell.relicBurst = true;
                     if (bullets.length < MAX_PLAYER_PROJECTILES) bullets.push(shell);
                 }
                 if (hasRelic('MIRROR_SHOT', this) && bullets.length < MAX_PLAYER_PROJECTILES) {
                     const back = baseAngle + Math.PI;
                     bullets.push(new Bullet(this.x + Math.cos(back) * 14, this.y + Math.sin(back) * 14,
                         Math.cos(back) * this.bulletSpeed, Math.sin(back) * this.bulletSpeed,
-                        finalDamage * RELIC_RULES.mirrorShare, this.bulletSize, this.pierce, this.ricochet, isCrit, false));
+                        finalDamage * relicTierValue('MIRROR_SHOT', 'mirrorShare', relicTier('MIRROR_SHOT', this)), this.bulletSize, this.pierce, this.ricochet, isCrit, false));
                 }
 
                 if (this.evolutions.has('firerate') && this.shotCounter % 5 === 0 &&
@@ -3929,7 +3930,7 @@
                     (forceChain || (evolvedArc && isCrit) || rng() < 0.35))) {
                     if (evolvedArc) player.buildStats.arcSurges++;
                     if (critStorm) player.critStormReadyAt = totalTime + RELIC_RULES.critStormGap;
-                    let jumps = Math.min(Math.max(player.chainLightning, critStorm ? RELIC_RULES.critStormJumps : 0), 8);
+                    let jumps = Math.min(Math.max(player.chainLightning, critStorm ? relicTierValue('CRIT_STORM', 'critStormJumps') : 0), 8);
                     let lastTarget = this;
                     const visited = new Set([this.id]);
 
@@ -4082,7 +4083,7 @@
                     showDopamineBanner(`${this.bossName} · İMHA`, '#ffe600');
                 } else {
                     const dropGold = rng() < (this.type === 'TANK' ? 0.42 : 0.11);
-                    const harvest = hasRelic('COMBO_HARVEST') && combo >= RELIC_RULES.harvestCombo ? RELIC_RULES.harvestXp : 1;
+                    const harvest = hasRelic('COMBO_HARVEST') && combo >= relicTierValue('COMBO_HARVEST', 'harvestCombo') ? RELIC_RULES.harvestXp : 1;
                     emitEnergyOrb(this.x, this.y, this.xpValue * harvest, dropGold);
 
                     if (!dropGold && rng() < 0.025) {
@@ -4229,7 +4230,7 @@
                         const goldAmt = Math.max(1, Math.round((2 + Math.floor(goldWave(wave) / 2)) * player.greedBonus)) * this.count;
                         totalGold += goldAmt;
                         sessionGold += goldAmt;
-                        if (hasRelic('GOLD_HEAL')) player.hp = Math.min(player.maxHp, player.hp + RELIC_RULES.goldHeal * this.count);
+                        if (hasRelic('GOLD_HEAL')) player.hp = Math.min(player.maxHp, player.hp + relicTierValue('GOLD_HEAL', 'goldHeal') * this.count);
                         if(combatDirector) combatDirector.onGoldGranted('orbs',goldAmt);
                         pendingMetaSave = true;
                         audio.playOrbPickup(combo, true);
@@ -4300,7 +4301,7 @@
                     screenShake=this.source==='boss'?15:10;
                     const rewardColor=this.source==='boss'?'#ffe600':'#40e9bc';
                     shockwaves.push(new Shockwave(this.x,this.y,180,rewardColor,.36));
-                    if (this.source === 'boss' && offerableRelics(player).length) pendingRelicChoices++;
+                    if (this.source === 'boss') queueRelicReward('chests');
                     const profile=getChestRewardProfile(this.source,wave,player.xpToNext,player.greedBonus);
                     const roll=rng();
                     if(roll<.38){
@@ -6349,42 +6350,99 @@
         // Odak 5.10 · relics: a boss chest offers 3, you keep 1 for the run.
         // They change how the run plays, not just a number.
         const RELIC_RULES = Object.freeze({
-            burstEvery: 10, burstRadius: 75, burstShare: 0.6,
-            emberGap: 28, emberLife: 2, emberRadius: 26, emberTick: 0.25, emberShare: 0.6,
-            critStormJumps: 2, critStormGap: 0.15,
-            lastStandHp: 0.35, lastStandFire: 2,
-            goldHeal: 2,
-            novaEchoDelay: 0.6, novaEchoShare: 0.5, novaEchoRadius: 290,
-            harvestCombo: 20, harvestXp: 2,
-            mirrorShare: 0.6
+            burstRadius: 75, burstShare: 0.6,
+            emberGap: 28, emberRadius: 26, emberTick: 0.25,
+            critStormGap: 0.15,
+            lastStandFire: 2,
+            novaEchoDelay: 0.6, novaEchoRadius: 290,
+            harvestXp: 2
         });
+        // Odak 5.17 · an owned relic can come back and climb to II and III. Each
+        // value lists tiers I, II, III. Once every relic is at III the boss chest
+        // pays gold and health instead.
+        const RELIC_MAX_TIER = 3;
+        const RELIC_TIERS = Object.freeze({
+            BURST_MAG: Object.freeze({ burstEvery: [10, 8, 6] }),
+            EMBER_DASH: Object.freeze({ emberShare: [0.6, 0.9, 1.2], emberLife: [2, 2.5, 3] }),
+            CRIT_STORM: Object.freeze({ critStormJumps: [2, 3, 4] }),
+            LAST_STAND: Object.freeze({ lastStandHp: [0.35, 0.45, 0.55] }),
+            GOLD_HEAL: Object.freeze({ goldHeal: [2, 3, 4] }),
+            NOVA_ECHO: Object.freeze({ novaEchoShare: [0.5, 0.75, 1] }),
+            COMBO_HARVEST: Object.freeze({ harvestCombo: [20, 15, 10] }),
+            MIRROR_SHOT: Object.freeze({ mirrorShare: [0.6, 0.8, 1] })
+        });
+        const RELIC_FALLBACK = Object.freeze({ gold: 250, heal: 0.25 });
+        const RELIC_ROMAN = Object.freeze(['I', 'II', 'III']);
+        const relicPct = v => '%' + Math.round(v * 100);
+        const relicSec = v => String(v).replace('.', ',') + ' sn';
+        // tierOf(t, key) reads a value at tier t; label(t) is the short form shown as "a → b".
         const RELICS = Object.freeze([
             Object.freeze({ id: 'BURST_MAG', kind: 'relic', name: 'Patlayan Şarjör', icon: 'fa-solid fa-burst', color: '#ff9a3d',
-                getDesc: () => 'Her 10. salvonun mermisi isabet edince patlar: çevresine %60 hasar.' }),
+                label: t => 'her ' + relicTierValue('BURST_MAG', 'burstEvery', t) + '. salvo',
+                describe: t => 'Her ' + relicTierValue('BURST_MAG', 'burstEvery', t) + '. salvonun mermisi isabet edince patlar: çevresine %60 hasar.' }),
             Object.freeze({ id: 'EMBER_DASH', kind: 'relic', name: 'Kor İzi', icon: 'fa-solid fa-fire', color: '#ff5a36',
-                getDesc: () => 'Atılma arkasında 2 sn yanan bir iz bırakır; üstündeki düşmanlar yanar.' }),
+                label: t => relicPct(relicTierValue('EMBER_DASH', 'emberShare', t)) + ' hasar, ' + relicSec(relicTierValue('EMBER_DASH', 'emberLife', t)),
+                describe: t => 'Atılma arkasında ' + relicSec(relicTierValue('EMBER_DASH', 'emberLife', t)) + ' yanan bir iz bırakır; üstündeki düşmanlar ' +
+                    relicPct(relicTierValue('EMBER_DASH', 'emberShare', t)) + ' hasarla yanar.' }),
             Object.freeze({ id: 'CRIT_STORM', kind: 'relic', name: 'Kritik Fırtına', icon: 'fa-solid fa-cloud-bolt', color: '#7fd8ff',
-                getDesc: () => 'Kritik vuruşlar en az 2 düşmana zincir şimşeği sıçratır.' }),
+                label: t => relicTierValue('CRIT_STORM', 'critStormJumps', t) + ' sıçrama',
+                describe: t => 'Kritik vuruşlar en az ' + relicTierValue('CRIT_STORM', 'critStormJumps', t) + ' düşmana zincir şimşeği sıçratır.' }),
             Object.freeze({ id: 'LAST_STAND', kind: 'relic', name: 'Son Direniş', icon: 'fa-solid fa-heart-crack', color: '#ff3d6e',
-                getDesc: () => 'Can %35\'in altındayken atış hızı iki katına çıkar.' }),
+                label: t => 'can <' + relicPct(relicTierValue('LAST_STAND', 'lastStandHp', t)),
+                describe: t => 'Can ' + relicPct(relicTierValue('LAST_STAND', 'lastStandHp', t)) + '\'in altındayken atış hızı iki katına çıkar.' }),
             Object.freeze({ id: 'GOLD_HEAL', kind: 'relic', name: 'Altın Kan', icon: 'fa-solid fa-hand-holding-heart', color: '#ffd34d',
-                getDesc: () => 'Topladığın her altın küresi 2 can onarır.' }),
+                label: t => relicTierValue('GOLD_HEAL', 'goldHeal', t) + ' can',
+                describe: t => 'Topladığın her altın küresi ' + relicTierValue('GOLD_HEAL', 'goldHeal', t) + ' can onarır.' }),
             Object.freeze({ id: 'NOVA_ECHO', kind: 'relic', name: 'Yankı Novası', icon: 'fa-solid fa-circle-radiation', color: '#c07bff',
-                getDesc: () => 'EMP Nova 0,6 sn sonra yarı güçle bir kez daha patlar.',
+                label: t => relicPct(relicTierValue('NOVA_ECHO', 'novaEchoShare', t)) + ' güç',
+                describe: t => 'EMP Nova 0,6 sn sonra ' + relicPct(relicTierValue('NOVA_ECHO', 'novaEchoShare', t)) + ' güçle bir kez daha patlar.',
                 offerable: () => isSystemUnlocked('emp') }),
             Object.freeze({ id: 'COMBO_HARVEST', kind: 'relic', name: 'Kombo Hasadı', icon: 'fa-solid fa-wheat-awn', color: '#7dff9a',
-                getDesc: () => 'Kombo 20 ve üstündeyken düşmanlar iki kat XP bırakır.' }),
+                label: t => relicTierValue('COMBO_HARVEST', 'harvestCombo', t) + ' kombo',
+                describe: t => 'Kombo ' + relicTierValue('COMBO_HARVEST', 'harvestCombo', t) + ' ve üstündeyken düşmanlar iki kat XP bırakır.' }),
             Object.freeze({ id: 'MIRROR_SHOT', kind: 'relic', name: 'Ayna Namlu', icon: 'fa-solid fa-arrows-left-right', color: '#5ef0e0',
-                getDesc: () => 'Her salvo arkana da %60 hasarlı bir mermi atar.' })
-        ]);
+                label: t => relicPct(relicTierValue('MIRROR_SHOT', 'mirrorShare', t)) + ' hasar',
+                describe: t => 'Her salvo arkana da ' + relicPct(relicTierValue('MIRROR_SHOT', 'mirrorShare', t)) + ' hasarlı bir mermi atar.' })
+        ].map(r => Object.freeze({ ...r, getDesc: () => r.describe(Math.max(1, relicTier(r.id))) })));
         let pendingRelicChoices = 0;
         let relicChoiceOpen = false;
         let relicEmbers = [];
         let relicNovaEchoAt = 0;
         let relicEmberTrail = null;
         function hasRelic(id, p = player) { return !!p?.relics?.has(id); }
+        // An owned relic without a recorded tier counts as tier I.
+        function relicTier(id, p = player) {
+            if (!hasRelic(id, p)) return 0;
+            return Math.min(RELIC_MAX_TIER, Math.max(1, p.relicTiers?.get(id) || 1));
+        }
+        function relicTierValue(id, key, t = relicTier(id)) {
+            const values = RELIC_TIERS[id][key];
+            return values[Math.min(values.length, Math.max(1, t)) - 1];
+        }
+        // New relics and owned ones below III.
         function offerableRelics(p = player) {
-            return RELICS.filter(r => !p.relics.has(r.id) && (!r.offerable || r.offerable(p)));
+            return RELICS.filter(r => relicTier(r.id, p) < RELIC_MAX_TIER && (!r.offerable || r.offerable(p)));
+        }
+        function relicPicksLeft(p = player) {
+            return offerableRelics(p).reduce((sum, r) => sum + RELIC_MAX_TIER - relicTier(r.id, p), 0);
+        }
+        // A relic reward becomes a choice while picks remain; after that it pays out.
+        function queueRelicReward(ledger = 'chests') {
+            if (!player) return false;
+            if (relicPicksLeft(player) > pendingRelicChoices) { pendingRelicChoices++; return true; }
+            grantRelicFallback(ledger);
+            return false;
+        }
+        function grantRelicFallback(ledger = 'chests') {
+            const gold = RELIC_FALLBACK.gold;
+            totalGold += gold; sessionGold += gold;
+            if (combatDirector) combatDirector.onGoldGranted(ledger, gold);
+            player.hp = Math.min(player.maxHp, player.hp + player.maxHp * RELIC_FALLBACK.heal);
+            pendingMetaSave = true;
+            showDopamineBanner('ESERLER TAMAM · +' + gold + ' ALTIN', '#ffd34d');
+        }
+        function relicTierTotal(p = player) {
+            return RELICS.reduce((sum, r) => sum + relicTier(r.id, p), 0);
         }
         function resetRelicRun() {
             pendingRelicChoices = 0; relicChoiceOpen = false; relicEmbers = []; relicNovaEchoAt = 0; relicEmberTrail = null;
@@ -6394,7 +6452,7 @@
             set('upgradeModalKicker', relic ? 'BOSS SANDIĞI — [1] [2] [3] TUŞLARIYLA SEÇEBİLİRSİN' : 'SEVİYE ATLADIN! — [1] [2] [3] TUŞLARIYLA SEÇEBİLİRSİN');
             set('upgradeModalTitle', relic ? 'ESER SEÇ' : 'SİBER YÜKSELTME SEÇ');
             const hint = document.getElementById('upgradeModalHint');
-            if (hint) hint.innerHTML = relic ? 'Eser koşu boyunca kalır ve oyun tarzını değiştirir. Her eser bir kez çıkar.' :
+            if (hint) hint.innerHTML = relic ? 'Eser koşu boyunca kalır ve oyun tarzını değiştirir. Sahip olduğun bir eser yeniden çıkarsa II ve III kademeye yükselir.' :
                 'Aynı modülü 3. kademeye ulaştırmak <span class="text-purple-300 font-bold">✦ MODÜL EVRİMİ</span> açar!';
             const tools = document.getElementById('upgradeToolsRow');
             if (tools) tools.hidden = !!relic;
@@ -6403,8 +6461,8 @@
         function openRelicChoice() {
             if (pendingRelicChoices <= 0 || gameState !== 'PLAYING' || !player) return false;
             pendingRelicChoices--;
-            const pool = shuffleInPlace(offerableRelics(player));
-            if (!pool.length) return false;
+            const pool = shuffleInPlace(offerableRelics(player)).map(relicChoiceCard);
+            if (!pool.length) { grantRelicFallback('chests'); return false; }
             relicChoiceOpen = true;
             gameState = 'LEVEL_UP';
             audio.playJackpot();
@@ -6413,7 +6471,7 @@
             const container = document.getElementById('upgradeCardsContainer');
             container.innerHTML = '';
             const statsBar = document.getElementById('upgradeStatsSummary');
-            if (statsBar) statsBar.innerHTML = `<div>ESERLER: <span class="text-amber-300 font-bold">${player.relics.size} / ${RELICS.length}</span></div>`;
+            if (statsBar) statsBar.innerHTML = `<div>ESERLER: <span class="text-amber-300 font-bold">${player.relics.size} / ${RELICS.length}</span> · KADEME <span class="text-amber-300 font-bold">${relicTierTotal(player)} / ${RELICS.length * RELIC_MAX_TIER}</span></div>`;
             const rarity = RARITIES[3];
             pool.slice(0, 3).forEach((relic, idx) => {
                 currentUpgradeChoices.push({ upg: relic, rarity });
@@ -6435,12 +6493,24 @@
             modal.classList.add('flex');
             return true;
         }
+        // A card for the hand: an owned relic shows its next tier and what changes.
+        function relicChoiceCard(relic) {
+            const tier = relicTier(relic.id);
+            if (!tier) return relic;
+            const next = tier + 1;
+            return Object.freeze({ ...relic, nextTier: next, name: relic.name + ' ' + RELIC_ROMAN[next - 1],
+                getDesc: () => relic.label(tier) + ' → ' + relic.label(next) + '. ' + relic.describe(next) });
+        }
         function selectRelic(relic) {
-            if (player.relics.has(relic.id)) return;
+            const tier = relicTier(relic.id);
+            if (tier >= RELIC_MAX_TIER) return;
+            if (!player.relicTiers) player.relicTiers = new Map();
             player.relics.add(relic.id);
+            player.relicTiers.set(relic.id, tier + 1);
+            const base = RELICS.find(r => r.id === relic.id) || relic;
             closeUpgradeModal();
             audio.playJackpot();
-            showDopamineBanner(`✦ ESER: ${relic.name.toUpperCase()} ✦`, relic.color);
+            showDopamineBanner(`✦ ESER: ${base.name.toUpperCase()}${tier ? ' ' + RELIC_ROMAN[tier] : ''} ✦`, base.color);
             shockwaves.push(new Shockwave(player.x, player.y, 190, relic.color, 0.4));
             updateModulesDock();
             updateHUD();
@@ -6462,7 +6532,7 @@
                 const last = relicEmberTrail;
                 if (!last || Math.hypot(player.x - last.x, player.y - last.y) >= R.emberGap) {
                     relicEmberTrail = { x: player.x, y: player.y };
-                    relicEmbers.push({ x: player.x, y: player.y, expiresAt: totalTime + R.emberLife, nextTick: totalTime });
+                    relicEmbers.push({ x: player.x, y: player.y, expiresAt: totalTime + relicTierValue('EMBER_DASH', 'emberLife'), nextTick: totalTime });
                 }
             } else relicEmberTrail = null;
             for (const ember of relicEmbers) {
@@ -6470,7 +6540,7 @@
                 ember.nextTick = totalTime + R.emberTick;
                 for (const e of enemies) {
                     if (!e.dead && Math.hypot(e.x - ember.x, e.y - ember.y) <= R.emberRadius + e.radius)
-                        e.takeDamage(player.damage * R.emberShare, 0, 0, false, false);
+                        e.takeDamage(player.damage * relicTierValue('EMBER_DASH', 'emberShare'), 0, 0, false, false);
                 }
             }
             if (relicEmbers.length) relicEmbers = relicEmbers.filter(ember => totalTime < ember.expiresAt);
@@ -6483,7 +6553,7 @@
                     if (d > R.novaEchoRadius) continue;
                     const a = Math.atan2(dy, dx), push = (1 - d / R.novaEchoRadius) * 270 + 100;
                     e.stunTimer = Math.max(e.stunTimer, 0.55);
-                    e.takeDamage((player.damage * 2.4 + 20) * R.novaEchoShare, Math.cos(a) * push, Math.sin(a) * push, true);
+                    e.takeDamage((player.damage * 2.4 + 20) * relicTierValue('NOVA_ECHO', 'novaEchoShare'), Math.cos(a) * push, Math.sin(a) * push, true);
                 }
             }
         }
@@ -10284,7 +10354,7 @@
                 grantRunGold(gold);
                 runActs.cleared.push(act);
                 if(player)player.hp=Math.min(player.maxHp,player.hp+player.maxHp*ACT_RULES.actRewardHeal);
-                pendingRelicChoices++;
+                queueRelicReward('acts');
                 saveMetaProgress();
                 audio.playJackpot();
                 showDopamineBanner('PERDE '+RUN_ACTS[act-1].roman+' TAMAMLANDI · +'+gold+' ALTIN',RUN_ACTS[act-1].color);
@@ -12282,8 +12352,9 @@
             if (!dock || !player) return;
             updateBuildGuide();
             const entries = Object.entries(player.upgradeCounts);
-            const relicChips = RELICS.filter(r => player.relics.has(r.id)).map(r =>
-                `<span title="ESER · ${r.name}: ${r.getDesc()}" class="flex items-center px-2 py-0.5 rounded-lg border text-xs" style="border-color:#ffe600;background:rgba(0,0,0,0.6);"><i class="${r.icon}" style="color:${r.color}"></i></span>`).join('');
+            const relicChips = RELICS.filter(r => player.relics.has(r.id)).map(r => {
+                const tier = relicTier(r.id), roman = RELIC_ROMAN[tier - 1];
+                return `<span title="ESER · ${r.name} ${roman}: ${r.getDesc()}" class="flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-cyber font-bold" style="border-color:#ffe600;background:rgba(0,0,0,0.6);"><i class="${r.icon}" style="color:${r.color}"></i>${tier > 1 ? `<span>${roman}</span>` : ''}</span>`; }).join('');
             if (entries.length === 0 && !relicChips) {
                 dock.innerHTML = `<span class="text-[10px] font-cyber text-gray-500 px-1">HENÜZ MODÜL YOK</span>`;
                 return;

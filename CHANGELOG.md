@@ -1,5 +1,9 @@
 # Değişiklik Günlüğü
 
+## Odak 5.17 · Eser kademeleri
+- Sahip olduğun bir eser boss sandığında yeniden çıkabilir ve II, III kademeye yükselir; kart neyin değiştiğini gösterir (örn. Altın Kan: 2 can → 3 can).
+- Bütün eserler III olduktan sonra boss sandığı boşa gitmez: 250 altın ve canının %25'ini verir.
+
 ## Odak 5.16 · Deneysel tempo temizliği
 - Normal oyunda hiçbir etkisi olmadan her karede çalışan deneysel tempo ölçümü ve öğrenen model kaldırıldı (yaklaşık 700 satır).
 - Koşu raporundaki RİTİM sekmesi kaldırıldı; rapor artık beş sekme. Eski deney kayıtları tarayıcıdan bir kez temizlenir.
