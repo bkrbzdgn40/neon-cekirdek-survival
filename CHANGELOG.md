@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 5.15 · Mantık düzeltmeleri
+- Yayındaki sayfada adres çubuğuna ?wave veya ?unlock=all yazmak artık dalga, kilit ya da kayıt atlatmaz; bu seçenekler yalnızca yerel test içindir.
+- Koşu raporundaki RİTİM sekmesi, oynanamayan bir mod karşılaştırması istemek yerine yalnızca bu koşunun ritmini gösterir.
+- "Altın & XP Çarpanı" yalnızca altını artırdığı için adı "Altın Çarpanı" oldu. Kinetik Türbin, EMP açılmadan EMP süresini kısaltmaz. Günlük koşu, gün içinde sözleşmeler açılsa da aynı sözleşmeyle kalır.
+
 ## Odak 5.14 · Perdeler ve final
 - Koşu 3 perdeye bölündü: 10. ve 20. dalgada güçlü bir perde sonu boss'u gelir; yenilince altın, can ve ek bir eser seçimi verir. Dalga göstergesi hedefi gösterir (örn. 8/30).
 - 30. dalgada Behemot, Yıkıcı ve Hiçlik birlikte gelir (Çekirdek Erimesi). Kazanınca zafer ekranı: koşuyu zaferle bitir ya da sonsuz erimeye devam et; orada düşmanlar her dalga daha sert vurur.

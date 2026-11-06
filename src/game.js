@@ -680,6 +680,10 @@
             return h >>> 0;
         }
         function dailyContractFor(key) {
+            // Odak 5.15 · once today's daily run is recorded its contract holds for the
+            // day, even if contracts open in between, so every try is the same run.
+            const kept = todaysDailyBest(key)?.contract;
+            if (kept) return kept;
             if (!isSystemUnlocked('contracts')) return 'STANDARD';
             return NEON_CONTRACTS[dailySeedFor(key + ':contract') % NEON_CONTRACTS.length].id;
         }
@@ -687,7 +691,8 @@
             if (!data || typeof data !== 'object' || typeof data.date !== 'string' ||
                 !/^\d{4}-\d{2}-\d{2}$/.test(data.date)) return null;
             const score = safeSaveInteger(data.score, -1), wave = safeSaveInteger(data.wave, -1, 100000);
-            return score < 0 || wave < 1 ? null : { date: data.date, score, wave };
+            const contract = NEON_CONTRACTS.some(c => c.id === data.contract) ? data.contract : null;
+            return score < 0 || wave < 1 ? null : { date: data.date, score, wave, contract };
         }
         function todaysDailyBest(key = dailyDateKey()) {
             return dailyBest && dailyBest.date === key ? dailyBest : null;
@@ -697,7 +702,7 @@
             const best = todaysDailyBest(key);
             const s = Math.max(0, Math.round(runScore));
             if (best && best.score >= s) return false;
-            dailyBest = { date: key, score: s, wave: runWave };
+            dailyBest = { date: key, score: s, wave: runWave, contract: best?.contract || activeContractId };
             return true;
         }
         function renderDailyRunButton() {
@@ -1288,7 +1293,7 @@
             },
             {
                 key: 'greed',
-                name: 'Altın & XP Çarpanı',
+                name: 'Altın Çarpanı',
                 icon: 'fa-solid fa-coins',
                 color: '#ffe600',
                 desc: 'Her kademe kazanılan Altın Çekirdek miktarını +%10 artırır.',
@@ -4981,7 +4986,7 @@
                 apply: (p, r) => {
                     p.speed *= (1 + 0.10 * r.mult);
                     p.magnetRadius *= 1.35;
-                    p.novaMaxCooldown = Math.max(4.5, p.novaMaxCooldown * 0.85);
+                    if (isSystemUnlocked('emp')) p.novaMaxCooldown = Math.max(4.5, p.novaMaxCooldown * 0.85);
                 }
             }
         ];
@@ -5586,7 +5591,15 @@
         // through window.NEON_UNLOCK_ALL (an outer harness may set it first).
         // ?seed=N (Odak 3.0) fixes every run's rng() seed for balance checks.
         const PLAYTEST_MAX_WAVE = 99;
-        function readPlaytestParams(search = window.location?.search || '') {
+        // Odak 5.15 · they work only on a local dev host or a local file. A published
+        // page ignores them, so no URL can skip waves, unlocks or saved progress.
+        const LOCAL_PLAYTEST_HOSTS = Object.freeze(['', 'localhost', '127.0.0.1', '[::1]', '::1']);
+        function isLocalPlaytestHost(host = window.location?.hostname) {
+            const name = String(host ?? '').toLowerCase();
+            return LOCAL_PLAYTEST_HOSTS.includes(name) || name.endsWith('.localhost');
+        }
+        function readPlaytestParams(search = window.location?.search || '', host = window.location?.hostname) {
+            if (!isLocalPlaytestHost(host)) return { wave: 1, unlockAll: false, seed: null };
             const waveMatch = /(?:^|[?&])wave=(\d{1,3})(?:&|$)/.exec(search);
             const requestedWave = waveMatch ? Number(waveMatch[1]) : 1;
             const seedMatch = /(?:^|[?&])seed=(\d{1,10})(?:&|$)/.exec(search);
@@ -13562,6 +13575,10 @@
                     reportPair('Boss korumalı süre',Math.round(m.bossProtectedSeconds)+' sn')+
                     reportPair('Nefes evresine giriş',m.reliefEntries));
             const saved=readTempoComparison();
+            // Odak 5.15 · the adaptive mode is a test option; a player who never ran it
+            // sees this run's rhythm only, not a comparison they cannot complete.
+            if(report.tempo.mode!=='adaptive'&&!saved.adaptive)
+                return '<div class="report-grid">'+current+'</div>';
             let comparison=reportEmpty('Karşılaştırma için her iki modda birer tamamlanmış koşu gerekiyor.');
             if(saved.classic&&saved.adaptive){
                 const a=saved.adaptive,c=saved.classic;

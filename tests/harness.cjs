@@ -51,7 +51,7 @@ function setup(stored = {}, options = {}) {
     addEventListener(type, fn) { on(documentListeners, type, fn); },
   };
   const window = { innerWidth: options.width || 1280, innerHeight: options.height || 720, devicePixelRatio: 1,
-    location: { search: options.locationSearch || '' },
+    location: { search: options.locationSearch || '', hostname: options.hostname },
     addEventListener(type, fn) { on(windowListeners, type, fn); } };
   const storage = {
     getItem: (key) => stored[key] ?? null,
