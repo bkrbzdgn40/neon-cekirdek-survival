@@ -530,6 +530,9 @@ Menüdeki GÜNLÜK düğmesi o günün tohumu ve sözleşmesiyle koşu başlatı
 ### - [x] 5.12 Silah dengesi
 Her silah 3. kademede tek başına bir build taşır (kalabalıkta temel plazmanın ×2,0–2,7'si) ve tek bir boss'a ulaşır (×1,7–2,2; Devre çizime bağlı). Atış hızı ve Siber Cinnet bütün silahların temposunu hızlandırır.
 
+### - [x] 5.13 Görev başarısızlığı ve boss sırasında biyom
+Görevler başarısız olabilir: hasarsız görev ilk gerçek hasarda, diğerleri 75 sn dolunca düşer ve sıradaki göreve geçilir. Biyom tehlikeleri boss savaşında ve boss uyarısında da çalışır; boss'lar raylardan ve sersemletmeden muaf kalır, gösteri ve nemesis boss'suz anı bekler.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

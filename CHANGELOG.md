@@ -1,5 +1,10 @@
 # Değişiklik Günlüğü
 
+## Odak 5.13 · Görev başarısızlığı ve boss sırasında biyom
+- Hasarsız görev hasar alınca sıfırlanmak yerine başarısız olur ve sıradaki göreve geçilir; diğer görevlerin 75 sn süresi var, son 15 sn çipte sayılır.
+- Koşu raporunda "Hasarsız görev sıfırlaması" yerine başarısız görev sayısı gösterilir.
+- Dökümhane rayları, iyon çiçekleri ve yarık geçitleri boss savaşında da çalışır; boss'un kendisi etkilenmez.
+
 ## Odak 5.12 · Silah dengesi
 - Her silahın boss'a ulaşan bir yolu var: uydular kilitli hedefe ateş eder, mayınlar hedefe fırlatılır, disk hedefe atılıp boss'u defalarca keser, şok halkası mızrak saplar, devre kapanınca boss'a boşalır, yalnız kalan düşmana şimşek geri iner.
 - Atış hızı kartları ve Siber Cinnet artık disk, halka, devre, mayın ve uyduların temposunu da hızlandırır; çatallı plazma tek kazanan build değil.
