@@ -536,6 +536,9 @@ Görevler başarısız olabilir: hasarsız görev ilk gerçek hasarda, diğerler
 ### - [x] 5.14 Perdeler ve final
 Koşu 10 dalgalık üç perdeye bölünür. 10. ve 20. dalga perde sonu boss'unu çağırır (×1,35 can; altın, %35 can, ek eser). 30. dalgada üç boss'lu Çekirdek Erimesi finali gelir; dalga sayacı final bitene kadar bekler. Final kazanılınca zafer ekranı çıkar, koşu bitirilir ya da sonsuz erimeye geçilir (her dalga düşman hasarı +%5). Biyomlar başladıkları perdenin kademesini alır.
 
+### - [x] 5.15 Mantık düzeltmeleri
+Test adres seçenekleri (?wave, ?unlock=all, ?seed) yalnızca yerel sunucuda ve yerel dosyada çalışır; yayındaki sayfa bunları yok sayar. Rapordaki RİTİM sekmesi, adaptif mod hiç oynanmadıysa karşılaştırma istemez. Laboratuvardaki altın yükseltmesinin adı "Altın Çarpanı" oldu. Kinetik Türbin EMP kapalıyken EMP süresine dokunmaz. Günlük koşunun sözleşmesi, o gün ilk kayıttan sonra sabit kalır.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

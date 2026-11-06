@@ -8946,3 +8946,77 @@ test('Odak 5.14 each biome gets harder in later acts and shows its act on the ch
   assert.match(x.out[2].badge, /DÖKÜMHANE III/);
   assert.deepEqual(x.garden, { tier: 2, cooldown: 8.5, cap: 11 });
 });
+
+test('Odak 5.15 playtest URL options work on a local host only; a published page ignores them', () => {
+  const publicHost = setup({}, { unlockAll: false, hostname: 'bkrbzdgn40.github.io', locationSearch: '?wave=29&unlock=all&seed=7' });
+  const pub = JSON.parse(publicHost.run(`(() => { startNewGame();
+    return JSON.stringify({ wave, unlockAll: window.NEON_UNLOCK_ALL === true, seeded: runSeed === 7, params: playtestParams }); })()`));
+  assert.equal(pub.wave, 1);
+  assert.equal(pub.unlockAll, false);
+  assert.equal(pub.seeded, false);
+  assert.deepEqual(pub.params, { wave: 1, unlockAll: false, seed: null });
+  for (const host of ['localhost', '127.0.0.1', 'neon.localhost', '']) {
+    const local = setup({}, { unlockAll: false, hostname: host, locationSearch: '?wave=29&unlock=all&seed=7' });
+    const x = JSON.parse(local.run('startNewGame(); JSON.stringify({ wave, unlockAll: window.NEON_UNLOCK_ALL === true, seed: runSeed })'));
+    assert.deepEqual(x, { wave: 29, unlockAll: true, seed: 7 }, host || 'file');
+  }
+  const { run } = setup();
+  assert.equal(run("isLocalPlaytestHost('localhost.evil.com')"), false);
+  assert.equal(run("isLocalPlaytestHost('LOCALHOST')"), true);
+});
+
+test('Odak 5.15 a classic run shows its own rhythm without asking for an adaptive comparison', () => {
+  const { run } = setup();
+  const html = run(`(() => { startNewGame(); totalTime = 140; wave = 9; triggerGameOver();
+    return document.getElementById('reportTempoContent').innerHTML; })()`);
+  assert.match(html, /BU KOŞUNUN RİTMİ/);
+  assert.match(html, /FAZ ZAMANLARI/);
+  assert.doesNotMatch(html, /ADAPTİF/);
+  assert.doesNotMatch(html, /Karşılaştırma için/);
+  assert.doesNotMatch(html, /SON KLASİK/);
+});
+
+test('Odak 5.15 the gold upgrade is named for gold; Kinetic Turbine touches EMP only once EMP is open', () => {
+  const locked = setup({}, { unlockAll: false });
+  const x = JSON.parse(locked.run(`(() => {
+    const greed = META_SHOP_ITEMS.find(i => i.key === 'greed');
+    startNewGame(); const magnet = UPGRADES_POOL.find(u => u.id === 'kinetic_magnet');
+    const before = player.novaMaxCooldown; magnet.apply(player, RARITIES[0]);
+    return JSON.stringify({ name: greed.name, emp: isSystemUnlocked('emp'), before, after: player.novaMaxCooldown, desc: magnet.getDesc(RARITIES[0]) });
+  })()`));
+  assert.equal(x.name, 'Altın Çarpanı');
+  assert.equal(x.emp, false);
+  assert.equal(x.after, x.before, 'a locked EMP keeps its cooldown');
+  assert.doesNotMatch(x.desc, /EMP/);
+  const { run } = setup();
+  const y = JSON.parse(run(`(() => { startNewGame(); const before = player.novaMaxCooldown;
+    UPGRADES_POOL.find(u => u.id === 'kinetic_magnet').apply(player, RARITIES[0]);
+    return JSON.stringify({ before, after: player.novaMaxCooldown }); })()`));
+  assert.equal(y.after, Math.max(4.5, y.before * 0.85));
+});
+
+test('Odak 5.15 the daily contract holds for the day once a daily run is recorded', () => {
+  const store = {};
+  const first = setup(store, { unlockAll: false });
+  const x = JSON.parse(first.run(`(() => {
+    const key = dailyDateKey();
+    startDailyRun(); const played = activeContractId; score = 1200; wave = 6; triggerGameOver();
+    unlockLevel = MAX_UNLOCK_LEVEL;
+    const after = dailyContractFor(key);
+    startDailyRun(); const again = activeContractId;
+    let other = null; for (let d = 1; d <= 28 && other === null; d++) { const c = dailyContractFor('2027-02-' + String(d).padStart(2, '0')); if (c !== 'STANDARD') other = c; }
+    return JSON.stringify({ played, after, again, other, saved: JSON.parse(localStorage.getItem(META_SAVE_KEY)).daily });
+  })()`));
+  assert.equal(x.played, 'STANDARD', 'contracts are still locked');
+  assert.equal(x.after, 'STANDARD', 'opening contracts mid-day does not change today\'s run');
+  assert.equal(x.again, 'STANDARD');
+  assert.ok(x.other, 'other days still roll a contract');
+  assert.equal(x.saved.contract, 'STANDARD');
+  const reloaded = setup(store);
+  assert.equal(reloaded.run('dailyContractFor(dailyDateKey())'), 'STANDARD');
+  const key = reloaded.run('META_SAVE_KEY');
+  assert.match(store[key], /"contract":"STANDARD"/);
+  const bad = setup({ [key]: store[key].replace('"contract":"STANDARD"', '"contract":"NOPE"') });
+  assert.equal(bad.run('todaysDailyBest()?.score'), 1200, 'the record itself still loads');
+  assert.equal(bad.run('todaysDailyBest()?.contract ?? null'), null, 'an unknown contract is dropped');
+});
