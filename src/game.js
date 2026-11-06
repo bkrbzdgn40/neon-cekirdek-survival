@@ -1532,8 +1532,11 @@
         });
         let activeQuest={type:'KILLS',target:15,progress:0,rewardGold:20,desc:'15 Düşman İmha Et'};
         let questHistory=[];
-        let questStats={offered:0,completed:0,byType:{},hitsReset:0};
+        let questStats={offered:0,completed:0,failed:0,byType:{},failedByType:{}};
         let questHudPrevious='';
+        // Odak 5.13 · a mission can fail: a hit ends a flawless run, and every other
+        // mission has a time limit, so a stuck objective never blocks the next one.
+        const QUEST_FAIL_RULES=Object.freeze({timeLimit:75,warnAt:15});
 
         function getQuestCandidates(currentWave=wave,hasChain=!!player?.chainLightning){
             const options=['KILLS','ORBS','COMBO'];
@@ -1568,7 +1571,8 @@
             else if(type==='DEFEND'){target=DEFEND_RULES.target;desc='SİNYAL NOKTASINI SAVUN';}
             else if(type==='RESCUE'){target=2;desc='2 VERİ KAPSÜLÜNÜ KURTAR';}
             const quest={type,target,progress,rewardGold:Math.min(180,
-                advanced?30+currentWave*5:18+currentWave*4),desc};
+                advanced?30+currentWave*5:18+currentWave*4),desc,
+                timeLeft:type==='NO_HIT'?null:QUEST_FAIL_RULES.timeLimit};
             if(type==='DEFEND'||type==='RESCUE') quest.point=getQuestPoint();
             if(type==='DEFEND') quest.radius=105;
             return quest;
@@ -1612,11 +1616,20 @@
             if(activeQuest.progress>=activeQuest.target) completeQuest();
             else updateQuestHud();
         }
+        function failQuest(reason='GÖREV BAŞARISIZ'){
+            if(!activeQuest) return;
+            const {type}=activeQuest;
+            questStats.failed++;
+            questStats.failedByType[type]=(questStats.failedByType[type]||0)+1;
+            audio.playThreatCue('phase');
+            if(player) createFloatingText(player.x,player.y-45,
+                'GÖREV BAŞARISIZ · '+reason,'#ff5c7a',17);
+            showDopamineBanner('GÖREV BAŞARISIZ','#ff5c7a');
+            generateNextQuest();
+        }
         function resetFlawlessQuest(){
             if(activeQuest?.type!=='NO_HIT') return;
-            activeQuest.progress=0;
-            questStats.hitsReset++;
-            updateQuestHud();
+            failQuest('HASAR ALINDI');
         }
         // Odak 3.9 · standing in the zone always counts; nearby enemies only speed it up.
         // Early waves kill enemies before they reach the zone, so presence can't be required.
@@ -1625,6 +1638,10 @@
             if(!isSystemUnlocked('quests')) return;
             if(!activeQuest||!player||gameState!=='PLAYING'||dt<=0) return;
             const current=activeQuest;
+            if(current.timeLeft!=null){
+                current.timeLeft-=dt;
+                if(current.timeLeft<=0){failQuest('SÜRE DOLDU');return;}
+            }
             if(current.type==='NO_HIT') advanceQuest('NO_HIT',dt);
             else if(current.type==='DEFEND'&&current.point){
                 const dist=Math.hypot(player.x-current.point.x,player.y-current.point.y);
@@ -1645,12 +1662,17 @@
                     if(activeQuest===current) current.point=getQuestPoint(player.x,player.y);
                 }
             }
+            if(activeQuest===current&&current.timeLeft!=null&&
+                current.timeLeft<=QUEST_FAIL_RULES.warnAt) updateQuestHud();
         }
         function updateQuestHud(){
             if(!activeQuest) return;
             const q=activeQuest;
             const shown=Math.floor(q.progress);
-            const progress=QUEST_LABELS[q.type]+' · '+shown+'/'+q.target;
+            // The countdown only shows near the end, so the chip is not woken every second.
+            const clock=q.timeLeft!=null&&q.timeLeft<=QUEST_FAIL_RULES.warnAt?
+                ' · '+Math.ceil(q.timeLeft)+'sn':'';
+            const progress=QUEST_LABELS[q.type]+' · '+shown+'/'+q.target+clock;
             const reward=' · +'+q.rewardGold;
             const content=progress+reward;
             if(content===questHudPrevious) return;
@@ -1696,7 +1718,8 @@
             rewardGold:activeQuest.rewardGold,
             point:activeQuest.point?{...activeQuest.point}:null,
             eligible:getQuestCandidates(),history:[...questHistory],
-            stats:{...questStats,byType:{...questStats.byType}}
+            timeLeft:activeQuest.timeLeft==null?null:Math.round(activeQuest.timeLeft*10)/10,
+            stats:{...questStats,byType:{...questStats.byType},failedByType:{...questStats.failedByType}}
         }:null;
 
         function showDopamineBanner(text, borderColor = '#ffe600') {
@@ -7725,10 +7748,11 @@
                 {x:Math.min(worldWidth-75,worldWidth*.84),y:worldHeight*.54}
             ];
         }
+        function bossEncounterActive() {
+            return activeBosses.some(b=>!b.dead) || nextBossTime-totalTime<=4.0;
+        }
         function chapterEffectsAllowed() {
             return gameState==='PLAYING' && !!player &&
-                activeBosses.every(b=>b.dead) &&
-                nextBossTime-totalTime>4.0 &&
                 !combatDirector?.activeArenaEvent;
         }
         function resetChapterBiome() {
@@ -8058,7 +8082,7 @@
             if(!arenaChapter||wave<showcaseWave||
                 (wave-showcaseWave)%CHAPTER_RULES.chapterWaves!==0||
                 chapterShowcaseAttemptedWave===wave||waveTimer<1.2||
-                !chapterEffectsAllowed())return false;
+                !chapterEffectsAllowed()||bossEncounterActive())return false;
             let targets=[];
             if(arenaChapter==='RIFT'){
                 const eligible=enemies.filter(e=>!e.dead&&!e.isBoss&&e.stunTimer<=0&&
@@ -8714,7 +8738,7 @@
             let message='STANDARD ARENA';
             let urgent=false;
             if(d){
-                if(!chapterEffectsAllowed())message='BOSS / ETKİNLİK KORUMASI';
+                if(!chapterEffectsAllowed())message='ETKİNLİK KORUMASI';
                 else if(arenaChapter==='FOUNDRY'){
                     const phase=chapterFoundryPhase();
                     message=phase<CHAPTER_RULES.foundryWarn?
@@ -8748,6 +8772,9 @@
             if(chip){
                 const nextUrgent=String(!!d&&urgent&&chapterEffectsAllowed());
                 if(chip.dataset.urgent!==nextUrgent)chip.dataset.urgent=nextUrgent;
+                // Odak 5.13 · phones keep the chip compact under the boss bar.
+                const nextBoss=String(activeBosses.some(b=>!b.dead));
+                if(chip.dataset.boss!==nextBoss)chip.dataset.boss=nextBoss;
                 if(d&&!show)showContextual(chip,HUD_CONTEXT_RULES.holdMs);
             }
             // Odak 4.5 · during a showcase its own banner already names it; no second copy.
@@ -9057,7 +9084,8 @@
                 lock:0,trail:0,cross:0};
         }
         function nemesisAllowed(){
-            return isSystemUnlocked('nemesis')&&chapterEffectsAllowed()&&!chapterShowcase;
+            return isSystemUnlocked('nemesis')&&chapterEffectsAllowed()&&
+                !bossEncounterActive()&&!chapterShowcase;
         }
         function sampleNemesisMovement(){
             if(!player)return;
@@ -12723,7 +12751,7 @@
             lastRunUnlock=null;
             activeReportTab='summary';
             questHistory=[];
-            questStats={offered:0,completed:0,byType:{},hitsReset:0};
+            questStats={offered:0,completed:0,failed:0,byType:{},failedByType:{}};
             questHudPrevious='';
             generateNextQuest();
 
@@ -13235,7 +13263,8 @@
                         fireDelay:player.fireDelay,maxHp:player.maxHp,speed:player.speed}:null},
                 economy:economy||{goldBySource:{},chestDrops:{},chestOpened:{},chestRewards:{}},
                 missions:{offered:questStats.offered,completed:questStats.completed,
-                    byType:{...questStats.byType},hitsReset:questStats.hitsReset},
+                    failed:questStats.failed,byType:{...questStats.byType},
+                    failedByType:{...questStats.failedByType}},
                 arena:director?{offered:director.arenaOffered,completed:director.arenaCompleted,
                     expired:director.arenaExpired,cancelled:director.arenaCancelled,
                     byKind:director.arenaByKind}:{offered:0,completed:0,expired:0,cancelled:0,byKind:{}},
@@ -13544,7 +13573,7 @@
                     reportPair('Sunulan',reportNumber(r.missions.offered))+
                     reportPair('Tamamlanan',reportNumber(r.missions.completed))+
                     reportPair('Tamamlama oranı',missionRatio+'%')+
-                    reportPair('Hasarsız görev sıfırlaması',reportNumber(r.missions.hitsReset)))+
+                    reportPair('Başarısız',reportNumber(r.missions.failed||0)))+
                 reportBlock('TAMAMLANAN GÖREV TÜRLERİ','fa-medal',questBars)+
                 reportBlock('ARENA ETKİNLİKLERİ','fa-map-location-dot',
                     reportPair('Sunulan',reportNumber(r.arena.offered))+

@@ -3358,14 +3358,18 @@ test('M5.2 chain mission unlocks only after chain trait and requires a real jump
   assert.equal(x.complete,0);
 });
 
-test('M5.2 no-hit mission advances only during active play and resets on real HP loss',()=>{
+test('Odak 5.13 no-hit mission advances only during active play and fails on real HP loss',()=>{
   const {run}=setup();
-  const data=JSON.parse(run("(()=>{startNewGame();wave=2;generateNextQuest('NO_HIT');updateQuest(4);const safe=activeQuest.progress;gameState='PAUSED';updateQuest(7);const paused=activeQuest.progress;gameState='PLAYING';player.hasShield=true;player.shieldActive=true;player.invulnTimer=0;player.takeDamage(9);const shielded=activeQuest.progress;player.shieldActive=false;player.invulnTimer=0;player.takeDamage(9);return JSON.stringify({safe,paused,shielded,after:activeQuest.progress,hits:questStats.hitsReset});})()"));
+  const data=JSON.parse(run("(()=>{startNewGame();wave=2;generateNextQuest('NO_HIT');const gold=totalGold;updateQuest(4);const safe=activeQuest.progress;gameState='PAUSED';updateQuest(7);const paused=activeQuest.progress;gameState='PLAYING';player.hasShield=true;player.shieldActive=true;player.invulnTimer=0;player.takeDamage(9);const shielded=activeQuest.progress;const offered=questStats.offered;player.shieldActive=false;player.invulnTimer=0;player.takeDamage(9);return JSON.stringify({safe,paused,shielded,failed:questStats.failed,byType:questStats.failedByType,next:activeQuest.type,nextProgress:activeQuest.progress,newOffers:questStats.offered-offered,completed:questStats.completed,goldGained:totalGold-gold});})()"));
   assert.equal(data.safe,4);
   assert.equal(data.paused,4);
-  assert.equal(data.shielded,4);
-  assert.equal(data.after,0);
-  assert.equal(data.hits,1);
+  assert.equal(data.shielded,4,'a shield block is not a hit');
+  assert.equal(data.failed,1);
+  assert.deepEqual(data.byType,{NO_HIT:1});
+  assert.notEqual(data.next,'NO_HIT','the failed mission is skipped');
+  assert.equal(data.newOffers,1);
+  assert.equal(data.completed,0);
+  assert.equal(data.goldGained,0);
 });
 
 test('M5.2 flawless timer pays once at target without auto-finishing an idle mission',()=>{
@@ -6339,14 +6343,14 @@ test('M5.17 foundry warns before the heat pulse and damages at most twelve norma
  assert.equal(s.stats.foundryPlayerHits,1);
 });
 
-test('M5.17 existing event and boss encounters suppress chapter effects and charge',()=>{
+test('Odak 5.13 arena events suppress chapter effects; boss fights and their warning do not',()=>{
  const {run}=setup();
  const s=JSON.parse(run("(()=>{startNewGame();wave=9;nextBossTime=500;player.x=worldWidth*.25;player.y=worldHeight*.38;updateArenaChapter(.2);updateArenaChapter(1);const charge=chapterGardenCharge[0];combatDirector.activeArenaEvent={kind:'RELAY',dead:false};updateArenaChapter(3);const during=chapterGardenCharge[0];const allowedEvent=chapterEffectsAllowed();combatDirector.activeArenaEvent=null;activeBosses=[new Enemy(500,300,'BOSS_DESTROYER')];updateArenaChapter(4);const allowedBoss=chapterEffectsAllowed();activeBosses=[];nextBossTime=totalTime+3;const allowedWarning=chapterEffectsAllowed();gameState='PAUSED';const allowedPause=chapterEffectsAllowed();return JSON.stringify({charge,during,allowedEvent,allowedBoss,allowedWarning,allowedPause,id:arenaChapter});})()"));
  assert.ok(s.charge>0);
  assert.equal(s.during,0);
  assert.equal(s.allowedEvent,false);
- assert.equal(s.allowedBoss,false);
- assert.equal(s.allowedWarning,false);
+ assert.equal(s.allowedBoss,true);
+ assert.equal(s.allowedWarning,true);
  assert.equal(s.allowedPause,false);
  assert.equal(s.id,'GARDEN');
 });
@@ -6384,12 +6388,13 @@ test('M5.17 rift gate teleports once, re-arms on exit, preserves gold and breaks
  assert.equal(s.gold,s.saved);
 });
 
-test('M5.17 rift does not activate near boss warning or during an arena mission',()=>{
+test('Odak 5.13 rift stays live through the boss warning but not during an arena mission',()=>{
  const {run}=setup();
- const s=JSON.parse(run("(()=>{startNewGame();wave=12;nextBossTime=200;totalTime=196.5;const a=getRiftCenters()[0];player.x=a.x;player.y=a.y;updateArenaChapter(.02);const danger=getArenaChapterSnapshot();totalTime=180;combatDirector.activeArenaEvent={kind:'STORM'};updateArenaChapter(.02);const event=getArenaChapterSnapshot();return JSON.stringify({danger,event,warps:chapterStats.riftWarps,x:player.x});})()"));
- assert.equal(s.danger.enabled,false);
+ const s=JSON.parse(run("(()=>{startNewGame();wave=12;nextBossTime=200;totalTime=196.5;const a=getRiftCenters()[0];player.x=a.x;player.y=a.y;updateArenaChapter(.02);const danger=getArenaChapterSnapshot();const dangerWarps=chapterStats.riftWarps;totalTime=180;chapterRiftLastWarpAt=-Infinity;player.x=a.x;player.y=a.y;combatDirector.activeArenaEvent={kind:'STORM'};updateArenaChapter(.02);const event=getArenaChapterSnapshot();return JSON.stringify({danger,dangerWarps,event,warps:chapterStats.riftWarps,x:player.x});})()"));
+ assert.equal(s.danger.enabled,true);
+ assert.equal(s.dangerWarps,1);
  assert.equal(s.event.enabled,false);
- assert.equal(s.warps,0);
+ assert.equal(s.warps,1);
 });
 
 test('M5.17 new run resets all three chapters and metrics and keeps legacy progression',()=>{
@@ -8737,4 +8742,76 @@ test('Odak 5.12 lightning grounds into a lone foe and a circuit discharges into 
   assert.ok(x.pair.b > 0);
   assert.equal(x.stats, 1);
   assert.equal(x.discharge, Math.round(x.dmg * 17 * 0.78));
+});
+
+test('Odak 5.13 every mission but no-hit fails when its time runs out', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); gameState = 'PLAYING'; wave = 6;
+    generateNextQuest('KILLS');
+    const start = activeQuest.timeLeft, gold = totalGold;
+    updateQuest(QUEST_FAIL_RULES.timeLimit - QUEST_FAIL_RULES.warnAt - 1);
+    const quietHud = questHudPrevious;
+    updateQuest(1.5);
+    const warnHud = questHudPrevious;
+    gameState = 'PAUSED'; updateQuest(100); const paused = activeQuest.type;
+    gameState = 'PLAYING'; updateQuest(QUEST_FAIL_RULES.warnAt);
+    const after = { type: activeQuest.type, timeLeft: activeQuest.timeLeft, failed: questStats.failed, byType: questStats.failedByType };
+    generateNextQuest('NO_HIT'); const flawless = activeQuest.timeLeft;
+    const snap = window.getNeonQuestSnapshot();
+    triggerGameOver();
+    return JSON.stringify({ start, quietHud, warnHud, paused, after, flawless, snap: snap.timeLeft, goldGained: totalGold - gold, report: window.getNeonFinalReport().missions });
+  })()`));
+  assert.equal(x.start, 75);
+  assert.doesNotMatch(x.quietHud, /sn/, 'no countdown before the warning window');
+  assert.match(x.warnHud, /· 15sn/);
+  assert.equal(x.paused, 'KILLS', 'the clock stops outside active play');
+  assert.equal(x.after.failed, 1);
+  assert.deepEqual(x.after.byType, { KILLS: 1 });
+  assert.notEqual(x.after.type, 'KILLS');
+  assert.equal(x.after.timeLeft, x.after.type === 'NO_HIT' ? null : 75, 'the next mission gets a fresh clock');
+  assert.equal(x.flawless, null);
+  assert.equal(x.snap, null);
+  assert.equal(x.goldGained, 0);
+  assert.equal(x.report.failed, 1);
+  assert.deepEqual(x.report.failedByType, { KILLS: 1 });
+});
+
+test('Odak 5.13 biome hazards keep working during a boss fight while bosses stay immune', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    // Garden: ion node bursts and stuns the crowd around a live boss.
+    startNewGame(); wave = 9; nextBossTime = 500;
+    const node = getGardenCenters()[0]; player.x = node.x; player.y = node.y;
+    enemies = Array.from({ length: 12 }, () => new Enemy(node.x + 18, node.y + 14, 'TANK'));
+    const gBoss = new Enemy(node.x, node.y, 'BOSS_DESTROYER'); enemies.push(gBoss); activeBosses = [gBoss];
+    updateArenaChapter(.1); updateArenaChapter(.8); updateArenaChapter(.85);
+    const garden = { stuns: enemies.filter(e => e.stunTimer > 0).length, bossStun: gBoss.stunTimer, bursts: chapterStats.gardenBursts };
+    // Foundry: the heat rail fires through the boss warning window.
+    startNewGame(); wave = 6; totalTime = 0; nextBossTime = 3; updateArenaChapter(.1);
+    const L = chapterFoundryLayout; const at = foundryRailPositions(L)[0];
+    const put = (o, along) => { if (L.axis === 'y') { o.x = along; o.y = at; } else { o.x = at; o.y = along; } return o; };
+    put(player, 200); enemies = [put(new Enemy(0, 0, 'TANK'), 240)]; enemies[0].hp = enemies[0].maxHp = 2000;
+    const fBoss = put(new Enemy(0, 0, 'BOSS_DESTROYER'), 260); fBoss.hp = fBoss.maxHp = 2000; enemies.push(fBoss); activeBosses = [fBoss];
+    const hp = player.hp; totalTime = 1.6; updateArenaChapter(.1);
+    const foundry = { playerLost: hp - player.hp, enemyHp: enemies[0].hp, bossHp: fBoss.hp };
+    // The nemesis and the scripted showcase still wait for the boss to fall.
+    startNewGame(); wave = 16; waveTimer = 2; totalTime = 400; nextBossTime = 1000;
+    const sBoss = new Enemy(300, 300, 'BOSS_TITAN'); activeBosses = [sBoss];
+    updateArenaChapter(.02);
+    const duringBoss = { showcase: getArenaChapterSnapshot().showcase, nemesis: nemesisAllowed(), hud: chapterEffectsAllowed() };
+    sBoss.dead = true; updateArenaChapter(.02);
+    const afterBoss = { showcase: getArenaChapterSnapshot().showcase?.id || null };
+    return JSON.stringify({ garden, foundry, duringBoss, afterBoss });
+  })()`));
+  assert.equal(x.garden.stuns, 8);
+  assert.equal(x.garden.bossStun, 0);
+  assert.equal(x.garden.bursts, 1);
+  assert.equal(x.foundry.playerLost, 9);
+  assert.ok(x.foundry.enemyHp < 2000);
+  assert.equal(x.foundry.bossHp, 2000);
+  assert.equal(x.duringBoss.hud, true);
+  assert.equal(x.duringBoss.showcase, null);
+  assert.equal(x.duringBoss.nemesis, false);
+  assert.equal(x.afterBoss.showcase, 'FOUNDRY');
 });
