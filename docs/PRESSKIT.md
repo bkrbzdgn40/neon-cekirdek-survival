@@ -52,7 +52,7 @@ These are instructions for **future captures**, not claims that the files alread
 5. A player-triggered reactor, actual fuse telegraph and resulting explosion, or an active graviton field.
 6. Optional: real boss battle, phase telegraphs and identifiable boss HUD.
 
-When recording, include game build/commit, browser, viewport, graphics quality and whether `?tempo=adaptive` or `?learn=on` is active. Game screenshots for future store use should show actual play, not composited text overlays.
+When recording, include game build/commit, browser, viewport, and graphics quality. Game screenshots for future store use should show actual play, not composited text overlays.
 
 ## How to evaluate
 

@@ -539,6 +539,9 @@ Koşu 10 dalgalık üç perdeye bölünür. 10. ve 20. dalga perde sonu boss'unu
 ### - [x] 5.15 Mantık düzeltmeleri
 Test adres seçenekleri (?wave, ?unlock=all, ?seed) yalnızca yerel sunucuda ve yerel dosyada çalışır; yayındaki sayfa bunları yok sayar. Rapordaki RİTİM sekmesi, adaptif mod hiç oynanmadıysa karşılaştırma istemez. Laboratuvardaki altın yükseltmesinin adı "Altın Çarpanı" oldu. Kinetik Türbin EMP kapalıyken EMP süresine dokunmaz. Günlük koşunun sözleşmesi, o gün ilk kayıttan sonra sabit kalır.
 
+### - [x] 5.16 Deneysel tempo temizliği
+Gameplay V2 deneyi kaldırıldı: stres gözlemcisi, ?tempo=adaptive, ?learn=on ile açılan öğrenen model, tempo karşılaştırma kaydı ve rapordaki RİTİM sekmesi. Savaş yöneticisi sabit 64 saniyelik ritmiyle çalışmaya devam eder. Eski kayıt anahtarları açılışta silinir.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

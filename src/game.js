@@ -2301,7 +2301,6 @@
                 if (this.hasShield && this.shieldActive) {
                     this.shieldActive = false;
                     runMetrics.shieldBlocks++;
-                    combatDirector?.intensityObserver.recordShieldBreak();
                     this.shieldCooldown = this.shieldMaxCooldown;
                     this.invulnTimer = 0.8;
                     if (this.synergies.has('shock_aegis') && emitShockRing(this)) this.buildStats.shieldShocks++;
@@ -2341,7 +2340,6 @@
                 if(damageLost>0){
                     runMetrics.damageTaken+=damageLost;
                     runMetrics.hitsTaken++;
-                    combatDirector?.intensityObserver.recordDamage(damageLost, this.maxHp);
                 }
                 resetFlawlessQuest();
                 this.invulnTimer = 0.65;
@@ -3975,7 +3973,6 @@
 
             die() {
                 this.dead = true;
-                combatDirector?.intensityObserver.recordKill(this, player);
                 kills++;
                 recordCodexKill(this);
                 advanceQuest('KILLS',1);
@@ -9711,16 +9708,13 @@
             return available[available.length - 1].type;
         }
 
-        function getDirectorProfile(seconds, currentWave, activeBossCount, nextBossAt, afterBossUntil, hpFraction, normalPhase = null) {
+        function getDirectorProfile(seconds, currentWave, activeBossCount, nextBossAt, afterBossUntil, hpFraction) {
             const cycle = ((seconds % 64) + 64) % 64;
             let phase = cycle < 12 ? 'BUILDUP' : cycle < 34 ? 'PRESSURE' : cycle < 49 ? 'CRISIS' : 'RECOVERY';
-            // Priority is non-negotiable: boss presence, post-boss relief and
-            // telegraphed boss warning cannot be overwritten by adaptive tempo.
+            // Boss presence, post-boss relief and a telegraphed boss warning come first.
             if (activeBossCount > 0) phase = 'BOSS';
             else if (seconds < afterBossUntil) phase = 'RECOVERY';
             else if (Number.isFinite(nextBossAt) && seconds >= nextBossAt - 3.8 && seconds < nextBossAt) phase = 'WARNING';
-            else if (normalPhase && ['BUILDUP', 'PRESSURE', 'CRISIS', 'RECOVERY'].includes(normalPhase))
-                phase = normalPhase;
 
             const def = DIRECTOR_PHASES[phase];
             const hpAssist = hpFraction < 0.30 ? 0.78 : hpFraction < 0.50 ? 0.90 : 1;
@@ -9751,487 +9745,9 @@
                 cap: Math.max(1, Math.round(profile.cap * density)), arenaDensity: density };
         }
 
-        // Gameplay V2, stage 1: observe real player pressure without changing spawns.
-        // High kill counts alone never imply panic. Nearby combat and damage do.
-        const INTENSITY_OBSERVER = Object.freeze({
-            nearbyEnemyRadius: 170, nearbyShotRadius: 125,
-            scanSeconds: .25, historySeconds: 1, historyCapacity: 180,
-            peakThreshold: 68, buildupMinimum: 8, buildupMaximum: 36,
-            sustainSeconds: 4, fadeSeconds: 4, relaxMinimum: 12,
-            relaxMaximum: 24, relaxThreshold: 38
-        });
-        const INTENSITY_PREVIEW_STAGES = Object.freeze([
-            'BUILDUP', 'SUSTAIN', 'FADE', 'RELAX', 'BOSS_LOCK'
-        ]);
-        const clampIntensity = value => Math.max(0, Math.min(100, value));
-        class AdaptiveTempoObserver {
-            constructor() {
-                this.eventStress = 0;
-                this.localPressure = 0;
-                this.intensity = 0;
-                this.mastery = 0;
-                this.nearbyEnemies = 0;
-                this.nearbyProjectiles = 0;
-                this.shieldBreaks = 0;
-                this.hpHits = 0;
-                this.nearKills = 0;
-                this.kills = 0;
-                this.lastDamageAt = -Infinity;
-                this.scanElapsed = 0;
-                this.previewPhase = 'BUILDUP';
-                this.previewAge = 0;
-                this.previewTransitions = 0;
-                this.history = new Float32Array(INTENSITY_OBSERVER.historyCapacity * 6);
-                this.historyNext = 0;
-                this.historyCount = 0;
-                this.nextHistoryAt = 0;
-            }
-
-            refreshIntensity() {
-                this.intensity = clampIntensity(this.eventStress + this.localPressure);
-            }
-
-            recordShieldBreak() {
-                this.shieldBreaks++;
-                this.eventStress = clampIntensity(this.eventStress + 12);
-                this.mastery = clampIntensity(this.mastery - 5);
-                this.lastDamageAt = totalTime;
-                this.refreshIntensity();
-            }
-
-            recordDamage(lost, maximumHp) {
-                if (!(lost > 0)) return;
-                this.hpHits++;
-                const hpFraction = lost / Math.max(1, maximumHp);
-                this.eventStress = clampIntensity(this.eventStress +
-                    Math.min(34, 15 + hpFraction * 110));
-                this.mastery = clampIntensity(this.mastery - 16);
-                this.lastDamageAt = totalTime;
-                this.refreshIntensity();
-            }
-
-            recordKill(enemy, survivor) {
-                if (enemy.isBoss) return; // Boss rewards and recovery have their own rules.
-                this.kills++;
-                // Safe ranged kills represent control, not an overwhelming attack.
-                this.mastery = clampIntensity(this.mastery +
-                    (totalTime - this.lastDamageAt >= 4 ? 2 : .8));
-                if (!survivor) return;
-                const distance = Math.hypot(enemy.x - survivor.x, enemy.y - survivor.y);
-                if (distance <= INTENSITY_OBSERVER.nearbyEnemyRadius) {
-                    this.nearKills++;
-                    this.eventStress = clampIntensity(this.eventStress +
-                        (enemy.isElite ? 4 : 2.5));
-                    this.refreshIntensity();
-                }
-            }
-
-            setPreview(phase) {
-                if (phase === this.previewPhase) return;
-                this.previewPhase = phase;
-                this.previewAge = 0;
-                this.previewTransitions++;
-            }
-
-            advancePreview(dt, bossLocked) {
-                if (bossLocked) {
-                    this.setPreview('BOSS_LOCK');
-                    return;
-                }
-                if (this.previewPhase === 'BOSS_LOCK') this.setPreview('BUILDUP');
-                this.previewAge += dt;
-                const age = this.previewAge;
-                switch (this.previewPhase) {
-                    case 'BUILDUP':
-                        if (age >= INTENSITY_OBSERVER.buildupMinimum &&
-                            (this.intensity >= INTENSITY_OBSERVER.peakThreshold ||
-                             age >= INTENSITY_OBSERVER.buildupMaximum)) this.setPreview('SUSTAIN');
-                        break;
-                    case 'SUSTAIN':
-                        if (age >= INTENSITY_OBSERVER.sustainSeconds) this.setPreview('FADE');
-                        break;
-                    case 'FADE':
-                        if (age >= INTENSITY_OBSERVER.fadeSeconds) this.setPreview('RELAX');
-                        break;
-                    case 'RELAX':
-                        if (age >= INTENSITY_OBSERVER.relaxMaximum ||
-                            (age >= INTENSITY_OBSERVER.relaxMinimum &&
-                             this.intensity <= INTENSITY_OBSERVER.relaxThreshold))
-                            this.setPreview('BUILDUP');
-                        break;
-                }
-            }
-
-            observe(dt, seconds, survivor, foes, hostileShots, bossLocked) {
-                if (!(dt > 0)) return;
-                const elapsed = Math.min(dt, .1);
-                this.scanElapsed += elapsed;
-                if (this.scanElapsed >= INTENSITY_OBSERVER.scanSeconds) {
-                    this.scanElapsed %= INTENSITY_OBSERVER.scanSeconds;
-                    let closeEnemies = 0, closeShots = 0;
-                    if (survivor) {
-                        const enemyRangeSq = INTENSITY_OBSERVER.nearbyEnemyRadius ** 2;
-                        const shotRangeSq = INTENSITY_OBSERVER.nearbyShotRadius ** 2;
-                        for (const enemy of foes) {
-                            if (enemy.dead) continue;
-                            const dx = enemy.x - survivor.x, dy = enemy.y - survivor.y;
-                            if (dx * dx + dy * dy <= enemyRangeSq) closeEnemies++;
-                        }
-                        for (const shot of hostileShots) {
-                            if (shot.dead) continue;
-                            const dx = shot.x - survivor.x, dy = shot.y - survivor.y;
-                            if (dx * dx + dy * dy <= shotRangeSq) closeShots++;
-                        }
-                    }
-                    this.nearbyEnemies = closeEnemies;
-                    this.nearbyProjectiles = closeShots;
-                    this.localPressure = Math.min(54, closeEnemies * 3.8 + closeShots * 2.7);
-                }
-                // Pressure does not instantly disappear during close combat.
-                const inDanger = this.nearbyEnemies > 0 || this.nearbyProjectiles > 0;
-                this.eventStress = Math.max(0, this.eventStress -
-                    elapsed * (inDanger ? .7 : 5));
-                this.mastery = Math.max(0, this.mastery - elapsed * .55);
-                this.refreshIntensity();
-                this.advancePreview(elapsed, bossLocked);
-                if (seconds >= this.nextHistoryAt) {
-                    this.nextHistoryAt = seconds + INTENSITY_OBSERVER.historySeconds;
-                    const start = this.historyNext * 6;
-                    this.history[start] = seconds;
-                    this.history[start + 1] = this.intensity;
-                    this.history[start + 2] = this.mastery;
-                    this.history[start + 3] = this.nearbyEnemies;
-                    this.history[start + 4] = this.nearbyProjectiles;
-                    this.history[start + 5] = INTENSITY_PREVIEW_STAGES.indexOf(this.previewPhase);
-                    this.historyNext = (this.historyNext + 1) % INTENSITY_OBSERVER.historyCapacity;
-                    this.historyCount = Math.min(INTENSITY_OBSERVER.historyCapacity, this.historyCount + 1);
-                }
-            }
-
-            getSnapshot() {
-                return {
-                    mode: 'observe-only',
-                    stress: Math.round(this.intensity),
-                    mastery: Math.round(this.mastery),
-                    nearbyEnemies: this.nearbyEnemies,
-                    nearbyProjectiles: this.nearbyProjectiles,
-                    proposedPhase: this.previewPhase,
-                    proposedPhaseAge: +this.previewAge.toFixed(1),
-                    transitions: this.previewTransitions,
-                    hpHits: this.hpHits,
-                    shieldBreaks: this.shieldBreaks,
-                    kills: this.kills,
-                    nearKills: this.nearKills,
-                    historySamples: this.historyCount
-                };
-            }
-
-            getHistory() {
-                const rows = [];
-                for (let i = 0; i < this.historyCount; i++) {
-                    const index = (this.historyNext - this.historyCount +
-                        i + INTENSITY_OBSERVER.historyCapacity) % INTENSITY_OBSERVER.historyCapacity;
-                    const k = index * 6;
-                    rows.push({
-                        second: +this.history[k].toFixed(1),
-                        stress: +this.history[k + 1].toFixed(1),
-                        mastery: +this.history[k + 2].toFixed(1),
-                        nearbyEnemies: this.history[k + 3],
-                        nearbyProjectiles: this.history[k + 4],
-                        proposedPhase: INTENSITY_PREVIEW_STAGES[this.history[k + 5]]
-                    });
-                }
-                return rows;
-            }
-        }
-
-        // Gameplay V2 G2: opt-in live tempo via ?tempo=adaptive. Classic remains
-        // the default until real playtests validate stress thresholds and pacing.
-        function getTempoMode(search = '') {
-            return /(?:^|[?&])tempo=adaptive(?:&|$)/i.test(search) ? 'adaptive' : 'classic';
-        }
-        function mapAdaptiveStageToDirectorPhase(stage, age) {
-            if (stage === 'BUILDUP') return age < INTENSITY_OBSERVER.buildupMinimum ?
-                'BUILDUP' : 'PRESSURE';
-            if (stage === 'SUSTAIN') return 'CRISIS';
-            if (stage === 'FADE') return 'BUILDUP';
-            if (stage === 'RELAX') return 'RECOVERY';
-            return null; // BOSS_LOCK: legacy boss/warning/post-boss handling owns the profile.
-        }
-
-        // G3: cumulative, allocation-free measurements. These never make
-        // decisions about spawning, rewards, gameplay physics or difficulty.
-        const TEMPO_RUN_THRESHOLDS = Object.freeze({
-            highStress: 68, rearmStress: 38, calmStress: 20, calmWindowSeconds: 8
-        });
-        class TempoRunMetrics {
-            constructor() {
-                this.normalSeconds = 0;
-                this.bossProtectedSeconds = 0;
-                this.stressWeightedTotal = 0;
-                this.masteryWeightedTotal = 0;
-                this.peakStress = 0;
-                this.highStressSeconds = 0;
-                this.stressPeaks = 0;
-                this.peakArmed = true;
-                this.calmSeconds = 0;
-                this.currentCalmSeconds = 0;
-                this.longestCalmSeconds = 0;
-                this.calmWindows = 0;
-                this.reliefEntries = 0;
-                this.previousNormalPhase = null;
-            }
-            finishCalmWindow() {
-                this.longestCalmSeconds = Math.max(this.longestCalmSeconds, this.currentCalmSeconds);
-                if (this.currentCalmSeconds >= TEMPO_RUN_THRESHOLDS.calmWindowSeconds)
-                    this.calmWindows++;
-                this.currentCalmSeconds = 0;
-            }
-            observe(dt, observer, phase, bossLocked) {
-                if (!(dt > 0)) return;
-                if (bossLocked) {
-                    this.bossProtectedSeconds += dt;
-                    this.finishCalmWindow();
-                    this.previousNormalPhase = null;
-                    return;
-                }
-                const stress = observer.intensity, mastery = observer.mastery;
-                this.normalSeconds += dt;
-                this.stressWeightedTotal += stress * dt;
-                this.masteryWeightedTotal += mastery * dt;
-                this.peakStress = Math.max(this.peakStress, stress);
-                if (stress >= TEMPO_RUN_THRESHOLDS.highStress) {
-                    this.highStressSeconds += dt;
-                    if (this.peakArmed) {
-                        this.stressPeaks++;
-                        this.peakArmed = false;
-                    }
-                } else if (stress <= TEMPO_RUN_THRESHOLDS.rearmStress) {
-                    this.peakArmed = true;
-                }
-                if (phase === 'RECOVERY' && this.previousNormalPhase !== 'RECOVERY')
-                    this.reliefEntries++;
-                this.previousNormalPhase = phase;
-                // This measures low *local* threat, not a claim that the arena
-                // has no enemies. Avoid calling it true empty/dead playtime.
-                const calm = stress < TEMPO_RUN_THRESHOLDS.calmStress &&
-                    observer.nearbyEnemies === 0 && observer.nearbyProjectiles === 0;
-                if (calm) {
-                    this.calmSeconds += dt;
-                    this.currentCalmSeconds += dt;
-                } else {
-                    this.finishCalmWindow();
-                }
-            }
-            getSnapshot() {
-                const normal = this.normalSeconds;
-                return {
-                    normalSeconds: +normal.toFixed(2),
-                    bossProtectedSeconds: +this.bossProtectedSeconds.toFixed(2),
-                    averageStress: normal ? +(this.stressWeightedTotal / normal).toFixed(1) : 0,
-                    averageMastery: normal ? +(this.masteryWeightedTotal / normal).toFixed(1) : 0,
-                    peakStress: +this.peakStress.toFixed(1),
-                    highStressSeconds: +this.highStressSeconds.toFixed(2),
-                    stressPeaks: this.stressPeaks,
-                    calmSeconds: +this.calmSeconds.toFixed(2),
-                    longestCalmSeconds: +Math.max(this.longestCalmSeconds,
-                        this.currentCalmSeconds).toFixed(2),
-                    calmWindows: this.calmWindows +
-                        (this.currentCalmSeconds >= TEMPO_RUN_THRESHOLDS.calmWindowSeconds ? 1 : 0),
-                    reliefEntries: this.reliefEntries
-                };
-            }
-        }
-
-
-        // MLP1: Genuine online SGD learning, but predictions have NO spawn authority.
-        // Learn P(at least one actual HP-loss hit in the next 8 game seconds)
-        // from a feature snapshot taken BEFORE observing the outcome.
-        const PLAYER_LEARNER_SAVE_KEY = 'neonCekirdek.playerLearner.v1';
-        const PLAYER_LEARNER_VERSION = 1;
-        const PLAYER_LEARNER_WINDOW = 8;
-        const PLAYER_LEARNER_FEATURES = Object.freeze([
-            'bias', 'nearEnemies', 'nearProjectiles', 'hpDeficit',
-            'currentStress', 'mastery', 'previousKills', 'previousHits'
-        ]);
-        const PLAYER_LEARNER_CHASSIS = Object.freeze(['VANGUARD', 'PHANTOM', 'TITAN']);
-        const clampLearner01 = v => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
-        function isPlayerLearningEnabled(search = '') {
-            return /(?:^|[?&])learn=on(?:&|$)/i.test(search);
-        }
-        function validPlayerLearnerState(row) {
-            if (!row || typeof row !== 'object' || !Array.isArray(row.weights) ||
-                row.weights.length !== PLAYER_LEARNER_FEATURES.length ||
-                !row.weights.every(n=>typeof n==='number' && Number.isFinite(n) && Math.abs(n)<=8))
-                return false;
-            if (!Number.isSafeInteger(row.samples) || row.samples<0 || row.samples>1000000 ||
-                !Number.isSafeInteger(row.positives) || row.positives<0 || row.positives>row.samples)
-                return false;
-            for(const key of ['modelBrier','baselineBrier']) {
-                if (typeof row[key]!=='number' || !Number.isFinite(row[key]) ||
-                    row[key]<0 || row[key]>row.samples+.0001) return false;
-            }
-            return true;
-        }
-        function readPlayerLearnerBank() {
-            const models={};
-            try {
-                const row=JSON.parse(localStorage.getItem(PLAYER_LEARNER_SAVE_KEY)||'null');
-                if (row?.version!==PLAYER_LEARNER_VERSION || !row.models ||
-                    typeof row.models!=='object') return models;
-                for (const chassis of PLAYER_LEARNER_CHASSIS) {
-                    if (validPlayerLearnerState(row.models[chassis]))
-                        models[chassis]={
-                            weights:[...row.models[chassis].weights],
-                            samples:row.models[chassis].samples,
-                            positives:row.models[chassis].positives,
-                            modelBrier:row.models[chassis].modelBrier,
-                            baselineBrier:row.models[chassis].baselineBrier
-                        };
-                }
-            } catch (e) { /* Invalid or blocked storage starts a clean learner. */ }
-            return models;
-        }
-        class OnlinePlayerLearner {
-            constructor(chassis, enabled = false) {
-                this.chassis = PLAYER_LEARNER_CHASSIS.includes(chassis) ? chassis : 'VANGUARD';
-                this.enabled = enabled;
-                const stored=enabled?readPlayerLearnerBank()[this.chassis]:null;
-                this.weights=stored?[...stored.weights]:new Array(PLAYER_LEARNER_FEATURES.length).fill(0);
-                this.samples=stored?.samples||0;
-                this.positives=stored?.positives||0;
-                this.modelBrier=stored?.modelBrier||0;
-                this.baselineBrier=stored?.baselineBrier||0;
-                this.startSamples=this.samples;
-                this.pending=null;
-                this.previousKills=0;
-                this.previousHits=0;
-                this.skippedWindows=0;
-                this.lastPrediction=null;
-                this.lastOutcome=null;
-            }
-            features(actor, observer) {
-                return [
-                    1,
-                    clampLearner01(observer.nearbyEnemies/12),
-                    clampLearner01(observer.nearbyProjectiles/8),
-                    clampLearner01(1-actor.hp/Math.max(1,actor.maxHp)),
-                    clampLearner01(observer.intensity/100),
-                    clampLearner01(observer.mastery/100),
-                    clampLearner01(this.previousKills/20),
-                    clampLearner01(this.previousHits/3)
-                ];
-            }
-            predict(features) {
-                let z=0;
-                for(let i=0;i<this.weights.length;i++) z+=this.weights[i]*features[i];
-                z=Math.max(-12,Math.min(12,z));
-                return 1/(1+Math.exp(-z));
-            }
-            train(features, outcome) {
-                if (!Array.isArray(features) || features.length!==this.weights.length ||
-                    !features.every(v=>typeof v==='number' && Number.isFinite(v) && v>=0 && v<=1) ||
-                    (outcome!==0 && outcome!==1)) return false;
-                // Evaluate BEFORE updating, against a simple prior-prevalence baseline.
-                const probability=this.predict(features);
-                const baseline=(this.positives+1)/(this.samples+2);
-                this.modelBrier=Math.min(1000000,this.modelBrier+(probability-outcome)**2);
-                this.baselineBrier=Math.min(1000000,this.baselineBrier+(baseline-outcome)**2);
-                const rate=.18/Math.sqrt(1+this.samples/24);
-                for(let i=0;i<this.weights.length;i++) {
-                    const next=this.weights[i]*(1-rate*.002)+rate*(outcome-probability)*features[i];
-                    this.weights[i]=Math.max(-8,Math.min(8,next));
-                }
-                this.samples=Math.min(1000000,this.samples+1);
-                this.positives=Math.min(this.samples,this.positives+outcome);
-                this.lastOutcome=outcome;
-                return true;
-            }
-            observe(dt, seconds, actor, observer, bossLocked, hitCount, killCount, bossAt) {
-                if (!this.enabled || !(dt>0) || !actor) return;
-                // A boss warning/encounter interrupts the label window. Do not
-                // train on boss outcomes or pretend a truncated window is valid.
-                if (bossLocked || actor.hp<=0 || bossAt-seconds<=PLAYER_LEARNER_WINDOW+.2) {
-                    if (this.pending) this.skippedWindows++;
-                    this.pending=null;
-                    this.previousKills=0;
-                    this.previousHits=0;
-                    return;
-                }
-                if (!this.pending) {
-                    const features=this.features(actor,observer);
-                    this.lastPrediction=this.predict(features);
-                    this.pending={started:seconds,hits:hitCount,kills:killCount,features};
-                    return;
-                }
-                if (seconds-this.pending.started<PLAYER_LEARNER_WINDOW) return;
-                const finished=this.pending;
-                const hits=Math.max(0,hitCount-finished.hits);
-                this.previousHits=hits;
-                this.previousKills=Math.max(0,killCount-finished.kills);
-                this.train(finished.features,hits>0?1:0);
-                // The next window is a new prediction, not retroactive leakage.
-                const features=this.features(actor,observer);
-                this.lastPrediction=this.predict(features);
-                this.pending={started:seconds,hits:hitCount,kills:killCount,features};
-            }
-            exportState() {
-                return {
-                    weights:[...this.weights], samples:this.samples,
-                    positives:this.positives, modelBrier:this.modelBrier,
-                    baselineBrier:this.baselineBrier
-                };
-            }
-            getSnapshot() {
-                const ready=this.samples>=24 && this.positives>=4 &&
-                    this.samples-this.positives>=4;
-                return {
-                    enabled:this.enabled,
-                    mode:this.enabled?'online-training-shadow':'off',
-                    learnsFrom:'actual HP-loss hit in next 8 game seconds',
-                    chassis:this.chassis,
-                    trainedWindows:this.samples,
-                    thisRunWindows:this.samples-this.startSamples,
-                    positiveWindows:this.positives,
-                    skippedWindows:this.skippedWindows,
-                    readyForEvaluation:ready,
-                    // These are pre-update Brier scores, not retrospective training accuracy.
-                    preUpdateBrier:this.samples?+(this.modelBrier/this.samples).toFixed(4):null,
-                    baselineBrier:this.samples?+(this.baselineBrier/this.samples).toFixed(4):null,
-                    predictedRisk:this.lastPrediction===null?null:
-                        +this.lastPrediction.toFixed(3),
-                    previousOutcome:this.lastOutcome,
-                    weights:[...this.weights],
-                    featureNames:[...PLAYER_LEARNER_FEATURES],
-                    controlsSpawns:false
-                };
-            }
-            save() {
-                if (!this.enabled || this.samples<=this.startSamples) return false;
-                const models=readPlayerLearnerBank();
-                models[this.chassis]=this.exportState();
-                try {
-                    localStorage.setItem(PLAYER_LEARNER_SAVE_KEY,
-                        JSON.stringify({version:PLAYER_LEARNER_VERSION,models}));
-                    this.startSamples=this.samples;
-                    return true;
-                } catch (e) { return false; }
-            }
-        }
-
         class CombatDirector {
             constructor() {
                 this.tokens = 4;
-                this.intensityObserver = new AdaptiveTempoObserver();
-                this.tempoRunMetrics = new TempoRunMetrics();
-                this.playerLearner = new OnlinePlayerLearner(
-                    player?.chassis || selectedChassis,
-                    isPlayerLearningEnabled(window.location?.search || ''));
-                this.tempoMode = getTempoMode(window.location?.search || '');
-                this.adaptivePhase = null;
-                this.baseProfile = null;
-                this.tempoPhaseSwitches = 0;
-                this.tempoPhaseSeconds = { BUILDUP: 0, PRESSURE: 0, CRISIS: 0, RECOVERY: 0 };
                 this.afterBossUntil = -Infinity;
                 this.lastEliteChestAt = -Infinity;
                 this.lastBossCueEncounter = 0;
@@ -10273,35 +9789,15 @@
             update(dt) {
                 const hpFraction = player ? player.hp / Math.max(1, player.maxHp) : 1;
                 const previous = this.profile.phase;
-                // Always calculate the old director profile separately so
-                // special encounters / arena events keep their legacy eligibility.
-                const density = arenaDensityScale();
-                this.baseProfile = scaleDirectorProfileForArena(getDirectorProfile(totalTime, wave,
-                    activeBosses.length, nextBossTime, this.afterBossUntil, hpFraction), density);
+                this.profile = scaleDirectorProfileForArena(getDirectorProfile(totalTime, wave,
+                    activeBosses.length, nextBossTime, this.afterBossUntil, hpFraction));
                 const bossLocked = activeBosses.some(b => !b.dead) ||
                     nextBossTime - totalTime <= 3.8 || totalTime < this.afterBossUntil;
-                this.intensityObserver.observe(dt, totalTime, player, enemies,
-                    enemyProjectiles, bossLocked);
-                this.playerLearner.observe(dt,totalTime,player,this.intensityObserver,
-                    bossLocked,runMetrics.hitsTaken,kills,nextBossTime);
-                const proposal = this.tempoMode === 'adaptive' && !bossLocked ?
-                    mapAdaptiveStageToDirectorPhase(
-                        this.intensityObserver.previewPhase, this.intensityObserver.previewAge) : null;
-                this.adaptivePhase = proposal;
-                this.profile = proposal ? scaleDirectorProfileForArena(getDirectorProfile(totalTime,
-                    wave, activeBosses.length, nextBossTime, this.afterBossUntil, hpFraction, proposal),
-                    density) : this.baseProfile;
-                // Normal spawns use the selected profile. The existing shared
-                // token budget and hard caps still apply; no extra spawn paths.
+                // The shared token budget and hard caps apply to every spawn.
                 this.tokens = Math.min(14, this.tokens + dt * this.profile.tokenRate);
                 this.observeTacticalMotion(dt, bossLocked);
                 this.updateSpecialEncounter(dt);
                 this.updateArenaEvent(dt);
-                if (!bossLocked && this.tempoPhaseSeconds[this.profile.phase] !== undefined)
-                    this.tempoPhaseSeconds[this.profile.phase] += dt;
-                this.tempoRunMetrics.observe(dt, this.intensityObserver,
-                    this.profile.phase, bossLocked);
-                if (!bossLocked && this.profile.phase !== previous) this.tempoPhaseSwitches++;
                 if (this.profile.phase !== previous && this.profile.phase !== 'BOSS' &&
                     this.profile.phase !== 'WARNING') {
                     createFloatingText(player.x, player.y - 52,
@@ -10368,7 +9864,7 @@
                 }
                 if (totalTime < this.nextArenaAt || bossApproaching ||
                     this.pendingEncounter || !['BUILDUP', 'PRESSURE'].includes(
-                        (this.baseProfile || this.profile).phase) ||
+                        this.profile.phase) ||
                     wave < ARENA_EVENT_RULES.firstWave) return;
                 if (!isSystemUnlocked('arenaEvents')) return;
                 if (!claimSystemIntro('arenaEvents')) return;
@@ -10459,13 +9955,10 @@
                 if(bucket) bucket.cancelled++;
             }
             updateSpecialEncounter(dt) {
-                const specialProfile = this.baseProfile || this.profile;
-                // Keep classic eligibility windows and never inject a brand-new
-                // raid during adaptive RELAX/FADE. Already telegraphed raids
-                // still resolve as promised unless original boss rules cancel.
-                const inCombat = (specialProfile.phase === 'PRESSURE' || specialProfile.phase === 'CRISIS') &&
-                    (this.tempoMode !== 'adaptive' ||
-                     this.profile.phase === 'PRESSURE' || this.profile.phase === 'CRISIS');
+                const specialProfile = this.profile;
+                // Raids start only in combat phases. Already telegraphed raids
+                // still resolve as promised unless the boss rules cancel them.
+                const inCombat = specialProfile.phase === 'PRESSURE' || specialProfile.phase === 'CRISIS';
                 const bossImminent = activeBosses.length > 0 || nextBossTime - totalTime < 7;
                 if (this.pendingEncounter) {
                     if (bossImminent || specialProfile.phase === 'RECOVERY' || specialProfile.phase === 'WARNING' ||
@@ -10508,7 +10001,7 @@
                 for (const unit of plan.units) {
                     const cost = ENEMY_THREAT_COST[unit.type];
                     if (this.tokens < cost || enemies.length >= Math.min(MAX_ACTIVE_ENEMIES,
-                        (this.baseProfile || this.profile).cap)) break;
+                        this.profile.cap)) break;
                     const pos = formationEdgePoint(unit.side, unit.slot, unit.count);
                     if (spawnEnemy(false, unit.type, false, pos, {
                         formationId: plan.formationId,
@@ -10653,17 +10146,6 @@
                     timeSeconds: Math.round(totalTime), wave,
                     contract: getActiveNeonContract().id,
                     phase: this.profile.phase, theme: this.profile.theme,
-                    tempoMode: this.tempoMode,
-                    basePhase: (this.baseProfile || this.profile).phase,
-                    adaptivePhase: this.adaptivePhase,
-                    tempoPhaseSwitches: this.tempoPhaseSwitches,
-                    tempoPhaseSeconds: { ...this.tempoPhaseSeconds },
-                    tempoRunMetrics: this.tempoRunMetrics.getSnapshot(),
-                    playerLearner: this.playerLearner.getSnapshot(),
-                    adaptiveTempo: {
-                        ...this.intensityObserver.getSnapshot(),
-                        mode: this.tempoMode === 'adaptive' ? 'driving-spawns' : 'observe-only'
-                    },
                     threatTokens: Math.round(this.tokens * 10) / 10,
                     pendingEncounter: this.pendingEncounter ? this.pendingEncounter.type : null,
                     tacticalPlacement: { ...this.lastTacticalDecision },
@@ -13309,98 +12791,14 @@
         }
 
         const RUN_REPORT_VERSION=1;
-        // Only compact anonymized summaries survive page reloads. No complete
-        // builds, saved economy, RNG state, identifiers or network telemetry.
-        const TEMPO_COMPARE_SAVE_KEY = 'neonCekirdek.tempoCompare.v1';
-        const TEMPO_COMPARE_VERSION = 1;
-        function safeTempoNumber(value, max) {
-            return typeof value === 'number' && Number.isFinite(value) &&
-                value >= 0 && value <= max ? value : 0;
-        }
-        function sanitizeTempoComparisonRun(row, mode) {
-            if (!row || typeof row !== 'object' || row.mode !== mode ||
-                !['VANGUARD','PHANTOM','TITAN'].includes(row.chassis) ||
-                !['high','medium','low'].includes(row.graphicsQuality))
-                return null;
-            const numberFields = {
-                durationSeconds: 86400, wave: 100000, kills: 10000000,
-                damageTaken: 10000000, bossKills: 100000, specialEncounters: 100000,
-                averageStress: 100, peakStress: 100, averageMastery: 100,
-                stressPeaks: 100000, highStressSeconds: 86400,
-                calmSeconds: 86400, longestCalmSeconds: 86400,
-                calmWindows: 100000, reliefEntries: 100000,
-                crisisSeconds: 86400, recoverySeconds: 86400,
-                normalSeconds: 86400, bossProtectedSeconds: 86400
-            };
-            for (const [key,max] of Object.entries(numberFields)) {
-                if (typeof row[key] !== 'number' ||
-                    !Number.isFinite(row[key]) || row[key] < 0 || row[key] > max)
-                    return null;
+        // Odak 5.16 · the experimental tempo comparison and player learner are gone;
+        // any old records they left are removed at load.
+        const RETIRED_SAVE_KEYS = Object.freeze(['neonCekirdek.playerLearner.v1', 'neonCekirdek.tempoCompare.v1']);
+        function dropRetiredSaveKeys() {
+            for (const key of RETIRED_SAVE_KEYS) {
+                try { localStorage.removeItem(key); } catch (e) { /* storage may be blocked */ }
             }
-            if (row.wave < 1 || row.highStressSeconds > row.normalSeconds + .1 ||
-                row.calmSeconds > row.normalSeconds + .1 ||
-                row.longestCalmSeconds > row.calmSeconds + .1 ||
-                row.crisisSeconds + row.recoverySeconds > row.normalSeconds + .1)
-                return null;
-            const safe={mode,chassis:row.chassis,graphicsQuality:row.graphicsQuality};
-            for (const key of Object.keys(numberFields)) safe[key]=row[key];
-            return safe;
         }
-        function readTempoComparison() {
-            const empty={classic:null,adaptive:null};
-            try {
-                const raw=localStorage.getItem(TEMPO_COMPARE_SAVE_KEY);
-                if (!raw) return empty;
-                const data=JSON.parse(raw);
-                if (!data || data.version!==TEMPO_COMPARE_VERSION) return empty;
-                return {
-                    classic:sanitizeTempoComparisonRun(data.classic,'classic'),
-                    adaptive:sanitizeTempoComparisonRun(data.adaptive,'adaptive')
-                };
-            } catch (e) { return empty; }
-        }
-        function makeTempoComparisonRun(report) {
-            if (!report?.tempo) return null;
-            const metrics=report.tempo.metrics;
-            return sanitizeTempoComparisonRun({
-                mode:report.tempo.mode,chassis:report.chassis,
-                graphicsQuality:graphicsQuality,
-                durationSeconds:report.result.durationSeconds,
-                wave:report.result.wave,kills:report.result.kills,
-                damageTaken:report.combat.damageTaken,
-                bossKills:report.combat.bossKills,
-                specialEncounters:report.combat.specialEncounters,
-                averageStress:metrics.averageStress,
-                peakStress:metrics.peakStress,
-                averageMastery:metrics.averageMastery,
-                stressPeaks:metrics.stressPeaks,
-                highStressSeconds:metrics.highStressSeconds,
-                calmSeconds:metrics.calmSeconds,
-                longestCalmSeconds:metrics.longestCalmSeconds,
-                calmWindows:metrics.calmWindows,
-                reliefEntries:metrics.reliefEntries,
-                crisisSeconds:report.tempo.phases.CRISIS,
-                recoverySeconds:report.tempo.phases.RECOVERY,
-                normalSeconds:metrics.normalSeconds,
-                bossProtectedSeconds:metrics.bossProtectedSeconds
-            },report.tempo.mode);
-        }
-        function saveTempoComparisonRun(report) {
-            const current=makeTempoComparisonRun(report);
-            if (!current) return false;
-            const stored=readTempoComparison();
-            stored[current.mode]=current;
-            try {
-                localStorage.setItem(TEMPO_COMPARE_SAVE_KEY,
-                    JSON.stringify({version:TEMPO_COMPARE_VERSION,...stored}));
-                return true;
-            } catch (e) { return false; }
-        }
-        window.getNeonTempoComparison=()=>readTempoComparison();
-        window.clearNeonTempoComparison=()=>{
-            try { localStorage.setItem(TEMPO_COMPARE_SAVE_KEY,'');return true; }
-            catch (e) { return false; }
-        };
 
         function snapshotEndOfRun(reason='CORE_DEPLETED',isNewRecord=false){
             if(finalRunReport) return finalRunReport;
@@ -13438,13 +12836,7 @@
                     expired:director.arenaExpired,cancelled:director.arenaCancelled,
                     byKind:director.arenaByKind}:{offered:0,completed:0,expired:0,cancelled:0,byKind:{}},
                 encounters:director?{bossByPattern:director.bossByPattern,
-                    specialByKind:director.specialByKind}:{bossByPattern:{},specialByKind:{}},
-                tempo:director?{
-                    mode:director.tempoMode,
-                    metrics:director.tempoRunMetrics,
-                    phases:director.tempoPhaseSeconds,
-                    switches:director.tempoPhaseSwitches
-                }:null
+                    specialByKind:director.specialByKind}:{bossByPattern:{},specialByKind:{}}
             };
             // A serialization boundary prevents later game mutations and UI references
             // from ever modifying the finished run. Reports remain in this session only.
@@ -13455,11 +12847,11 @@
         window.getNeonFinalReport=()=>finalRunReport?
             JSON.parse(JSON.stringify(finalRunReport)):null;
 
-        const REPORT_TABS=Object.freeze(['summary','combat','build','economy','objectives','tempo']);
+        const REPORT_TABS=Object.freeze(['summary','combat','build','economy','objectives']);
         const REPORT_TAB_IDS=Object.freeze({
             summary:'reportSummaryContent',combat:'reportCombatContent',
             build:'reportBuildContent',economy:'reportEconomyContent',
-            objectives:'reportObjectivesContent',tempo:'reportTempoContent'
+            objectives:'reportObjectivesContent'
         });
         const REPORT_EFFECT_NAMES=Object.freeze({
             railShots:'Ray atışı',clusterBursts:'Küme patlaması',
@@ -13548,73 +12940,6 @@
                 detail:'Bu koşu temel savaş verilerini topladı. Bir sonraki koşuda daha fazla görev, modül ve arena olayını keşfedebilirsin.'});
             return notes.slice(0,3);
         }
-        function renderTempoReportMarkup(report) {
-            if (!report?.tempo)
-                return reportEmpty('Bu koşu için tempo verisi bulunmuyor.');
-            const m=report.tempo.metrics;
-            const phases=report.tempo.phases;
-            const mode=report.tempo.mode==='adaptive'?'ADAPTİF':'KLASİK';
-            const normal=Math.max(1,m.normalSeconds);
-            const pct=seconds=>Math.round(100*seconds/normal)+'%';
-            const current=reportBlock('BU KOŞUNUN RİTMİ','fa-wave-square',
-                reportPair('Aktif düzen',mode)+
-                reportPair('Ortalama stres',m.averageStress+' / 100')+
-                reportPair('Stres zirvesi',m.peakStress+' / 100')+
-                reportPair('Zirve sayısı',m.stressPeaks)+
-                reportPair('Yüksek stres süresi',Math.round(m.highStressSeconds)+' sn')+
-                reportPair('Ortalama hâkimiyet',m.averageMastery+' / 100')+
-                reportPair('Yakın tehditsiz sakin süre',Math.round(m.calmSeconds)+' sn')+
-                reportPair('En uzun sakin aralık',Math.round(m.longestCalmSeconds)+' sn')+
-                reportPair('8+ sn sakin aralık',m.calmWindows))+
-                reportBlock('FAZ ZAMANLARI','fa-chart-pie',
-                    reportPair('Hazırlık',Math.round(phases.BUILDUP)+' sn')+
-                    reportPair('Baskı',Math.round(phases.PRESSURE)+' sn')+
-                    reportPair('Kriz',Math.round(phases.CRISIS)+' sn · '+pct(phases.CRISIS))+
-                    reportPair('Nefes',Math.round(phases.RECOVERY)+' sn · '+pct(phases.RECOVERY))+
-                    reportPair('Normal savaş ölçümü',Math.round(m.normalSeconds)+' sn')+
-                    reportPair('Boss korumalı süre',Math.round(m.bossProtectedSeconds)+' sn')+
-                    reportPair('Nefes evresine giriş',m.reliefEntries));
-            const saved=readTempoComparison();
-            // Odak 5.15 · the adaptive mode is a test option; a player who never ran it
-            // sees this run's rhythm only, not a comparison they cannot complete.
-            if(report.tempo.mode!=='adaptive'&&!saved.adaptive)
-                return '<div class="report-grid">'+current+'</div>';
-            let comparison=reportEmpty('Karşılaştırma için her iki modda birer tamamlanmış koşu gerekiyor.');
-            if(saved.classic&&saved.adaptive){
-                const a=saved.adaptive,c=saved.classic;
-                const comparable=a.chassis===c.chassis &&
-                    a.graphicsQuality===c.graphicsQuality &&
-                    Math.min(a.durationSeconds,c.durationSeconds)>=120;
-                const format=row=>
-                    reportPair('Süre',Math.round(row.durationSeconds)+' sn')+
-                    reportPair('Dalga',row.wave)+
-                    reportPair('İmha / dk',((row.kills/Math.max(1,row.durationSeconds))*60).toFixed(1))+
-                    reportPair('HP kaybı / dk',((row.damageTaken/Math.max(1,row.durationSeconds))*60).toFixed(1))+
-                    reportPair('Ortalama stres',row.averageStress)+
-                    reportPair('Kriz oranı',Math.round(100*row.crisisSeconds/Math.max(1,row.normalSeconds))+'%')+
-                    reportPair('Nefes oranı',Math.round(100*row.recoverySeconds/Math.max(1,row.normalSeconds))+'%')+
-                    reportPair('Sakin aralık sayısı',row.calmWindows)+
-                    reportPair('Özel baskın',row.specialEncounters)+
-                    reportPair('Boss imhası',row.bossKills);
-                comparison=reportBlock('KLASİK · SON KOŞU','fa-clock',format(c))+
-                    reportBlock('ADAPTİF · SON KOŞU','fa-bolt',format(a))+
-                    reportBlock('KARŞILAŞTIRMA GÜVENİ','fa-scale-balanced',
-                        reportPair('Şasi aynı mı',a.chassis===c.chassis?'EVET':'HAYIR')+
-                        reportPair('Grafik kalitesi aynı mı',
-                            a.graphicsQuality===c.graphicsQuality?'EVET':'HAYIR')+
-                        reportPair('İki koşu da 2+ dk mı',
-                            Math.min(a.durationSeconds,c.durationSeconds)>=120?'EVET':'HAYIR')+
-                        '<p class="report-micro">'+(comparable?
-                        'Benzer koşul kontrolü sağlandı; farklı build, şans ve oyuncu kararları sonucu etkiler. Tek çift sonuç, daha eğlenceli olduğunu kanıtlamaz.':
-                        'Koşullar farklı veya süre kısa. Sayılar görülebilir fakat sonuçlardan denge/oyuncu memnuniyeti hükmü çıkarılmamalı.')+
-                        '</p>',true);
-            }
-            return '<div class="report-grid">'+current+
-                reportBlock('SON KLASİK / ADAPTİF KOŞU','fa-code-compare',
-                    '<p class="report-micro">Her modun son tamamlanan koşusunun kısa özeti yalnızca bu tarayıcıda tutulur. Tam oyun raporu veya kişisel veri gönderilmez. Bu ölçümler oyun keyfi/retention kanıtı değildir.</p>',true)+
-                comparison+'</div>';
-        }
-
         function renderRunReport(r=finalRunReport){
             if(!r) return false;
             renderUnlockAnnouncement(lastRunUnlock);
@@ -13774,7 +13099,6 @@
                             reportPair(id.replaceAll('_',' '),reportNumber(n))).join(''):
                         reportEmpty('Bu koşuda henüz boss karşılaşması kaydedilmedi.'),true);
             el('reportObjectivesContent').innerHTML='<div class="report-grid">'+objectives+'</div>';
-            el('reportTempoContent').innerHTML=renderTempoReportMarkup(r);
             showRunReportTab('summary');
             return true;
         }
@@ -13818,11 +13142,6 @@
                 gold: sessionGold, chassis: player?.chassis || selectedChassis };
             saveMetaProgress();
             snapshotEndOfRun(reason,isNewRecord);
-            // Once per completed run; no writes during combat or card choices.
-            saveTempoComparisonRun(finalRunReport);
-            // Training updates occurred during completed normal combat windows;
-            // save the tiny weight vector only at end of a finished run.
-            combatDirector?.playerLearner.save();
 
             document.getElementById('newRecordBadge').classList.toggle('hidden', !isNewRecord && !dailyRunActive);
             const recordText = document.getElementById('newRecordText');
@@ -14637,19 +13956,6 @@
             return records;
         };
         window.getNeonRunDiagnostics = () => combatDirector ? combatDirector.getDiagnostics() : null;
-        window.getNeonPlayerLearner = () => combatDirector ?
-            combatDirector.playerLearner.getSnapshot() : null;
-        window.clearNeonPlayerLearner = () => {
-            try {
-                localStorage.setItem(PLAYER_LEARNER_SAVE_KEY,'');
-                if (combatDirector) combatDirector.playerLearner =
-                    new OnlinePlayerLearner(player?.chassis||selectedChassis,
-                        combatDirector.playerLearner.enabled);
-                return true;
-            } catch (e) { return false; }
-        };
-        window.getNeonIntensityHistory = () => combatDirector ?
-            combatDirector.intensityObserver.getHistory() : [];
         window.getNeonEconomySnapshot = () => combatDirector ? combatDirector.getEconomySnapshot() : null;
         window.getNeonBastionStatus = () => getBastionStatus();
         window.getNeonPhaseEcho = () => getPhaseEchoSnapshot();
@@ -14667,6 +13973,7 @@
             effects: { ...player.buildStats }
         } : null;
         window.onload = function () {
+            dropRetiredSaveKeys();
             loadMetaProgress();
             loadContractMastery();
             loadGraphicsQuality();

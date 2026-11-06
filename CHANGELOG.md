@@ -1,5 +1,9 @@
 # Değişiklik Günlüğü
 
+## Odak 5.16 · Deneysel tempo temizliği
+- Normal oyunda hiçbir etkisi olmadan her karede çalışan deneysel tempo ölçümü ve öğrenen model kaldırıldı (yaklaşık 700 satır).
+- Koşu raporundaki RİTİM sekmesi kaldırıldı; rapor artık beş sekme. Eski deney kayıtları tarayıcıdan bir kez temizlenir.
+
 ## Odak 5.15 · Mantık düzeltmeleri
 - Yayındaki sayfada adres çubuğuna ?wave veya ?unlock=all yazmak artık dalga, kilit ya da kayıt atlatmaz; bu seçenekler yalnızca yerel test içindir.
 - Koşu raporundaki RİTİM sekmesi, oynanamayan bir mod karşılaştırması istemek yerine yalnızca bu koşunun ritmini gösterir.

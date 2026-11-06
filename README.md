@@ -37,12 +37,10 @@ Open **http://127.0.0.1:8765/showcase.html** for the presentation or **http://12
 
 | Query | Behavior |
 |---|---|
-| No query or `?tempo=classic` | Default classic tempo |
-| `?tempo=adaptive` | Optional local adaptive normal-spawn pacing |
-| `?learn=on` | Observation-only shadow player learner |
+| `?wave=N`, `?unlock=all`, `?seed=N` | Local playtest options; ignored on a published page |
 | `?perf=1` | Opt-in performance diagnostics (desktop F3) |
 
-Gold, meta progression, settings and optional learning/tempo comparison records are stored in browser `localStorage`. They are **not synced to the cloud**. The menu's JSON **YEDEK AL / YEDEK YÜKLE** feature exports and restores meta progression, contract mastery and graphics configuration; learning model and comparison records are not part of that backup.
+Gold, meta progression and settings are stored in browser `localStorage`. They are **not synced to the cloud**. The menu's JSON **YEDEK AL / YEDEK YÜKLE** feature exports and restores meta progression, contract mastery and graphics configuration.
 
 ## Engineering and verification
 
@@ -88,6 +86,6 @@ For technical discussion or editorial enquiries, use the repository's [GitHub Is
 
 **Geliştirici/incelemeci için:** [Oyun testleri](tests/) · [CI](.github/workflows/neon-smoke.yml) · [Gerçek cihaz QA sınırları](docs/DEVICE_QA.md) · [Basın kiti](docs/PRESSKIT.md) · [Geliştirme belgeleri](docs/).
 
-**Kayıtlar:** Kalıcı ilerleme, altın ve ayarlar tarayıcıda saklanır. Menüdeki YEDEK AL / YEDEK YÜKLE JSON yedeğiyle taşınabilir. Oyuncu öğrenen model, açıkça etkinleştirilen gözlemsel/gölge moddur; spawn/ödül üzerinde karar vermez.
+**Kayıtlar:** Kalıcı ilerleme, altın ve ayarlar tarayıcıda saklanır. Menüdeki YEDEK AL / YEDEK YÜKLE JSON yedeğiyle taşınabilir.
 
 Geliştirme yol haritası [tarihsel bir belge](Neon_Cekirdek_Gelistirme_Yol_Haritasi.txt) niteliğindedir. Güncel özellikler için kaynak kod ve doğrulanmış `main` CI kullanılmalıdır. Proje bir ticari çıkış veya uzun süreli cihaz performans sertifikası olarak sunulmamaktadır.
