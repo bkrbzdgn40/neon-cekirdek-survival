@@ -1,5 +1,9 @@
 # Değişiklik Günlüğü
 
+## Odak 5.18 · Sonsuz laboratuvar
+- Laboratuvarda Başlangıç Hasarı ve Maksimum Zırh tavandan sonra ileri kademe satar: her biri +%1 hasar ya da +4 can. İlki 2.500 altın, her biri %15 daha pahalı.
+- Hız ve Altın Çarpanı tavanda kalır. İleri kademeler yedekle taşınır; koşu sonundaki hedef kartı sıradaki ileri kademeyi gösterir.
+
 ## Odak 5.17 · Eser kademeleri
 - Sahip olduğun bir eser boss sandığında yeniden çıkabilir ve II, III kademeye yükselir; kart neyin değiştiğini gösterir (örn. Altın Kan: 2 can → 3 can).
 - Bütün eserler III olduktan sonra boss sandığı boşa gitmez: 250 altın ve canının %25'ini verir.
