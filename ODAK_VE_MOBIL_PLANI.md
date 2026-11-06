@@ -545,6 +545,9 @@ Gameplay V2 deneyi kaldırıldı: stres gözlemcisi, ?tempo=adaptive, ?learn=on 
 ### - [x] 5.17 Eser kademeleri
 Sahip olunan bir eser boss sandığında yeniden çıkabilir ve II, III kademeye yükselir (8 eser × 3 = 24 seçim). Kart değişimi "2 can → 3 can" diye gösterir; modül çubuğunda kademe yazar. Bütün eserler III olunca boss ve perde sandığı eser yerine 250 altın ve %25 can verir.
 
+### - [x] 5.18 Sonsuz laboratuvar
+Başlangıç Hasarı ve Maksimum Zırh 10. kademeden sonra ileri kademe satar: her biri +%1 hasar ya da +4 can, ilki 2.500 altın, sonrakiler %15 pahalı. Hız ve Altın Çarpanı tavanda kalır. İleri kademeler kayıtta ve yedekte tutulur; eski kayıtlar 0 ile başlar. Rapor hedefi kostümlerden sonra ileri kademeyi gösterir.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

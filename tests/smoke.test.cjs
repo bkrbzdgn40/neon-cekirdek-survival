@@ -6976,7 +6976,7 @@ test('Odak 3.7 backups carry owned content and reject unknown ids', () => {
 });
 
 // Odak 5.2 · after the lab the goal points at the cheapest costume, then at the record.
-test('Odak 3.8 next goal walks collection, then lab, then costumes, then the record', () => {
+test('Odak 3.8 next goal walks collection, then lab, then costumes, then overclock tiers, then the record', () => {
   const { run } = setup({}, { unlockAll: false });
   const x = JSON.parse(run(`(()=>{
     savedMaxWave=10;const out=[];totalGold=0;out.push(getMenuNextGoal());
@@ -6984,6 +6984,7 @@ test('Odak 3.8 next goal walks collection, then lab, then costumes, then the rec
     CONTENT_UNLOCKS.forEach(c=>ownedContent.add(c.id));out.push(getMenuNextGoal());
     META_SHOP_ITEMS.forEach(i=>metaUpgrades[i.key]=i.maxLevel);out.push(getMenuNextGoal());
     COSMETICS.forEach(c=>ownedCosmetics.add(c.id));out.push(getMenuNextGoal());
+    metaUpgrades.baseDamagePlus=metaUpgrades.maxHpPlus=LAB_OVERCLOCK_PRICE.maxLevel;out.push(getMenuNextGoal());
     return JSON.stringify(out.map(g=>({kind:g.kind,id:g.id,ready:g.ready})));})()`));
   assert.deepEqual(x[0], { kind: 'content', id: 'coolant', ready: false });
   // With 1000 gold the cheapest locked item is affordable, so the card says it is ready.
@@ -6991,7 +6992,8 @@ test('Odak 3.8 next goal walks collection, then lab, then costumes, then the rec
   assert.equal(x[1].ready, true);
   assert.equal(x[2].kind, 'lab');
   assert.deepEqual(x[3], { kind: 'cosmetic', id: 'core_gold', ready: true });
-  assert.equal(x[4].kind, 'record');
+  assert.deepEqual(x[4], { kind: 'lab', id: 'baseDamage', ready: false });
+  assert.equal(x[5].kind, 'record');
 });
 
 test('Odak 3.8 the last run summary survives a reload and ignores broken saves', () => {
@@ -8328,4 +8330,66 @@ test('Odak 5.17 a locked EMP keeps the Nova Echo out of the relic count', () => 
   assert.equal(x.emp, false);
   assert.equal(x.picks, 21);
   assert.equal(x.offered, false);
+});
+
+test('Odak 5.18 damage and armour sell overclock tiers past the cap; speed and gold stay capped', () => {
+  const store = {};
+  const { run } = setup(store);
+  const x = JSON.parse(run(`(() => {
+    const cards = [];
+    const make = document.createElement; document.createElement = t => { const el = make(t); const btn = el.querySelector(); el.querySelector = () => btn; return el; };
+    const box = document.getElementById('shopItemsContainer'); box.appendChild = c => cards.push(c);
+    for (const i of META_SHOP_ITEMS) metaUpgrades[i.key] = i.maxLevel;
+    totalGold = 100000; cards.length = 0; renderShopItems();
+    const labels = cards.map(c => c.innerHTML);
+    startNewGame(); const plain = { damage: player.damage, maxHp: player.maxHp };
+    // Buy two damage tiers and one armour tier through the shop cards.
+    const click = i => { cards.length = 0; renderShopItems(); cards[i].querySelector('.buy-btn').click(); };
+    const gold0 = totalGold;
+    click(0); click(0); click(1);
+    const spent = gold0 - totalGold;
+    startNewGame(); const boosted = { damage: player.damage, maxHp: player.maxHp };
+    cards.length = 0; renderShopItems();
+    return JSON.stringify({ labels, plain, boosted, spent, levels: { d: metaUpgrades.baseDamagePlus, h: metaUpgrades.maxHpPlus },
+      after: cards.map(c => c.innerHTML), costs: [labOverclockCost(0), labOverclockCost(1), labOverclockCost(19)] });
+  })()`));
+  assert.match(x.labels[0], /2\.500 ALTIN İLE İLERİ KADEME/);
+  assert.match(x.labels[0], /Tavandan sonra ileri kademe: her biri \+%1 hasar\./);
+  assert.match(x.labels[1], /İLERİ KADEME/);
+  for (const i of [2, 3, 4]) assert.match(x.labels[i], /MAKSİMUM SEVİYE/);
+  assert.deepEqual(x.costs, [2500, 2875, 35579]);
+  assert.equal(x.spent, 2500 + 2875 + 2500);
+  assert.deepEqual(x.levels, { d: 2, h: 1 });
+  assert.ok(Math.abs(x.boosted.damage / x.plain.damage - (1 + 0.8 + 0.02) / 1.8) < 1e-9, x.boosted.damage + ' / ' + x.plain.damage);
+  assert.equal(x.boosted.maxHp - x.plain.maxHp, 4);
+  assert.match(x.after[0], /Kademe: 10 \/ 10 · İleri \+2/);
+  // Saved and loaded again.
+  const reloaded = setup(store);
+  assert.deepEqual(JSON.parse(reloaded.run('JSON.stringify({ d: metaUpgrades.baseDamagePlus, h: metaUpgrades.maxHpPlus })')), { d: 2, h: 1 });
+});
+
+test('Odak 5.18 overclock tiers travel with the backup; old backups and saves start at zero', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    for (const i of META_SHOP_ITEMS) metaUpgrades[i.key] = i.maxLevel;
+    metaUpgrades.baseDamagePlus = 7; metaUpgrades.maxHpPlus = 3;
+    const backup = createProgressBackup();
+    const parsed = parseProgressBackup(JSON.stringify(backup));
+    const old = JSON.parse(JSON.stringify(backup)); delete old.progress.upgrades.baseDamagePlus; delete old.progress.upgrades.maxHpPlus;
+    const bad = JSON.parse(JSON.stringify(backup)); bad.progress.upgrades.baseDamagePlus = -1;
+    const huge = JSON.parse(JSON.stringify(backup)); huge.progress.upgrades.maxHpPlus = 5000;
+    return JSON.stringify({ inBackup: backup.progress.upgrades, parsed: parsed.progress.upgrades,
+      old: parseProgressBackup(JSON.stringify(old)).progress.upgrades, bad: parseProgressBackup(JSON.stringify(bad)),
+      huge: parseProgressBackup(JSON.stringify(huge)) });
+  })()`));
+  assert.equal(x.inBackup.baseDamagePlus, 7);
+  assert.equal(x.parsed.baseDamagePlus, 7);
+  assert.equal(x.parsed.maxHpPlus, 3);
+  assert.equal(x.old.baseDamagePlus, 0);
+  assert.equal(x.old.maxHpPlus, 0);
+  assert.equal(x.bad, null);
+  assert.equal(x.huge, null);
+  const stored = { 'neonCekirdek.meta.v1': JSON.stringify({ version: 2, highScore: 0, maxWave: 1, gold: 0, unlockLevel: 0,
+    upgrades: { baseDamage: 10, maxHp: 0, speedDash: 0, greed: 0, defibrillator: 0, baseDamagePlus: 'x' } }) };
+  assert.equal(setup(stored).run('metaUpgrades.baseDamagePlus'), 0, 'a broken level falls back to zero');
 });

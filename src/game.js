@@ -403,7 +403,9 @@
             maxHp: 0,
             speedDash: 0,
             greed: 0,
-            defibrillator: 0
+            defibrillator: 0,
+            baseDamagePlus: 0,
+            maxHpPlus: 0
         };
 
         // A versioned save preserves the original single-file, offline playable build.
@@ -1021,6 +1023,27 @@
         }
         // Odak 4.4 · the lab sells one revive tier now; saves may still hold the old three.
         const META_UPGRADE_LIMITS = { baseDamage: 10, maxHp: 10, speedDash: 8, greed: 8, defibrillator: 1 };
+        // Odak 5.18 · damage and armour go on past their cap in small, ever dearer
+        // steps, so lab gold always has a use. Speed and the gold multiplier stay capped.
+        const LAB_OVERCLOCK = Object.freeze({
+            baseDamage: Object.freeze({ key: 'baseDamagePlus', damage: 0.01, hp: 0, label: '+%1 hasar' }),
+            maxHp: Object.freeze({ key: 'maxHpPlus', damage: 0, hp: 4, label: '+4 can' })
+        });
+        const LAB_OVERCLOCK_PRICE = Object.freeze({ baseCost: 2500, costScale: 1.15, maxLevel: 999 });
+        function labOverclockCost(level) {
+            return Math.round(LAB_OVERCLOCK_PRICE.baseCost * Math.pow(LAB_OVERCLOCK_PRICE.costScale, level));
+        }
+        function labOverclockDamage() {
+            return (metaUpgrades.baseDamagePlus || 0) * LAB_OVERCLOCK.baseDamage.damage;
+        }
+        function labOverclockHp() {
+            return (metaUpgrades.maxHpPlus || 0) * LAB_OVERCLOCK.maxHp.hp;
+        }
+        // A missing value is 0 (older saves); anything else must be a valid level.
+        function parseOverclockLevel(value) {
+            if (value === undefined) return 0;
+            return Number.isSafeInteger(value) && value >= 0 && value <= LAB_OVERCLOCK_PRICE.maxLevel ? value : null;
+        }
         const LEGACY_DEFIBRILLATOR_MAX = 3;
         const DEFIBRILLATOR_PRICE = Object.freeze({ baseCost: 60, costScale: 2.2 });
         // Gold paid for tiers above today's cap, given back once.
@@ -1081,6 +1104,8 @@
                     for (const [key, max] of Object.entries(META_UPGRADE_LIMITS)) {
                         metaUpgrades[key] = safeSaveInteger(data.upgrades[key], metaUpgrades[key], max);
                     }
+                    for (const { key } of Object.values(LAB_OVERCLOCK))
+                        metaUpgrades[key] = parseOverclockLevel(data.upgrades[key]) ?? 0;
                 }
             } catch (error) {
                 // Corrupt saves, disabled storage and file:// privacy restrictions must not block play.
@@ -1166,6 +1191,11 @@
                     if (!Number.isSafeInteger(level) || level < 0 || level > accepted) return null;
                     if (key === 'defibrillator') refund = defibrillatorRefund(level);
                     upgrades[key] = Math.min(level, maximum);
+                }
+                for (const { key } of Object.values(LAB_OVERCLOCK)) {
+                    const level = parseOverclockLevel(data.upgrades[key]);
+                    if (level === null) return null;
+                    upgrades[key] = level;
                 }
                 // Backups exported before v2 carry no unlock tier; migrate like a v1 save.
                 const restoredUnlockLevel = data.version === 1 ?
@@ -1751,8 +1781,8 @@
                 this.chassis = isContentOwned(selectedChassis) ? selectedChassis : 'VANGUARD';
                 this.color = this.chassis === 'PHANTOM' ? '#ff007f' : (this.chassis === 'TITAN' ? '#00ff66' : '#00f3ff');
 
-                const dmgBonus = 1 + metaUpgrades.baseDamage * 0.08;
-                const hpBonus = metaUpgrades.maxHp * 18;
+                const dmgBonus = 1 + metaUpgrades.baseDamage * 0.08 + labOverclockDamage();
+                const hpBonus = metaUpgrades.maxHp * 18 + labOverclockHp();
                 const spdBonus = 1 + metaUpgrades.speedDash * 0.04;
                 const dashCdReduction = 1 - metaUpgrades.speedDash * 0.04;
                 this.greedBonus = 1 + metaUpgrades.greed * GOLD_ECONOMY.greedPerLevel;
@@ -11869,6 +11899,12 @@
             const look = COSMETICS.filter(c => !ownedCosmetics.has(c.id)).sort((a, b) => a.cost - b.cost)[0];
             if (look) return { kind: 'cosmetic', id: look.id, title: look.name, label: 'KOSTÜM',
                 color: look.color, cost: look.cost, ready: totalGold >= look.cost };
+            const plus = META_SHOP_ITEMS.filter(item => LAB_OVERCLOCK[item.key] &&
+                    (metaUpgrades[LAB_OVERCLOCK[item.key].key] || 0) < LAB_OVERCLOCK_PRICE.maxLevel)
+                .map(item => ({ item, cost: labOverclockCost(metaUpgrades[LAB_OVERCLOCK[item.key].key] || 0) }))
+                .sort((a, b) => a.cost - b.cost)[0];
+            if (plus) return { kind: 'lab', id: plus.item.key, title: plus.item.name + ' · İleri kademe', label: 'GELİŞTİRME',
+                color: plus.item.color, cost: plus.cost, ready: totalGold >= plus.cost };
             return { kind: 'record', title: 'Rekorunu geç', label: 'USTALIK', color: '#67e8f9', cost: 0, ready: false };
         }
         // Odak 5.5 · the report ends on the next goal, measured against this run's gold.
@@ -12003,9 +12039,9 @@
             const summaryEl = document.getElementById('menuLoadoutSummary');
             if (summaryEl) {
                 const base = metaUpgrades.baseDamage || 0;
-                const hpTotal = 100 + (metaUpgrades.maxHp || 0) * 18 +
+                const hpTotal = 100 + (metaUpgrades.maxHp || 0) * 18 + labOverclockHp() +
                     (selectedChassis === 'TITAN' ? 50 : 0);
-                const dmgPct = Math.round(100 * ((1 + base * 0.08) *
+                const dmgPct = Math.round(100 * ((1 + base * 0.08 + labOverclockDamage()) *
                     (selectedChassis === 'VANGUARD' ? 1.12 : 1) - 1));
                 const critPct = Math.round(100 * (0.04 + base * 0.012 +
                     (selectedChassis === 'PHANTOM' ? 0.15 : 0)));
@@ -13357,8 +13393,13 @@
 
             META_SHOP_ITEMS.forEach(item => {
                 const currentLvl = metaUpgrades[item.key] || 0;
-                const isMax = currentLvl >= item.maxLevel;
-                const cost = Math.round(item.baseCost * Math.pow(item.costScale, currentLvl));
+                const overclock = LAB_OVERCLOCK[item.key];
+                const plusLvl = overclock ? metaUpgrades[overclock.key] || 0 : 0;
+                const capped = currentLvl >= item.maxLevel;
+                const inOverclock = capped && !!overclock && plusLvl < LAB_OVERCLOCK_PRICE.maxLevel;
+                const isMax = capped && !inOverclock;
+                const cost = inOverclock ? labOverclockCost(plusLvl) :
+                    Math.round(item.baseCost * Math.pow(item.costScale, currentLvl));
                 const canAfford = totalGold >= cost && !isMax;
 
                 const card = document.createElement('div');
@@ -13372,15 +13413,15 @@
                                 </div>
                                 <div>
                                     <h4 class="font-cyber font-bold text-white text-sm">${item.name}</h4>
-                                    <span class="text-xs font-cyber text-cyan-400">Kademe: ${currentLvl} / ${item.maxLevel}</span>
+                                    <span class="text-xs font-cyber text-cyan-400">Kademe: ${currentLvl} / ${item.maxLevel}${plusLvl ? ` · İleri +${plusLvl}` : ''}</span>
                                 </div>
                             </div>
                         </div>
-                        <p class="text-xs text-gray-400 leading-relaxed mb-4">${item.desc}${item.key === 'defibrillator' && defibrillatorRefundGold > 0 ?
+                        <p class="text-xs text-gray-400 leading-relaxed mb-4">${item.desc}${overclock ? `<span class="block mt-1 text-cyan-300">Tavandan sonra ileri kademe: her biri ${overclock.label}.</span>` : ''}${item.key === 'defibrillator' && defibrillatorRefundGold > 0 ?
                             `<span class="block mt-1 text-yellow-300">Artık tek kademe var: fazla kademeler için +${defibrillatorRefundGold.toLocaleString('tr-TR')} altın iade edildi.</span>` : ''}</p>
                     </div>
                     <button type="button" class="buy-btn w-full py-2.5 rounded-lg font-cyber font-bold text-xs flex items-center justify-center gap-1.5 transition ${isMax ? 'bg-gray-800 text-green-400 cursor-default' : (canAfford ? 'bg-yellow-500 hover:bg-yellow-400 text-black cursor-pointer' : 'bg-gray-800 text-gray-500 cursor-not-allowed')}">
-                        ${isMax ? '<i class="fa-solid fa-check"></i> MAKSİMUM SEVİYE' : `<i class="fa-solid fa-coins"></i> ${cost} ALTIN İLE YÜKSELT`}
+                        ${isMax ? '<i class="fa-solid fa-check"></i> MAKSİMUM SEVİYE' : `<i class="fa-solid fa-coins"></i> ${cost.toLocaleString('tr-TR')} ALTIN İLE ${inOverclock ? 'İLERİ KADEME' : 'YÜKSELT'}`}
                     </button>
                 `;
 
@@ -13388,7 +13429,8 @@
                 if (!isMax && canAfford) {
                     btn.addEventListener('click', () => {
                         totalGold -= cost;
-                        metaUpgrades[item.key] = currentLvl + 1;
+                        if (inOverclock) metaUpgrades[overclock.key] = plusLvl + 1;
+                        else metaUpgrades[item.key] = currentLvl + 1;
                         audio.init();
                         audio.playLevelUp();
                         saveMetaProgress();
