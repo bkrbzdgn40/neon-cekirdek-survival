@@ -1,5 +1,9 @@
 # Değişiklik Günlüğü
 
+## Odak 5.19 · Koşu hazırlığı
+- Mağazada yeni KOŞU HAZIRLIĞI bölümü var. Başlangıç Eseri (900), Ön Yükleme (600), Bedava Yenileme ×3 (250) ve Acil Şarj (1.500) bir sonraki normal koşuda kullanılır.
+- Günlük koşu hazırlıkları kullanmaz, onlar bekler. Kullanılmamış hazırlık iptal edilirse altın geri gelir. Başlat düğmesi hazırlık sayısını gösterir; kuyruk kayıtta ve yedekte taşınır.
+
 ## Odak 5.18 · Sonsuz laboratuvar
 - Laboratuvarda Başlangıç Hasarı ve Maksimum Zırh tavandan sonra ileri kademe satar: her biri +%1 hasar ya da +4 can. İlki 2.500 altın, her biri %15 daha pahalı.
 - Hız ve Altın Çarpanı tavanda kalır. İleri kademeler yedekle taşınır; koşu sonundaki hedef kartı sıradaki ileri kademeyi gösterir.

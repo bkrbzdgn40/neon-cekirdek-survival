@@ -548,6 +548,9 @@ Sahip olunan bir eser boss sandığında yeniden çıkabilir ve II, III kademeye
 ### - [x] 5.18 Sonsuz laboratuvar
 Başlangıç Hasarı ve Maksimum Zırh 10. kademeden sonra ileri kademe satar: her biri +%1 hasar ya da +4 can, ilki 2.500 altın, sonrakiler %15 pahalı. Hız ve Altın Çarpanı tavanda kalır. İleri kademeler kayıtta ve yedekte tutulur; eski kayıtlar 0 ile başlar. Rapor hedefi kostümlerden sonra ileri kademeyi gösterir.
 
+### - [x] 5.19 Koşu hazırlığı
+Mağazada KOŞU HAZIRLIĞI bölümü: Başlangıç Eseri, Ön Yükleme, Bedava Yenileme ×3 ve Acil Şarj bir sonraki normal koşuda kullanılır ve orada biter. Günlük koşu hazırlık kullanmaz; iptal altını geri verir. Kuyruk kayıt ve yedekte taşınır.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |

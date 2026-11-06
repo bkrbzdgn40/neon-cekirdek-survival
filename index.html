@@ -313,6 +313,7 @@
                         </button>
                         <button id="startBtn" type="button" class="cyber-action-btn sm:w-3/5 py-4 xl:py-5 px-6 bg-gradient-to-r from-cyan-500 via-blue-600 to-pink-600 font-cyber font-black text-sm sm:text-base xl:text-lg tracking-widest text-white border border-cyan-300 flex items-center justify-center gap-3 cursor-pointer shadow-[0_0_30px_rgba(0,243,255,0.45)]">
                             OPERASYONU BAŞLAT <i class="fa-solid fa-play text-xs"></i>
+                            <span id="runPrepBadge" class="run-prep-badge hidden"></span>
                         </button>
                     </div>
 
@@ -525,6 +526,12 @@
             <div id="shopItemsContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                 <!-- Populated dynamically via JS -->
             </div>
+            <!-- Odak 5.19: one-run preparations, used up by the next normal run -->
+            <div id="shopPrepSection" class="text-left mb-3">
+                <span class="text-xs font-cyber text-yellow-400 tracking-widest uppercase block">KOŞU HAZIRLIĞI</span>
+                <p class="text-xs text-gray-400 mt-1">Bir sonraki normal koşuda kullanılır ve orada biter. Günlük koşu kullanmaz; hazırlık bekler. Kullanılmamış hazırlığı iptal edersen altını geri alırsın.</p>
+            </div>
+            <div id="shopPrepContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6"></div>
             <div id="shopCollectionSection" class="text-left mb-3">
                 <span class="text-xs font-cyber text-yellow-400 tracking-widest uppercase block">KOLEKSİYON</span>
                 <p class="text-xs text-gray-400 mt-1">Bir kez aç; şasi menüde seçilebilir, silah ve pasif yükseltme kartlarında çıkar.</p>
