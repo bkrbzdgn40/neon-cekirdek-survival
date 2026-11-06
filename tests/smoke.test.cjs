@@ -7680,7 +7680,7 @@ test('Odak 5.9 chain arcs apply the late power multiplier once', () => {
   assert.ok(Math.abs(x.rich.arc - x.plain.arc * 1.3) <= 1, JSON.stringify(x));
 });
 
-test('Odak 5.10 a boss chest opens a hand of three relics and each relic comes once', () => {
+test('Odak 5.10 a boss chest opens a hand of three relics', () => {
   const { run } = setup();
   const x = JSON.parse(run(`(() => {
     startNewGame(); gameState = 'PLAYING';
@@ -7699,14 +7699,13 @@ test('Odak 5.10 a boss chest opens a hand of three relics and each relic comes o
     selectUpgradeOption(1);
     const after = { state: gameState, open: relicChoiceOpen, relics: [...player.relics], gold: totalGold,
       title: document.getElementById('upgradeModalTitle').textContent, tools: document.getElementById('upgradeToolsRow').hidden };
-    // Own all but one: the next hand has only the last relic; then no hand at all.
+    // Every other relic at III: the next hand has only the one still missing.
     const missing = RELICS.find(r => !player.relics.has(r.id)).id;
-    for (const r of RELICS) if (r.id !== missing) player.relics.add(r.id);
+    for (const r of RELICS) if (r.id !== missing) { player.relics.add(r.id); player.relicTiers.set(r.id, 3); }
     pendingRelicChoices = 1; gameState = 'PLAYING'; openRelicChoice();
     const last = currentUpgradeChoices.map(c => c.upg.id);
     selectUpgradeOption(0);
-    const full = new LootChest(player.x, player.y, 'boss'); gameState = 'PLAYING'; full.update(1 / 60);
-    return JSON.stringify({ queued, hand, view, skipped, after, last, fullQueue: pendingRelicChoices, owned: player.relics.size });
+    return JSON.stringify({ queued, hand, view, skipped, after, last, missing, owned: player.relics.size });
   })()`));
   assert.equal(x.queued, 1);
   assert.equal(x.hand.length, 3);
@@ -7723,8 +7722,7 @@ test('Odak 5.10 a boss chest opens a hand of three relics and each relic comes o
   assert.equal(x.after.open, false);
   assert.equal(x.after.title, 'SİBER YÜKSELTME SEÇ');
   assert.equal(x.after.tools, false);
-  assert.equal(x.last.length, 1);
-  assert.equal(x.fullQueue, 0);
+  assert.deepEqual(x.last, [x.missing]);
   assert.equal(x.owned, 8);
 });
 
@@ -7776,7 +7774,7 @@ test('Odak 5.10 every relic changes how the run plays', () => {
     player.novaCooldown = 0; player.triggerNova(); const first = lost(n);
     totalTime += 0.7; updateRelicEffects(1 / 60); const second = lost(n) - first;
     out.echo = +(second / first).toFixed(2);
-    out.echoNeedsEmp = RELICS.find(r => r.id === 'NOVA_ECHO').offerable.toString().includes('emp');
+    out.echoNeedsEmp = RELICS.find(r => r.id === 'NOVA_ECHO').offerable() === isSystemUnlocked('emp');
     return JSON.stringify(out);
   })()`));
   assert.equal(x.burstShell, 1);
@@ -8249,4 +8247,85 @@ test('Odak 5.15 the daily contract holds for the day once a daily run is recorde
   const bad = setup({ [key]: store[key].replace('"contract":"STANDARD"', '"contract":"NOPE"') });
   assert.equal(bad.run('todaysDailyBest()?.score'), 1200, 'the record itself still loads');
   assert.equal(bad.run('todaysDailyBest()?.contract ?? null'), null, 'an unknown contract is dropped');
+});
+
+test('Odak 5.17 an owned relic comes back as its next tier and the tier changes what it does', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); gameState = 'PLAYING'; wave = 5; player.x = 600; player.y = 400;
+    const pick = id => { const card = relicChoiceCard(RELICS.find(r => r.id === id)); selectRelic(card); gameState = 'PLAYING'; return card; };
+    pick('GOLD_HEAL');
+    const card2 = relicChoiceCard(RELICS.find(r => r.id === 'GOLD_HEAL'));
+    const heal = () => { player.hp = 50; new EnergyOrb(player.x, player.y, 1, true).update(1 / 60); return player.hp - 50; };
+    const h1 = heal(); pick('GOLD_HEAL'); const h2 = heal();
+    const card3 = relicChoiceCard(RELICS.find(r => r.id === 'GOLD_HEAL'));
+    pick('GOLD_HEAL'); const h3 = heal();
+    const offeredAtMax = offerableRelics().some(r => r.id === 'GOLD_HEAL');
+    pick('GOLD_HEAL'); const capped = relicTier('GOLD_HEAL');
+    // Mirror Shot: the backward shell hits harder at III.
+    const target = new Enemy(760, 400, 'TANK'); target.hp = target.maxHp = 1e6; target.speed = 0; enemies = [target];
+    const back = tier => { player.relics = new Set(['MIRROR_SHOT']); player.relicTiers = new Map([['MIRROR_SHOT', tier]]);
+      bullets = []; player.multishot = 1; player.critChance = 0; player.autoShoot();
+      const shells = bullets.map(b => b.damage).sort((a, b) => a - b); return +(shells[0] / shells[1]).toFixed(2); };
+    // Burst Mag fires on the 6th salvo at III.
+    player.relics = new Set(['BURST_MAG']); player.relicTiers = new Map([['BURST_MAG', 3]]); bullets = [];
+    player.shotCounter = 5; player.autoShoot(); const burst6 = bullets.filter(b => b.relicBurst).length;
+    return JSON.stringify({ card2: { name: card2.name, desc: card2.getDesc() }, card3: card3.name, h1, h2, h3, offeredAtMax, capped,
+      mirror: [back(1), back(3)], burst6, chip: (player.relics = new Set(['GOLD_HEAL']), player.relicTiers = new Map([['GOLD_HEAL', 3]]), updateModulesDock(), document.getElementById('hudModulesDock').innerHTML) });
+  })()`));
+  assert.equal(x.card2.name, 'Altın Kan II');
+  assert.match(x.card2.desc, /^2 can → 3 can\. Topladığın her altın küresi 3 can onarır\.$/);
+  assert.equal(x.card3, 'Altın Kan III');
+  assert.deepEqual([x.h1, x.h2, x.h3], [2, 3, 4]);
+  assert.equal(x.offeredAtMax, false);
+  assert.equal(x.capped, 3, 'a relic never passes III');
+  assert.deepEqual(x.mirror, [0.6, 1]);
+  assert.equal(x.burst6, 1);
+  assert.match(x.chip, /Altın Kan III: Topladığın her altın küresi 4 can onarır\./);
+  assert.match(x.chip, /<span>III<\/span>/);
+});
+
+test('Odak 5.17 relic rewards stop at 24 picks; after that a boss chest pays gold and health', () => {
+  const { run } = setup();
+  const x = JSON.parse(run(`(() => {
+    startNewGame(); gameState = 'PLAYING';
+    const start = relicPicksLeft();
+    for (const r of RELICS) { player.relics.add(r.id); player.relicTiers.set(r.id, 3); }
+    player.relicTiers.set('MIRROR_SHOT', 2);
+    const one = relicPicksLeft();
+    pendingRelicChoices = 0;
+    const firstQueued = queueRelicReward('chests');
+    // A second reward while the last pick is still waiting pays out instead.
+    const gold = totalGold, run0 = sessionGold, ledger0 = combatDirector.stats.goldBySource.chests;
+    player.hp = 10; const secondQueued = queueRelicReward('chests');
+    const paid = { gold: totalGold - gold, run: sessionGold - run0, ledger: combatDirector.stats.goldBySource.chests - ledger0, hp: player.hp, maxHp: player.maxHp };
+    gameState = 'PLAYING'; openRelicChoice(); const hand = currentUpgradeChoices.map(c => c.upg.name); selectUpgradeOption(0);
+    // Every relic at III: an act boss pays too, into the act ledger.
+    const acts0 = combatDirector.stats.goldBySource.acts, pending0 = pendingRelicChoices;
+    gameState = 'PLAYING'; queueRelicReward('acts');
+    const chest = new LootChest(player.x, player.y, 'boss'); gameState = 'PLAYING'; chest.update(1 / 60);
+    return JSON.stringify({ start, one, firstQueued, secondQueued, paid, hand, total: relicTierTotal(),
+      acts: combatDirector.stats.goldBySource.acts - acts0, pending: pendingRelicChoices - pending0 });
+  })()`));
+  assert.equal(x.start, 24, 'the Nova Echo is open, so all 8 relics count');
+  assert.equal(x.one, 1);
+  assert.equal(x.firstQueued, true);
+  assert.equal(x.secondQueued, false);
+  assert.equal(x.paid.gold, 250);
+  assert.equal(x.paid.run, 250);
+  assert.equal(x.paid.ledger, 250);
+  assert.equal(x.paid.hp, Math.min(x.paid.maxHp, 10 + x.paid.maxHp * 0.25));
+  assert.deepEqual(x.hand, ['Ayna Namlu III']);
+  assert.equal(x.total, 24);
+  assert.equal(x.acts, 250);
+  assert.equal(x.pending, 0);
+});
+
+test('Odak 5.17 a locked EMP keeps the Nova Echo out of the relic count', () => {
+  const { run } = setup({}, { unlockAll: false });
+  const x = JSON.parse(run(`(() => { startNewGame();
+    return JSON.stringify({ emp: isSystemUnlocked('emp'), picks: relicPicksLeft(), offered: offerableRelics().map(r => r.id).includes('NOVA_ECHO') }); })()`));
+  assert.equal(x.emp, false);
+  assert.equal(x.picks, 21);
+  assert.equal(x.offered, false);
 });

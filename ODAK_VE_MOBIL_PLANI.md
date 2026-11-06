@@ -542,6 +542,9 @@ Test adres seçenekleri (?wave, ?unlock=all, ?seed) yalnızca yerel sunucuda ve 
 ### - [x] 5.16 Deneysel tempo temizliği
 Gameplay V2 deneyi kaldırıldı: stres gözlemcisi, ?tempo=adaptive, ?learn=on ile açılan öğrenen model, tempo karşılaştırma kaydı ve rapordaki RİTİM sekmesi. Savaş yöneticisi sabit 64 saniyelik ritmiyle çalışmaya devam eder. Eski kayıt anahtarları açılışta silinir.
 
+### - [x] 5.17 Eser kademeleri
+Sahip olunan bir eser boss sandığında yeniden çıkabilir ve II, III kademeye yükselir (8 eser × 3 = 24 seçim). Kart değişimi "2 can → 3 can" diye gösterir; modül çubuğunda kademe yazar. Bütün eserler III olunca boss ve perde sandığı eser yerine 250 altın ve %25 can verir.
+
 ## Özet takvim
 
 | Faz | Süre (tahmini) | Sonuç |
